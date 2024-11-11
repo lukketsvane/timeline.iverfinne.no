@@ -7,78 +7,202 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
+import { Octokit } from "@octokit/rest"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import ReactMarkdown from 'react-markdown'
+import Image from 'next/image'
 
 interface Project {
-  date: string
   title: string
   description: string
+  date: string
   tags: string[]
-  href?: string
+  type: string
+  category: string
+  content: string
+  slug: string
+  images: string[]
 }
 
-const projects: Project[] = [
-  {
-    date: "10/23/2024",
-    title: "Building AI that Builds Itself",
-    description: "A podcast with Dan Shipper (Every) where I demo ditto and babyagi 2o",
-    tags: ["public", "video", "ai"],
-    href: "#"
-  },
-  {
-    date: "10/17/2024",
-    title: "babyagi 2o",
-    description: "The simplest self-building autonomous agent",
-    tags: ["public", "ai"],
-    href: "#"
-  },
-  {
-    date: "10/15/2024",
-    title: "ditto",
-    description: "The simplest self-building coding agent",
-    tags: ["public", "ai"],
-    href: "#"
-  },
-  {
-    date: "9/30/2024",
-    title: "babyagi 2",
-    description: "A framework for building self-building autonomous agents",
-    tags: ["public", "ai"],
-    href: "#"
-  },
-  {
-    date: "9/9/2024",
-    title: "Email stats by domain",
-    description: "Find email relationships strengths with a list of orgs",
-    tags: ["private", "vc"],
-    href: "#"
-  }
-]
-
-const filterCategories = {
-  type: ["public", "private", "prototype", "personal"],
-  tutorials: ["video", "template", "live tweet"],
-  categories: ["ai", "no code", "vc", "web3", "art", "dev"]
-}
+const octokit = new Octokit({ auth: process.env.NEXT_PUBLIC_GITHUB_PAT })
 
 export default function ProjectsTimeline() {
+  const [projects, setProjects] = React.useState<Project[]>([])
   const [searchQuery, setSearchQuery] = React.useState("")
   const [activeFilters, setActiveFilters] = React.useState<string[]>([])
+  const [isLoading, setIsLoading] = React.useState(true)
+  const [expandedProject, setExpandedProject] = React.useState<Project | null>(null)
 
-  const filteredProjects = projects.filter(project => {
-    const matchesSearch = 
-      project.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      project.description.toLowerCase().includes(searchQuery.toLowerCase())
-    
-    if (activeFilters.length === 0) return matchesSearch
-    
-    return matchesSearch && project.tags.some(tag => activeFilters.includes(tag))
-  })
+  React.useEffect(() => {
+    async function fetchProjects() {
+      try {
+        console.log('Fetching projects...');
+        const { data: projectsData } = await octokit.repos.getContent({
+          owner: 'lukketsvane',
+          repo: 'personal-web',
+          path: 'projects'
+        });
+        console.log('Projects data:', projectsData);
+
+        console.log('Fetching writing...');
+        const { data: writingData } = await octokit.repos.getContent({
+          owner: 'lukketsvane',
+          repo: 'personal-web',
+          path: 'writing'
+        });
+        console.log('Writing data:', writingData);
+
+        const allFiles = [...projectsData, ...writingData].filter(file => file.type === 'file' && file.name.endsWith('.mdx'));
+        console.log('All files:', allFiles);
+
+        if (allFiles.length === 0) {
+          console.error('No MDX files found in projects or writing directories');
+          return;
+        }
+
+        const projectsContent = await Promise.all(
+          allFiles.map(async (file) => {
+            console.log(`Processing file: ${file.path}`);
+            const { data } = await octokit.repos.getContent({
+              owner: 'lukketsvane',
+              repo: 'personal-web',
+              path: file.path,
+            });
+
+            if ('content' in data) {
+              const content = Buffer.from(data.content, 'base64').toString();
+              console.log(`File content: ${content.substring(0, 100)}...`);
+              const frontMatterRegex = /---\s*([\s\S]*?)\s*---/
+              const frontMatterMatch = content.match(frontMatterRegex)
+              const frontMatter = frontMatterMatch ? frontMatterMatch[1] : ''
+              const mdContent = content.replace(frontMatterRegex, '').trim()
+
+              const frontMatterObj = frontMatter.split('\n').reduce((acc, line) => {
+                const [key, value] = line.split(':').map(str => str.trim())
+                if (key && value) {
+                  acc[key] = value.replace(/^['"](.*)['"]$/, '$1') // Remove quotes if present
+                }
+                return acc
+              }, {} as Record<string, string>)
+
+              const projectName = file.path.split('/').pop()?.replace('.mdx', '') || ''
+              const projectImages = await fetchProjectImages(projectName)
+
+              console.log(`Processed ${file.path}`)
+              return {
+                title: frontMatterObj.title || file.name.replace('.mdx', ''),
+                description: frontMatterObj.description || '',
+                date: frontMatterObj.date || 'No date',
+                tags: frontMatterObj.tags ? frontMatterObj.tags.split(',').map(tag => tag.trim()) : [],
+                type: frontMatterObj.type || 'public',
+                category: frontMatterObj.category || 'uncategorized',
+                content: mdContent,
+                slug: file.name.replace('.mdx', ''),
+                images: projectImages
+              } as Project
+            } else {
+              console.log(`No content found for file: ${file.path}`);
+            }
+            console.log(`Skipped ${file.path} (no content)`)
+            return null
+          })
+        );
+
+        const filteredProjects = projectsContent.filter(Boolean) as Project[];
+        console.log('Filtered projects:', filteredProjects);
+
+        setProjects(filteredProjects);
+        setIsLoading(false);
+      } catch (error) {
+        console.error('Error fetching projects:', error);
+        setIsLoading(false);
+      }
+    }
+
+    fetchProjects()
+  }, [])
+
+  async function fetchProjectImages(projectName: string) {
+    try {
+      const { data: imageFiles } = await octokit.repos.getContent({
+        owner: 'lukketsvane',
+        repo: 'personal-web',
+        path: `images/${projectName}`
+      })
+
+      if (Array.isArray(imageFiles)) {
+        return imageFiles
+          .filter(file => file.type === 'file' && /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(file.name))
+          .map(file => file.download_url)
+      }
+    } catch (error) {
+      console.error(`Error fetching images for ${projectName}:`, error)
+    }
+    return []
+  }
+
+  const allTags = React.useMemo(() => {
+    const tags = new Set<string>()
+    projects.forEach(project => {
+      project.tags.forEach(tag => tags.add(tag))
+    })
+    return Array.from(tags)
+  }, [projects])
+
+  const types = React.useMemo(() => 
+    Array.from(new Set(projects.map(p => p.type))),
+    [projects]
+  )
+  
+  const categories = React.useMemo(() => 
+    Array.from(new Set(projects.map(p => p.category))),
+    [projects]
+  )
+
+  const filteredProjects = React.useMemo(() => {
+    return projects.filter(project => {
+      const matchesSearch = 
+        project.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        project.description.toLowerCase().includes(searchQuery.toLowerCase())
+      
+      if (activeFilters.length === 0) return matchesSearch
+      
+      return matchesSearch && (
+        project.tags.some(tag => activeFilters.includes(tag)) ||
+        activeFilters.includes(project.type) ||
+        activeFilters.includes(project.category)
+      )
+    })
+  }, [projects, searchQuery, activeFilters])
 
   const toggleFilter = (filter: string) => {
     setActiveFilters(prev => 
       prev.includes(filter) 
         ? prev.filter(f => f !== filter)
         : [...prev, filter]
+    )
+  }
+
+  if (isLoading) {
+    return <div className="flex justify-center items-center h-screen">Loading projects...</div>
+  }
+
+  if (projects.length === 0) {
+    return (
+      <div className="flex flex-col justify-center items-center h-screen">
+        <p className="text-xl font-semibold mb-4">No projects found.</p>
+        <p className="text-muted-foreground">
+          Please check the console for error messages and ensure your GitHub token is correct.
+        </p>
+      </div>
     )
   }
 
@@ -89,46 +213,46 @@ export default function ProjectsTimeline() {
         <aside className="space-y-6">
           <div className="space-y-4">
             <div>
-              <Label>type</Label>
+              <Label>Type</Label>
               <div className="flex flex-wrap gap-2 mt-2">
-                {filterCategories.type.map(filter => (
+                {types.map(type => (
                   <Badge
-                    key={filter}
-                    variant={activeFilters.includes(filter) ? "default" : "outline"}
+                    key={type}
+                    variant={activeFilters.includes(type) ? "default" : "outline"}
                     className="cursor-pointer hover:bg-muted-foreground/20"
-                    onClick={() => toggleFilter(filter)}
+                    onClick={() => toggleFilter(type)}
                   >
-                    {filter}
+                    {type}
                   </Badge>
                 ))}
               </div>
             </div>
             <div>
-              <Label>tutorials</Label>
+              <Label>Categories</Label>
               <div className="flex flex-wrap gap-2 mt-2">
-                {filterCategories.tutorials.map(filter => (
+                {categories.map(category => (
                   <Badge
-                    key={filter}
-                    variant={activeFilters.includes(filter) ? "default" : "outline"}
+                    key={category}
+                    variant={activeFilters.includes(category) ? "default" : "outline"}
                     className="cursor-pointer bg-green-50 hover:bg-green-100 text-green-700 border-green-200"
-                    onClick={() => toggleFilter(filter)}
+                    onClick={() => toggleFilter(category)}
                   >
-                    {filter}
+                    {category}
                   </Badge>
                 ))}
               </div>
             </div>
             <div>
-              <Label>categories</Label>
+              <Label>Tags</Label>
               <div className="flex flex-wrap gap-2 mt-2">
-                {filterCategories.categories.map(filter => (
+                {allTags.map(tag => (
                   <Badge
-                    key={filter}
-                    variant={activeFilters.includes(filter) ? "default" : "outline"}
+                    key={tag}
+                    variant={activeFilters.includes(tag) ? "default" : "outline"}
                     className="cursor-pointer bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200"
-                    onClick={() => toggleFilter(filter)}
+                    onClick={() => toggleFilter(tag)}
                   >
-                    {filter}
+                    {tag}
                   </Badge>
                 ))}
               </div>
@@ -157,16 +281,21 @@ export default function ProjectsTimeline() {
                 </time>
                 <div className="space-y-3">
                   <h3 className="text-xl font-semibold">
-                    <a 
-                      href={project.href} 
-                      className="text-blue-500 hover:text-blue-600 hover:underline"
-                    >
-                      {project.title}
-                    </a>
+                    {project.title}
                   </h3>
                   <p className="text-muted-foreground">
                     {project.description}
                   </p>
+                  {project.images.length > 0 && (
+                    <div className="relative w-full h-48 rounded-lg overflow-hidden">
+                      <Image
+                        src={project.images[0]}
+                        alt={project.title}
+                        layout="fill"
+                        objectFit="cover"
+                      />
+                    </div>
+                  )}
                   <div className="flex gap-2">
                     {project.tags.map(tag => (
                       <Badge
@@ -182,6 +311,39 @@ export default function ProjectsTimeline() {
                       </Badge>
                     ))}
                   </div>
+                  <Dialog>
+                    <DialogTrigger asChild>
+                      <Button variant="outline" onClick={() => setExpandedProject(project)}>
+                        Read more
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="max-w-4xl max-h-[80vh]">
+                      <DialogHeader>
+                        <DialogTitle>{expandedProject?.title}</DialogTitle>
+                        <DialogDescription>
+                          {expandedProject?.date} - {expandedProject?.category}
+                        </DialogDescription>
+                      </DialogHeader>
+                      <ScrollArea className="mt-4 h-full max-h-[calc(80vh-100px)]">
+                        <ReactMarkdown 
+                          className="prose dark:prose-invert"
+                          components={{
+                            img: ({node, ...props}) => (
+                              <Image
+                                src={props.src || ''}
+                                alt={props.alt || ''}
+                                width={600}
+                                height={400}
+                                className="rounded-lg"
+                              />
+                            ),
+                          }}
+                        >
+                          {expandedProject?.content || ''}
+                        </ReactMarkdown>
+                      </ScrollArea>
+                    </DialogContent>
+                  </Dialog>
                 </div>
               </div>
             ))}
