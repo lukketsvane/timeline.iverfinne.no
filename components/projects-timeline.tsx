@@ -1,187 +1,199 @@
-'use client'
+"use client"
 
-import { useState, useEffect } from 'react'
-import { Octokit } from '@octokit/rest'
-import matter from 'gray-matter'
-import { motion } from 'framer-motion'
+import * as React from "react"
+import { Search } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { Search } from "lucide-react"
+import { Label } from "@/components/ui/label"
+import { cn } from "@/lib/utils"
 
 interface Project {
+  date: string
   title: string
   description: string
-  date: string
   tags: string[]
-  type: string
-  category: string
-  content: string
-  image?: string
+  href?: string
 }
 
-const octokit = new Octokit({ auth: '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' })
+const projects: Project[] = [
+  {
+    date: "10/23/2024",
+    title: "Building AI that Builds Itself",
+    description: "A podcast with Dan Shipper (Every) where I demo ditto and babyagi 2o",
+    tags: ["public", "video", "ai"],
+    href: "#"
+  },
+  {
+    date: "10/17/2024",
+    title: "babyagi 2o",
+    description: "The simplest self-building autonomous agent",
+    tags: ["public", "ai"],
+    href: "#"
+  },
+  {
+    date: "10/15/2024",
+    title: "ditto",
+    description: "The simplest self-building coding agent",
+    tags: ["public", "ai"],
+    href: "#"
+  },
+  {
+    date: "9/30/2024",
+    title: "babyagi 2",
+    description: "A framework for building self-building autonomous agents",
+    tags: ["public", "ai"],
+    href: "#"
+  },
+  {
+    date: "9/9/2024",
+    title: "Email stats by domain",
+    description: "Find email relationships strengths with a list of orgs",
+    tags: ["private", "vc"],
+    href: "#"
+  }
+]
+
+const filterCategories = {
+  type: ["public", "private", "prototype", "personal"],
+  tutorials: ["video", "template", "live tweet"],
+  categories: ["ai", "no code", "vc", "web3", "art", "dev"]
+}
 
 export default function ProjectsTimeline() {
-  const [projects, setProjects] = useState<Project[]>([])
-  const [filteredProjects, setFilteredProjects] = useState<Project[]>([])
-  const [searchTerm, setSearchTerm] = useState("")
-  const [selectedType, setSelectedType] = useState<string | null>(null)
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [searchQuery, setSearchQuery] = React.useState("")
+  const [activeFilters, setActiveFilters] = React.useState<string[]>([])
 
-  useEffect(() => {
-    async function fetchProjects() {
-      try {
-        const projectsResponse = await octokit.repos.getContent({
-          owner: 'lukketsvane',
-          repo: 'personal-web',
-          path: 'projects',
-        })
+  const filteredProjects = projects.filter(project => {
+    const matchesSearch = 
+      project.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      project.description.toLowerCase().includes(searchQuery.toLowerCase())
+    
+    if (activeFilters.length === 0) return matchesSearch
+    
+    return matchesSearch && project.tags.some(tag => activeFilters.includes(tag))
+  })
 
-        const writingResponse = await octokit.repos.getContent({
-          owner: 'lukketsvane',
-          repo: 'personal-web',
-          path: 'writing',
-        })
-
-        if (Array.isArray(projectsResponse.data) && Array.isArray(writingResponse.data)) {
-          const mdxFiles = [...projectsResponse.data, ...writingResponse.data].filter(file => file.name.endsWith('.mdx'))
-          const projectPromises = mdxFiles.map(async file => {
-            const content = await octokit.repos.getContent({
-              owner: 'lukketsvane',
-              repo: 'personal-web',
-              path: file.path,
-            })
-
-            if ('content' in content.data) {
-              const decodedContent = Buffer.from(content.data.content, 'base64').toString('utf8')
-              const { data, content: mdxContent } = matter(decodedContent)
-              return {
-                title: data.title || file.name.replace('.mdx', ''),
-                description: data.description || '',
-                date: data.date || 'No date',
-                tags: data.tags || [],
-                type: data.type || 'public',
-                category: data.category || 'uncategorized',
-                content: mdxContent,
-                image: data.image || '',
-              }
-            }
-          })
-
-          const fetchedProjects = await Promise.all(projectPromises)
-          setProjects(fetchedProjects.filter(Boolean) as Project[])
-          setFilteredProjects(fetchedProjects.filter(Boolean) as Project[])
-        }
-      } catch (err) {
-        console.error('Error fetching projects:', err)
-        setError('Failed to load projects. Please try again later.')
-      } finally {
-        setIsLoading(false)
-      }
-    }
-
-    fetchProjects()
-  }, [])
-
-  useEffect(() => {
-    const filtered = projects.filter(project => 
-      (project.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-       project.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-       project.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()))) &&
-      (!selectedType || project.type === selectedType) &&
-      (!selectedCategory || project.category === selectedCategory)
+  const toggleFilter = (filter: string) => {
+    setActiveFilters(prev => 
+      prev.includes(filter) 
+        ? prev.filter(f => f !== filter)
+        : [...prev, filter]
     )
-    setFilteredProjects(filtered)
-  }, [searchTerm, selectedType, selectedCategory, projects])
-
-  if (isLoading) return <div className="flex justify-center items-center h-screen">Loading...</div>
-  if (error) return <div className="flex justify-center items-center h-screen text-red-500">{error}</div>
+  }
 
   return (
-    <div className="flex min-h-screen bg-background">
-      <div className="w-64 p-4 border-r">
-        <h2 className="text-lg font-semibold mb-4">Filters</h2>
-        <div className="mb-4">
-          <h3 className="text-sm font-medium mb-2">Type</h3>
-          <div className="space-y-2">
-            {['public', 'private', 'prototype', 'personal'].map(type => (
-              <Button
-                key={type}
-                variant={selectedType === type ? "secondary" : "ghost"}
-                className="w-full justify-start"
-                onClick={() => setSelectedType(selectedType === type ? null : type)}
-              >
-                {type}
-              </Button>
-            ))}
+    <div className="container mx-auto p-4 lg:p-8">
+      <div className="grid gap-8 lg:grid-cols-[240px,1fr]">
+        {/* Sidebar */}
+        <aside className="space-y-6">
+          <div className="space-y-4">
+            <div>
+              <Label>type</Label>
+              <div className="flex flex-wrap gap-2 mt-2">
+                {filterCategories.type.map(filter => (
+                  <Badge
+                    key={filter}
+                    variant={activeFilters.includes(filter) ? "default" : "outline"}
+                    className="cursor-pointer hover:bg-muted-foreground/20"
+                    onClick={() => toggleFilter(filter)}
+                  >
+                    {filter}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+            <div>
+              <Label>tutorials</Label>
+              <div className="flex flex-wrap gap-2 mt-2">
+                {filterCategories.tutorials.map(filter => (
+                  <Badge
+                    key={filter}
+                    variant={activeFilters.includes(filter) ? "default" : "outline"}
+                    className="cursor-pointer bg-green-50 hover:bg-green-100 text-green-700 border-green-200"
+                    onClick={() => toggleFilter(filter)}
+                  >
+                    {filter}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+            <div>
+              <Label>categories</Label>
+              <div className="flex flex-wrap gap-2 mt-2">
+                {filterCategories.categories.map(filter => (
+                  <Badge
+                    key={filter}
+                    variant={activeFilters.includes(filter) ? "default" : "outline"}
+                    className="cursor-pointer bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200"
+                    onClick={() => toggleFilter(filter)}
+                  >
+                    {filter}
+                  </Badge>
+                ))}
+              </div>
+            </div>
           </div>
-        </div>
-        <div className="mb-4">
-          <h3 className="text-sm font-medium mb-2">Categories</h3>
-          <div className="space-y-2">
-            {['ai', 'no code', 'vc', 'web3', 'art', 'dev'].map(category => (
-              <Button
-                key={category}
-                variant={selectedCategory === category ? "secondary" : "ghost"}
-                className="w-full justify-start"
-                onClick={() => setSelectedCategory(selectedCategory === category ? null : category)}
-              >
-                {category}
-              </Button>
-            ))}
+        </aside>
+
+        {/* Main Content */}
+        <main className="min-h-screen">
+          <div className="relative mb-8">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Type here to search"
+              className="pl-10"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
           </div>
-        </div>
-      </div>
-      <div className="flex-1 p-4">
-        <div className="mb-4 relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-          <Input
-            type="search"
-            placeholder="Type here to search"
-            className="pl-10"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-        </div>
-        <ScrollArea className="h-[calc(100vh-100px)]">
-          <div className="relative pl-8">
-            <div className="absolute left-4 top-0 h-full w-px bg-border" />
+
+          <div className="relative pl-8 border-l-2 border-muted space-y-12">
             {filteredProjects.map((project, index) => (
-              <motion.div
-                key={index}
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: index * 0.1, duration: 0.3 }}
-                className="mb-8 relative"
-              >
-                <div className="absolute left-0 top-6 w-3 h-3 bg-primary rounded-full -translate-x-[5px]" />
-                <div className={`pl-8 ${index % 2 === 0 ? 'pr-12' : 'pl-12 pr-8'}`}>
-                  <time className="text-sm text-muted-foreground">{project.date}</time>
-                  <Card className="p-4 mt-2">
-                    <h3 className="text-xl font-semibold text-primary">{project.title}</h3>
-                    <p className="mt-2 text-muted-foreground">{project.description}</p>
-                    {project.image && (
-                      <img src={project.image} alt={project.title} className="mt-4 rounded-md w-full h-40 object-cover" />
-                    )}
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      {project.tags.map((tag, tagIndex) => (
-                        <Badge key={tagIndex} variant="secondary">
-                          {tag}
-                        </Badge>
-                      ))}
-                    </div>
-                  </Card>
+              <div key={index} className="relative">
+                <div className="absolute -left-[41px] h-5 w-5 rounded-full border-4 border-background bg-muted" />
+                <time className="block text-sm text-muted-foreground mb-2">
+                  {project.date}
+                </time>
+                <div className="space-y-3">
+                  <h3 className="text-xl font-semibold">
+                    <a 
+                      href={project.href} 
+                      className="text-blue-500 hover:text-blue-600 hover:underline"
+                    >
+                      {project.title}
+                    </a>
+                  </h3>
+                  <p className="text-muted-foreground">
+                    {project.description}
+                  </p>
+                  <div className="flex gap-2">
+                    {project.tags.map(tag => (
+                      <Badge
+                        key={tag}
+                        variant="outline"
+                        className={cn(
+                          "cursor-pointer",
+                          activeFilters.includes(tag) && "bg-primary text-primary-foreground"
+                        )}
+                        onClick={() => toggleFilter(tag)}
+                      >
+                        {tag}
+                      </Badge>
+                    ))}
+                  </div>
                 </div>
-              </motion.div>
+              </div>
             ))}
           </div>
-        </ScrollArea>
+        </main>
       </div>
+
+      <Button 
+        className="fixed bottom-6 right-6 bg-black text-white hover:bg-black/90"
+      >
+        Chat with Mini Yohei →
+      </Button>
     </div>
   )
 }
