@@ -1,4 +1,8 @@
 /** @type {import('next').NextConfig} */
-const nextConfig = {};
+const nextConfig = {
+  env: {
+    GITHUB_PAT: process.env.GITHUB_PAT,
+  },
+}
 
-export default nextConfig;
+export default nextConfig
