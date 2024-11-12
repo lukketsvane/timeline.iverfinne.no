@@ -293,12 +293,12 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: index * 0.1, duration: 0.3 }}
-                    className="relative pl-16 md:pl-24"
+                    className="relative pl-24 md:pl-32"
                   >
-                    <time className="absolute left-0 top-0 text-sm md:text-base font-bold text-muted-foreground">
+                    <time className="absolute left-0 top-0 text-base md:text-lg lg:text-xl font-bold text-muted-foreground">
                       {formatDate(entry.date)}
                     </time>
-                    <div className="absolute left-[30px] md:left-[62px] top-[10px] h-3 w-3 rounded-full border-2 border-primary bg-background" />
+                    <div className="absolute left-[90px] md:left-[124px] top-[10px] h-3 w-3 rounded-full border-2 border-primary bg-background" />
                     <Card className="overflow-hidden">
                       <CardContent className="p-4 md:p-6">
                         <div className="flex items-center gap-2 mb-2">
