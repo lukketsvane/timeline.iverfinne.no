@@ -2,52 +2,62 @@
 
 import * as React from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Search, ChevronLeft, ExternalLink, ChevronDown, ChevronUp } from "lucide-react"
+import { Search, ChevronLeft, ExternalLink, ChevronDown, ChevronUp, Share2 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { cn } from "@/lib/utils"
 import { Octokit } from "@octokit/rest"
 import Link from "next/link"
+import { useRouter, usePathname } from 'next/navigation'
 import ReactMarkdown from 'react-markdown'
 import Image from 'next/image'
-
-interface Project {
-  title: string
-  description: string
-  date: string
-  tags: string[]
-  type: string
-  category: string
-  content: string
-  slug: string
-  imagePaths: string[]
-  url?: string
-}
+import { Project } from "@/lib/github"
 
 const octokit = new Octokit({ 
   auth: process.env.NEXT_PUBLIC_GITHUB_PAT || process.env.GITHUB_PAT 
 })
 
-const ImageComponent = ({ src, alt, width, height }) => {
-  // Ensure the src starts with a forward slash
-  const imageSrc = src.startsWith('/') ? src : `/${src}`
-  
+interface ImageGridProps {
+  images: string[]
+}
+
+const ImageGrid: React.FC<ImageGridProps> = ({ images }) => {
   return (
-    <Image
-      src={imageSrc}
-      alt={alt}
-      width={width || 600}
-      height={height || 400}
-      className="rounded-lg shadow-md"
-    />
+    <div className="flex flex-wrap gap-4">
+      <div className="w-full md:w-[calc(50%-0.5rem)]">
+        {images.slice(0, Math.ceil(images.length / 2)).map((src, index) => (
+          <div key={index} className="mb-4 last:mb-0">
+            <Image
+              src={src}
+              alt={`Gradient Image ${index * 2 + 1}`}
+              width={600}
+              height={400}
+              className="w-full rounded-lg"
+            />
+          </div>
+        ))}
+      </div>
+      <div className="w-full md:w-[calc(50%-0.5rem)]">
+        {images.slice(Math.ceil(images.length / 2)).map((src, index) => (
+          <div key={index} className="mb-4 last:mb-0">
+            <Image
+              src={src}
+              alt={`Gradient Image ${index * 2 + 2}`}
+              width={600}
+              height={400}
+              className="w-full rounded-lg"
+            />
+          </div>
+        ))}
+      </div>
+    </div>
   )
 }
 
-export default function ProjectsTimeline() {
+export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string }) {
   const [projects, setProjects] = React.useState<Project[]>([])
   const [searchQuery, setSearchQuery] = React.useState("")
   const [activeFilters, setActiveFilters] = React.useState<string[]>([])
@@ -55,71 +65,53 @@ export default function ProjectsTimeline() {
   const [expandedProject, setExpandedProject] = React.useState<Project | null>(null)
   const [error, setError] = React.useState<string | null>(null)
   const [showAllTags, setShowAllTags] = React.useState(false)
+  const router = useRouter()
+  const pathname = usePathname()
 
   React.useEffect(() => {
     async function fetchProjects() {
       try {
-        const [projectsData, writingData] = await Promise.all([
-          octokit.repos.getContent({
-            owner: 'lukketsvane',
-            repo: 'personal-web',
-            path: 'projects'
-          }),
-          octokit.repos.getContent({
-            owner: 'lukketsvane',
-            repo: 'personal-web',
-            path: 'writing'
-          })
-        ])
+        const fetchedProjects = await octokit.repos.getContent({
+          owner: 'lukketsvane',
+          repo: 'personal-web',
+          path: 'projects'
+        })
 
-        const allFiles = [
-          ...Array.isArray(projectsData.data) ? projectsData.data : [],
-          ...Array.isArray(writingData.data) ? writingData.data : []
-        ].filter(file => file.type === 'file' && file.name.endsWith('.mdx'))
+        if (Array.isArray(fetchedProjects.data)) {
+          const projectsData = await Promise.all(
+            fetchedProjects.data
+              .filter(file => file.type === 'file' && file.name.endsWith('.mdx'))
+              .map(async (file) => {
+                const { data } = await octokit.repos.getContent({
+                  owner: 'lukketsvane',
+                  repo: 'personal-web',
+                  path: file.path,
+                })
 
-        const projectsContent = await Promise.all(
-          allFiles.map(async (file) => {
-            const { data } = await octokit.repos.getContent({
-              owner: 'lukketsvane',
-              repo: 'personal-web',
-              path: file.path,
-            })
+                if ('content' in data) {
+                  const content = Buffer.from(data.content, 'base64').toString()
+                  const [, frontMatter, mdContent] = content.split('---')
+                  const frontMatterObj = Object.fromEntries(
+                    frontMatter.trim().split('\n').map(line => {
+                      const [key, ...valueParts] = line.split(':')
+                      return [key.trim(), valueParts.join(':').trim()]
+                    })
+                  )
 
-            if ('content' in data) {
-              const content = Buffer.from(data.content, 'base64').toString()
-              const frontMatterRegex = /---\s*([\s\S]*?)\s*---/
-              const frontMatterMatch = content.match(frontMatterRegex)
-              const frontMatter = frontMatterMatch ? frontMatterMatch[1] : ''
-              const mdContent = content.replace(frontMatterRegex, '').trim()
-
-              const frontMatterObj = frontMatter.split('\n').reduce((acc, line) => {
-                const [key, value] = line.split(':').map(str => str.trim())
-                if (key && value) {
-                  acc[key] = value.replace(/^['"](.*)['"]$/, '$1')
+                  return {
+                    title: frontMatterObj.title || file.name.replace('.mdx', ''),
+                    description: frontMatterObj.description || '',
+                    date: frontMatterObj.date || new Date().toISOString().split('T')[0],
+                    tags: frontMatterObj.tags ? frontMatterObj.tags.split(',').map(tag => tag.trim()) : [],
+                    slug: file.name.replace('.mdx', ''),
+                    content: mdContent.trim()
+                  } as Project
                 }
-                return acc
-              }, {} as Record<string, string>)
+              })
+          )
 
-              const imagePaths = await fetchImagePaths(file.path.split('/')[0])
-
-              return {
-                title: frontMatterObj.title || file.name.replace('.mdx', ''),
-                description: frontMatterObj.description || '',
-                date: frontMatterObj.date || new Date().toISOString().split('T')[0],
-                tags: frontMatterObj.tags ? frontMatterObj.tags.split(',').map(tag => tag.trim()) : [],
-                type: file.path.startsWith('projects/') ? 'project' : 'writing',
-                category: frontMatterObj.category || file.path.split('/')[0],
-                content: mdContent,
-                slug: file.name.replace('.mdx', ''),
-                imagePaths,
-                url: frontMatterObj.url || ''
-              } as Project
-            }
-          })
-        )
-
-        const validProjects = projectsContent.filter(Boolean) as Project[]
-        setProjects(validProjects.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()))
+          setProjects(projectsData.filter((project): project is Project => project !== undefined))
+        }
         setIsLoading(false)
       } catch (error) {
         console.error('Error fetching projects:', error)
@@ -128,28 +120,27 @@ export default function ProjectsTimeline() {
       }
     }
 
-    async function fetchImagePaths(projectName: string) {
-      try {
-        const { data } = await octokit.repos.getContent({
-          owner: 'lukketsvane',
-          repo: 'personal-web',
-          path: `images/${projectName}`
-        })
-
-        if (Array.isArray(data)) {
-          return data
-            .filter(file => file.type === 'file' && /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(file.name))
-            .map(file => file.download_url)
-        }
-        return []
-      } catch (error) {
-        console.error(`Error fetching images for ${projectName}:`, error)
-        return []
-      }
-    }
-
     fetchProjects()
   }, [])
+
+  React.useEffect(() => {
+    if (initialSlug && projects.length > 0) {
+      const project = projects.find(p => p.slug === initialSlug)
+      if (project) {
+        setExpandedProject(project)
+      }
+    }
+  }, [initialSlug, projects])
+
+  React.useEffect(() => {
+    const slug = pathname.split('/').pop()
+    if (slug) {
+      const project = projects.find(p => p.slug === slug)
+      if (project) {
+        setExpandedProject(project)
+      }
+    }
+  }, [pathname, projects])
 
   const allTags = React.useMemo(() => {
     const tags = new Set<string>()
@@ -158,16 +149,6 @@ export default function ProjectsTimeline() {
     })
     return Array.from(tags)
   }, [projects])
-
-  const types = React.useMemo(() => 
-    Array.from(new Set(projects.map(p => p.type))),
-    [projects]
-  )
-  
-  const categories = React.useMemo(() => 
-    Array.from(new Set(projects.map(p => p.category))),
-    [projects]
-  )
 
   const filteredProjects = React.useMemo(() => {
     return projects.filter(project => {
@@ -179,9 +160,7 @@ export default function ProjectsTimeline() {
       if (activeFilters.length === 0) return matchesSearch
       
       return matchesSearch && (
-        project.tags.some(tag => activeFilters.includes(tag)) ||
-        activeFilters.includes(project.type) ||
-        activeFilters.includes(project.category)
+        project.tags.some(tag => activeFilters.includes(tag))
       )
     })
   }, [projects, searchQuery, activeFilters])
@@ -202,6 +181,20 @@ export default function ProjectsTimeline() {
     return showAllTags ? allTags : allTags.slice(0, 10)
   }, [allTags, showAllTags])
 
+  const handleProjectClick = (project: Project) => {
+    setExpandedProject(project)
+    window.history.pushState(null, '', `/${project.slug}`)
+  }
+
+  const handleShareClick = (project: Project) => {
+    const url = `${window.location.origin}/${project.slug}`
+    navigator.clipboard.writeText(url).then(() => {
+      alert('Link copied to clipboard!')
+    }).catch(err => {
+      console.error('Failed to copy link: ', err)
+    })
+  }
+
   if (isLoading) {
     return (
       <div className="flex justify-center items-center h-screen">
@@ -221,26 +214,14 @@ export default function ProjectsTimeline() {
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto p-4 lg:p-8">
-        {/* Header Section */}
         <div className="text-center mb-12">
           <h1 className="text-4xl font-bold mb-2">build-in-public log</h1>
           <p className="text-lg text-muted-foreground mb-8">some of my tools and experiments.</p>
           
-          {/* Featured Projects */}
           <h2 className="text-2xl font-semibold text-primary mb-6">Featured Builds</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
             {featuredProjects.map((project, index) => (
               <Card key={index} className="overflow-hidden">
-                <div className="aspect-video bg-muted">
-                  {project.imagePaths[0] && (
-                    <ImageComponent
-                      src={project.imagePaths[0]}
-                      alt={project.title}
-                      width={400}
-                      height={300}
-                    />
-                  )}
-                </div>
                 <CardContent className="p-4">
                   <h3 className="font-semibold mb-2">{project.title}</h3>
                   <p className="text-sm text-muted-foreground mb-4">{project.description}</p>
@@ -258,39 +239,8 @@ export default function ProjectsTimeline() {
         </div>
 
         <div className="grid gap-8 lg:grid-cols-[240px,1fr]">
-          {/* Sidebar */}
           <aside className="space-y-6">
             <div className="space-y-4">
-              <div>
-                <Label>type</Label>
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {types.map(type => (
-                    <Badge
-                      key={type}
-                      variant={activeFilters.includes(type) ? "default" : "outline"}
-                      className="cursor-pointer hover:bg-muted-foreground/20"
-                      onClick={() => toggleFilter(type)}
-                    >
-                      {type}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <Label>categories</Label>
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {categories.map(category => (
-                    <Badge
-                      key={category}
-                      variant={activeFilters.includes(category) ? "default" : "outline"}
-                      className="cursor-pointer bg-green-50 hover:bg-green-100 text-green-700 border-green-200"
-                      onClick={() => toggleFilter(category)}
-                    >
-                      {category}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
               <div>
                 <Label>tags</Label>
                 <div className="flex flex-wrap gap-2 mt-2">
@@ -323,7 +273,6 @@ export default function ProjectsTimeline() {
             </div>
           </aside>
 
-          {/* Main Content */}
           <main className="min-h-screen">
             <div className="mb-8">
               <div className="relative">
@@ -356,7 +305,7 @@ export default function ProjectsTimeline() {
                           <h2 className="font-semibold hover:text-primary">
                             <button
                               className="text-left"
-                              onClick={() => setExpandedProject(project)}
+                              onClick={() => handleProjectClick(project)}
                             >
                               {project.title}
                             </button>
@@ -371,6 +320,15 @@ export default function ProjectsTimeline() {
                               </Badge>
                             ))}
                           </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="mt-2"
+                            onClick={() => handleShareClick(project)}
+                          >
+                            <Share2 className="mr-2 h-4 w-4" />
+                            Share
+                          </Button>
                         </Card>
                       </div>
                     </motion.div>
@@ -405,7 +363,10 @@ export default function ProjectsTimeline() {
               <Button
                 variant="ghost"
                 className="mb-6"
-                onClick={() => setExpandedProject(null)}
+                onClick={() => {
+                  setExpandedProject(null)
+                  window.history.pushState(null, '', '/')
+                }}
               >
                 <ChevronLeft className="mr-2 h-4 w-4" />
                 Back to Timeline
@@ -435,10 +396,17 @@ export default function ProjectsTimeline() {
                 >
                   <ReactMarkdown
                     components={{
-                      img: ({ node, ...props }) => (
-                        <ImageComponent {...props} />
+                      img: ({ ...props }) => (
+                        <Image
+                          {...props}
+                          src={props.src || ''}
+                          alt={props.alt || ''}
+                          width={600}
+                          height={400}
+                          className="rounded-lg shadow-md"
+                        />
                       ),
-                      video: ({ node, ...props }) => (
+                      video: ({ ...props }) => (
                         <video
                           {...props}
                           style={{
@@ -450,48 +418,43 @@ export default function ProjectsTimeline() {
                           className="rounded-lg shadow-md"
                         />
                       ),
-                      h2: ({ node, ...props }) => (
+                      h2: ({ ...props }) => (
                         <h2 className="text-2xl font-semibold mt-8 mb-4" {...props} />
                       ),
-                      h3: ({ node, ...props }) => (
+                      h3: ({ ...props }) => (
                         <h3 className="text-xl font-semibold mt-6 mb-3" {...props} />
                       ),
-                      p: ({ node, ...props }) => (
+                      p: ({ ...props }) => (
                         <p className="mb-4 leading-relaxed" {...props} />
                       ),
-                      ul: ({ node, ...props }) => (
+                      ul: ({ ...props }) => (
                         <ul className="list-disc pl-6 mb-4" {...props} />
                       ),
-                      ol: ({ node, ...props }) => (
+                      ol: ({ ...props }) => (
                         <ol className="list-decimal pl-6 mb-4" {...props} />
                       ),
-                      li: ({ node, ...props }) => (
+                      li: ({ ...props }) => (
                         <li className="mb-2" {...props} />
                       ),
-                      code: ({ node, inline, ...props }) => (
-                        inline 
-                          ? <code className="bg-muted px-1 py-0.5 rounded" {...props} />
-                          : <pre className="bg-muted p-4 rounded-lg overflow-x-auto"><code {...props} /></pre>
-                      ),
+                      code: ({ className, children, ...props }) => {
+                        const match = /language-(\w+)/.exec(className || '')
+                        return match ? (
+                          <pre className="bg-muted p-4 rounded-lg overflow-x-auto">
+                            <code className={className} {...props}>
+                              {children}
+                            </code>
+                          </pre>
+                        ) : (
+                          <code className="bg-muted px-1 py-0.5 rounded" {...props}>
+                            {children}
+                          </code>
+                        )
+                      },
                     }}
                   >
                     {expandedProject.content}
                   </ReactMarkdown>
                 </motion.div>
-                {expandedProject.url && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.6, duration: 0.3 }}
-                  >
-                    <Button variant="outline" asChild>
-                      <Link href={expandedProject.url} target="_blank">
-                        View Project
-                        <ExternalLink className="ml-2 h-4 w-4" />
-                      </Link>
-                    </Button>
-                  </motion.div>
-                )}
               </div>
             </motion.article>
           </motion.div>

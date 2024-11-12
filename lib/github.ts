@@ -1,95 +1,75 @@
-import { Octokit } from "@octokit/rest"
+import { Octokit } from '@octokit/rest'
 
 const octokit = new Octokit({ 
-  auth: process.env.NEXT_PUBLIC_GITHUB_PAT || process.env.GITHUB_PAT 
+  auth: process.env.GITHUB_PAT 
 })
 
-export async function fetchProjects() {
+export interface Project {
+  title: string
+  description: string
+  date: string
+  tags: string[]
+  slug: string
+  content: string
+  type: string
+  category: string
+}
+
+export async function fetchProjects(): Promise<Project[]> {
   try {
-    const [projectsData, writingData] = await Promise.all([
-      octokit.repos.getContent({
-        owner: 'lukketsvane',
-        repo: 'personal-web',
-        path: 'projects'
-      }),
-      octokit.repos.getContent({
-        owner: 'lukketsvane',
-        repo: 'personal-web',
-        path: 'writing'
-      })
-    ])
+    const { data: projectsData } = await octokit.repos.getContent({
+      owner: 'lukketsvane',
+      repo: 'personal-web',
+      path: 'projects'
+    })
 
-    const allFiles = [
-      ...Array.isArray(projectsData.data) ? projectsData.data : [],
-      ...Array.isArray(writingData.data) ? writingData.data : []
-    ].filter(file => file.type === 'file' && file.name.endsWith('.mdx'))
+    if (!Array.isArray(projectsData)) {
+      throw new Error('Unexpected response format from GitHub API')
+    }
 
-    const projectsContent = await Promise.all(
-      allFiles.map(async (file) => {
-        const { data } = await octokit.repos.getContent({
-          owner: 'lukketsvane',
-          repo: 'personal-web',
-          path: file.path,
-        })
+    const projects = await Promise.all(
+      projectsData
+        .filter(file => file.type === 'file' && file.name.endsWith('.mdx'))
+        .map(async (file) => {
+          const { data } = await octokit.repos.getContent({
+            owner: 'lukketsvane',
+            repo: 'personal-web',
+            path: file.path,
+          })
 
-        if ('content' in data) {
-          const content = Buffer.from(data.content, 'base64').toString()
-          const frontMatterRegex = /---\s*([\s\S]*?)\s*---/
-          const frontMatterMatch = content.match(frontMatterRegex)
-          const frontMatter = frontMatterMatch ? frontMatterMatch[1] : ''
-          const mdContent = content.replace(frontMatterRegex, '').trim()
+          if (typeof data === 'object' && 'content' in data && typeof data.content === 'string') {
+            const content = Buffer.from(data.content, 'base64').toString()
+            const [, frontMatter, mdContent] = content.split('---')
+            const frontMatterObj = Object.fromEntries(
+              frontMatter.trim().split('\n').map(line => {
+                const [key, ...valueParts] = line.split(':')
+                return [key.trim(), valueParts.join(':').trim()]
+              })
+            )
 
-          const frontMatterObj = frontMatter.split('\n').reduce((acc, line) => {
-            const [key, value] = line.split(':').map(str => str.trim())
-            if (key && value) {
-              acc[key] = value.replace(/^['"](.*)['"]$/, '$1')
+            return {
+              title: frontMatterObj.title || file.name.replace('.mdx', ''),
+              description: frontMatterObj.description || '',
+              date: frontMatterObj.date || new Date().toISOString().split('T')[0],
+              tags: frontMatterObj.tags ? frontMatterObj.tags.split(',').map(tag => tag.trim()) : [],
+              slug: file.name.replace('.mdx', ''),
+              content: mdContent.trim(),
+              type: 'project',
+              category: frontMatterObj.category || 'project'
             }
-            return acc
-          }, {} as Record<string, string>)
-
-          const imagePaths = await fetchImagePaths(file.path.split('/')[0])
-          const slug = file.name.replace('.mdx', '')
-
-          return {
-            title: frontMatterObj.title || slug,
-            description: frontMatterObj.description || '',
-            date: frontMatterObj.date || new Date().toISOString().split('T')[0],
-            tags: frontMatterObj.tags ? frontMatterObj.tags.split(',').map(tag => tag.trim()) : [],
-            type: file.path.startsWith('projects/') ? 'project' : 'writing',
-            category: frontMatterObj.category || file.path.split('/')[0],
-            content: mdContent,
-            slug,
-            imagePaths,
-            url: frontMatterObj.url || '',
-            route: `/${slug}`
           }
-        }
-      })
+          return null
+        })
     )
 
-    return projectsContent.filter(Boolean)
+    return projects.filter((project): project is Project => project !== null)
   } catch (error) {
     console.error('Error fetching projects:', error)
-    throw error
+    return []
   }
 }
 
-async function fetchImagePaths(projectName: string) {
-  try {
-    const { data } = await octokit.repos.getContent({
-      owner: 'lukketsvane',
-      repo: 'personal-web',
-      path: `images/${projectName}`
-    })
-
-    if (Array.isArray(data)) {
-      return data
-        .filter(file => file.type === 'file' && /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(file.name))
-        .map(file => file.download_url)
-    }
-    return []
-  } catch (error) {
-    console.error(`Error fetching images for ${projectName}:`, error)
-    return []
-  }
-} 
+export async function getProjectBySlug(slug: string): Promise<Project | null> {
+  const projects = await fetchProjects()
+  return projects.find(project => project.slug === slug) || null
+}
