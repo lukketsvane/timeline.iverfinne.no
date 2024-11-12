@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import * as React from "react"
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import Image from 'next/image'
@@ -8,9 +8,9 @@ import { fetchProjects } from '@/lib/github'
 import type { ContentItem } from '@/lib/github'
 
 export default function FeaturedBuilds() {
-  const [featuredProjects, setFeaturedProjects] = useState<ContentItem[]>([])
+  const [featuredProjects, setFeaturedProjects] = React.useState<ContentItem[]>([])
 
-  useEffect(() => {
+  React.useEffect(() => {
     async function loadFeaturedProjects() {
       const projects = await fetchProjects()
       setFeaturedProjects(projects.slice(0, 3))
@@ -19,38 +19,49 @@ export default function FeaturedBuilds() {
   }, [])
 
   return (
-    <div className="mb-8 hidden sm:block">
-      <div className="grid grid-cols-3 gap-6">
-        {featuredProjects.map((project) => (
-          <Card key={project.slug} className="overflow-hidden w-72">
-            <div className="relative aspect-[16/9]">
-              {project.image && (
-                <Image
-                  src={project.image}
-                  alt={project.title}
-                  fill
-                  className="object-cover"
-                />
-              )}
-            </div>
-            <CardContent className="p-3">
-              <h3 className="text-lg font-semibold mb-1 truncate">{project.title}</h3>
-              <p className="text-muted-foreground text-xs mb-2 line-clamp-2">{project.description}</p>
-              <div className="flex flex-wrap gap-1">
-                {project.category && (
-                  <Badge variant="secondary" className="text-xs">
-                    {project.category}
-                  </Badge>
+    <div className="mb-16 hidden sm:block">
+      <div className="text-center mb-12">
+        <h1 className="text-4xl font-bold mb-2">build-in-public log</h1>
+        <p className="text-xl text-muted-foreground">
+          some of my tools and experiments.
+        </p>
+      </div>
+      <div className="flex justify-center ">
+        <div className="grid grid-cols-3 gap-2 max-w-5xl">
+          {featuredProjects.map((project) => (
+            <Card key={project.slug} className="overflow-hidden bg-white dark:bg-background shadow-sm w-[280px]">
+              <div className="relative aspect-[12/9]">
+                {project.image && (
+                  <Image
+                    src={project.image}
+                    alt={project.title}
+                    fill
+                    className="object-cover"
+                  />
                 )}
-                {project.tags && project.tags.map((tag) => (
-                  <Badge key={tag} variant="secondary" className="text-xs">
-                    {tag}
-                  </Badge>
-                ))}
               </div>
-            </CardContent>
-          </Card>
-        ))}
+              <CardContent className="p-4">
+                <div className="min-h-[100px] flex flex-col">
+                  <h3 className="text-base font-semibold mb-2">{project.title}</h3>
+                  <p className="text-sm text-muted-foreground mb-4 line-clamp-2 flex-grow">
+                    {project.description}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {project.tags?.slice(0, 3).map((tag) => (
+                      <Badge 
+                        key={tag} 
+                        variant="secondary" 
+                        className="text-xs py-0.5 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full font-normal"
+                      >
+                        {tag}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       </div>
     </div>
   )
