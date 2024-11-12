@@ -9,6 +9,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { Toast } from "@/components/ui/toast"
 import ReactMarkdown from 'react-markdown'
 import Image from 'next/image'
 import { fetchProjects, fetchWritings, fetchBooks, fetchOutgoingLinks, ContentItem } from "@/lib/github"
@@ -18,28 +19,19 @@ const categoryColors = {
   writing: "bg-violet-50 hover:bg-violet-100 text-violet-700 border-violet-200",
   book: "bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-200",
   outgoing_link: "bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200"
-}
+} as const
 
 const selectedCategoryColors = {
   project: "bg-emerald-500 hover:bg-emerald-600 text-white",
   writing: "bg-violet-500 hover:bg-violet-600 text-white",
   book: "bg-amber-500 hover:bg-amber-600 text-white",
   outgoing_link: "bg-blue-500 hover:bg-blue-600 text-white"
-}
+} as const
 
-function extractImageUrl(htmlString: string) {
-  const match = htmlString.match(/src="([^"]+)"/)
-  return match ? match[1] : null
-}
-
-interface RatingProps {
-  rating: number;
-}
-
-const Rating: React.FC<RatingProps> = ({ rating }) => {
+const Rating: React.FC<{ rating: number }> = React.memo(({ rating }) => {
   const fullStars = Math.floor(rating)
   const hasHalfStar = rating % 1 >= 0.5
-  
+
   return (
     <div className="flex items-center gap-0.5">
       {[...Array(fullStars)].map((_, i) => (
@@ -52,7 +44,24 @@ const Rating: React.FC<RatingProps> = ({ rating }) => {
       <span className="ml-2 text-sm text-gray-600">{rating.toFixed(1)}/10</span>
     </div>
   )
-}
+})
+
+Rating.displayName = 'Rating'
+
+const EntryIcon: React.FC<{ type: ContentItem['type'] }> = React.memo(({ type }) => {
+  switch (type) {
+    case 'project':
+      return <Code className="w-4 h-4" />
+    case 'writing':
+      return <Pen className="w-4 h-4" />
+    case 'book':
+      return <Book className="w-4 h-4" />
+    case 'outgoing_link':
+      return <ExternalLink className="w-4 h-4" />
+  }
+})
+
+EntryIcon.displayName = 'EntryIcon'
 
 export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string }) {
   const [entries, setEntries] = React.useState<ContentItem[]>([])
@@ -63,6 +72,7 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
   const [expandedEntry, setExpandedEntry] = React.useState<ContentItem | null>(null)
   const [error, setError] = React.useState<string | null>(null)
   const [showAllTags, setShowAllTags] = React.useState(false)
+  const [showToast, setShowToast] = React.useState(false)
 
   React.useEffect(() => {
     async function loadEntries() {
@@ -75,11 +85,7 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
         ])
         
         const allEntries: ContentItem[] = [...projects, ...writings, ...books, ...outgoingLinks]
-          .map(entry => ({
-            ...entry,
-            date: new Date(entry.date)
-          }))
-          .sort((a, b) => b.date.getTime() - a.date.getTime())
+          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
 
         setEntries(allEntries)
         setIsLoading(false)
@@ -126,75 +132,66 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
     })
   }, [entries, searchQuery, activeFilters, activeCategories])
 
-  const toggleFilter = (filter: string) => {
+  const toggleFilter = React.useCallback((filter: string) => {
     setActiveFilters(prev => 
       prev.includes(filter) 
         ? prev.filter(f => f !== filter)
         : [...prev, filter]
     )
-  }
+  }, [])
 
-  const toggleCategory = (category: string) => {
+  const toggleCategory = React.useCallback((category: string) => {
     setActiveCategories(prev => 
       prev.includes(category) 
         ? prev.filter(c => c !== category)
         : [...prev, category]
     )
-  }
+  }, [])
 
   const displayedTags = React.useMemo(() => {
     return showAllTags ? allTags : allTags.slice(0, 10)
   }, [allTags, showAllTags])
 
-  const handleEntryClick = (entry: ContentItem) => {
+  const handleEntryClick = React.useCallback((entry: ContentItem) => {
     if (entry.type === 'outgoing_link') {
       window.open(entry.url, '_blank')
     } else {
       setExpandedEntry(entry)
       window.history.pushState(null, '', `/${entry.type}/${entry.slug}`)
     }
-  }
+  }, [])
 
-  const handleShareClick = (entry: ContentItem) => {
-    const url = entry.type === 'outgoing_link' ? entry.url : `${window.location.origin}/${entry.type}/${entry.slug}`
+  const handleShareClick = React.useCallback((entry: ContentItem) => {
+    const url = entry.type === 'outgoing_link' && entry.url 
+      ? entry.url 
+      : `${window.location.origin}/${entry.type}/${entry.slug}`
+    
     navigator.clipboard.writeText(url).then(() => {
-      alert('Link copied to clipboard!')
+      setShowToast(true)
+      setTimeout(() => setShowToast(false), 3000)
     }).catch(err => {
       console.error('Failed to copy link: ', err)
     })
-  }
+  }, [])
 
-  const formatDate = (date: Date) => {
-    return new Intl.DateTimeFormat('en-US', {
+  const formatDate = React.useCallback((date: string) => {
+    return new Date(date).toLocaleDateString('en-US', {
       month: '2-digit',
       day: '2-digit',
       year: 'numeric'
-    }).format(date)
-  }
-
-  const getEntryIcon = (type: ContentItem['type']) => {
-    switch (type) {
-      case 'project':
-        return <Code className="w-4 h-4" />
-      case 'writing':
-        return <Pen className="w-4 h-4" />
-      case 'book':
-        return <Book className="w-4 h-4" />
-      case 'outgoing_link':
-        return <ExternalLink className="w-4 h-4" />
-    }
-  }
+    })
+  }, [])
 
   const currentIndex = expandedEntry ? filteredEntries.findIndex(entry => entry.slug === expandedEntry.slug) : -1
 
-  const navigateTimeline = (direction: 'prev' | 'next') => {
+  const navigateTimeline = React.useCallback((direction: 'prev' | 'next') => {
     if (currentIndex === -1) return
     const newIndex = direction === 'prev' ? currentIndex - 1 : currentIndex + 1
     if (newIndex >= 0 && newIndex < filteredEntries.length) {
       setExpandedEntry(filteredEntries[newIndex])
       window.history.pushState(null, '', `/${filteredEntries[newIndex].type}/${filteredEntries[newIndex].slug}`)
     }
-  }
+  }, [currentIndex, filteredEntries])
 
   if (isLoading) {
     return (
@@ -237,13 +234,13 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
                       key={category}
                       className={`cursor-pointer transition-colors ${
                         activeCategories.includes(category)
-                          ? selectedCategoryColors[category]
-                          : categoryColors[category]
+                          ? selectedCategoryColors[category as keyof typeof selectedCategoryColors]
+                          : categoryColors[category as keyof typeof categoryColors]
                       }`}
                       onClick={() => toggleCategory(category)}
                     >
                       <span className="flex items-center gap-1.5">
-                        {getEntryIcon(category)}
+                        <EntryIcon type={category as ContentItem['type']} />
                         {category === 'outgoing_link' ? 'External' : category.charAt(0).toUpperCase() + category.slice(1)}
                       </span>
                     </Badge>
@@ -305,7 +302,7 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
                     <Card className="overflow-hidden">
                       <CardContent className="p-3 md:p-4">
                         <div className="flex items-center gap-2 mb-2">
-                          {getEntryIcon(entry.type)}
+                          <EntryIcon type={entry.type} />
                           <span className={`text-xs md:text-sm font-medium capitalize ${
                             categoryColors[entry.type].split(' ')[2]
                           }`}>
@@ -317,7 +314,7 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
                             {entry.title}
                           </button>
                         </h2>
-                        {entry.type === 'book' && entry.rating && (
+                        {entry.type === 'book' && entry.rating !== undefined && (
                           <div className="mt-2">
                             <Rating rating={entry.rating} />
                           </div>
@@ -325,11 +322,11 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
                         {entry.image && (
                           <div className="relative w-full h-32 md:h-48 my-3 md:my-4">
                             <Image
-                              src={extractImageUrl(entry.image) || entry.image}
+                              src={entry.image}
                               alt={entry.title}
                               fill
                               className="object-cover rounded-lg"
-                            />
+                />
                           </div>
                         )}
                         <p className="text-sm md:text-base text-muted-foreground mt-2">
@@ -419,12 +416,12 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
                   className="space-y-3 md:space-y-4"
                 >
                   <div className="flex items-center gap-2">
-                    {getEntryIcon(expandedEntry.type)}
+                    <EntryIcon type={expandedEntry.type} />
                     <span className="text-sm font-medium capitalize">{expandedEntry.type}</span>
                   </div>
                   <time className="text-sm text-muted-foreground">{formatDate(expandedEntry.date)}</time>
                   <h1 className="text-2xl md:text-4xl font-bold">{expandedEntry.title}</h1>
-                  {expandedEntry.type === 'book' && expandedEntry.rating && (
+                  {expandedEntry.type === 'book' && expandedEntry.rating !== undefined && (
                     <Rating rating={expandedEntry.rating} />
                   )}
                   <div className="flex flex-wrap gap-2">
@@ -513,6 +510,16 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
               </div>
             </motion.article>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showToast && (
+          <Toast
+            variant="default"
+            title="Link copied"
+            description="The link has been copied to your clipboard."
+          />
         )}
       </AnimatePresence>
     </div>

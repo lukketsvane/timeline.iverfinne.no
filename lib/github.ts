@@ -13,9 +13,9 @@ export interface ContentItem {
   content: string
   type: 'project' | 'writing' | 'book' | 'outgoing_link'
   category: string
-  url?: string // for outgoing links
-  image?: string;
-  rating?: number // Add this line
+  url?: string
+  image?: string
+  rating?: number
 }
 
 async function fetchContentFromGitHub(path: string, type: 'project' | 'writing' | 'book'): Promise<ContentItem[]> {
@@ -60,8 +60,8 @@ async function fetchContentFromGitHub(path: string, type: 'project' | 'writing' 
               type: type,
               category: frontMatterObj.category || type,
               image: frontMatterObj.image || '',
-              rating: frontMatterObj.rating ? parseInt(frontMatterObj.rating) : undefined, //Added rating
-            }
+              rating: frontMatterObj.rating ? parseFloat(frontMatterObj.rating) : undefined,
+            } as ContentItem
           }
           return null
         })
@@ -129,8 +129,8 @@ export async function fetchOutgoingLinks(): Promise<ContentItem[]> {
               category: frontMatterObj.category || 'outgoing_link',
               url: frontMatterObj.url || '',
               image: frontMatterObj.image || '',
-              rating: frontMatterObj.rating ? parseInt(frontMatterObj.rating) : undefined, //Added rating
-            }
+              rating: frontMatterObj.rating ? parseFloat(frontMatterObj.rating) : undefined,
+            } as ContentItem
           }
           return null
         })
