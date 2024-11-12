@@ -14,6 +14,7 @@ export interface ContentItem {
   type: 'project' | 'writing' | 'book' | 'outgoing_link'
   category: string
   url?: string // for outgoing links
+  image?: string;
 }
 
 async function fetchContentFromGitHub(path: string, type: 'project' | 'writing' | 'book'): Promise<ContentItem[]> {
@@ -56,7 +57,8 @@ async function fetchContentFromGitHub(path: string, type: 'project' | 'writing' 
               slug: file.name.replace('.mdx', ''),
               content: mdContent.trim(),
               type: type,
-              category: frontMatterObj.category || type
+              category: frontMatterObj.category || type,
+              image: frontMatterObj.image || ''
             }
           }
           return null
@@ -123,7 +125,8 @@ export async function fetchOutgoingLinks(): Promise<ContentItem[]> {
               content: mdContent.trim(),
               type: 'outgoing_link' as const,
               category: frontMatterObj.category || 'outgoing_link',
-              url: frontMatterObj.url || ''
+              url: frontMatterObj.url || '',
+              image: frontMatterObj.image || ''
             }
           }
           return null
@@ -175,4 +178,4 @@ export async function fetchEntryBySlug(slug: string): Promise<ContentItem | null
 export async function fetchAllSlugs(): Promise<string[]> {
   const allEntries = await fetchAllEntries();
   return allEntries.map(entry => entry.slug);
-} 
+}

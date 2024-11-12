@@ -21,7 +21,6 @@ export default function FeaturedBuilds() {
     loadFeaturedProjects()
   }, [])
 
-  // Check if the cards can fit in a row of three without wrapping
   React.useEffect(() => {
     const updateVisibility = () => {
       if (containerRef.current) {
@@ -30,18 +29,11 @@ export default function FeaturedBuilds() {
         const numberOfCards = 3
         const totalRequiredWidth = cardWidth * numberOfCards
 
-        if (containerWidth >= totalRequiredWidth) {
-          setShouldShowProjects(true)
-        } else {
-          setShouldShowProjects(false)
-        }
+        setShouldShowProjects(containerWidth >= totalRequiredWidth)
       }
     }
 
-    // Run check on initial load
     updateVisibility()
-
-    // Run check whenever window is resized
     window.addEventListener('resize', updateVisibility)
     return () => {
       window.removeEventListener('resize', updateVisibility)
@@ -108,4 +100,4 @@ export default function FeaturedBuilds() {
       </div>
     </div>
   )
-}
+}cl
