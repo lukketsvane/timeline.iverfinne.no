@@ -11,7 +11,7 @@ export interface ContentItem {
   tags: string[]
   slug: string
   content: string
-  type: 'project' | 'writing' | 'book' | 'outgoing_link'
+  type: 'project' | 'writing' | 'book' | 'outgoing'
   category: string
   url?: string
   image?: string
@@ -86,12 +86,12 @@ export async function fetchBooks(): Promise<ContentItem[]> {
   return fetchContentFromGitHub('books', 'book')
 }
 
-export async function fetchOutgoingLinks(): Promise<ContentItem[]> {
+export async function Outgoing(): Promise<ContentItem[]> {
   try {
     const { data: contentData } = await octokit.repos.getContent({
       owner: 'lukketsvane',
       repo: 'personal-web',
-      path: 'outgoing_links'
+      path: 'outgoing'
     })
 
     if (!Array.isArray(contentData)) {
@@ -125,8 +125,8 @@ export async function fetchOutgoingLinks(): Promise<ContentItem[]> {
               tags: frontMatterObj.tags ? frontMatterObj.tags.split(',').map(tag => tag.trim()) : [],
               slug: file.name.replace('.mdx', ''),
               content: mdContent.trim(),
-              type: 'outgoing_link' as const,
-              category: frontMatterObj.category || 'outgoing_link',
+              type: 'outgoing' as const,
+              category: frontMatterObj.category || 'outgoing',
               url: frontMatterObj.url || '',
               image: frontMatterObj.image || '',
               rating: frontMatterObj.rating ? parseFloat(frontMatterObj.rating) : undefined,
@@ -159,7 +159,7 @@ export async function getBookBySlug(slug: string): Promise<ContentItem | null> {
 }
 
 export async function getOutgoingLinkBySlug(slug: string): Promise<ContentItem | null> {
-  const links = await fetchOutgoingLinks()
+  const links = await Outgoing()
   return links.find(link => link.slug === slug) || null
 }
 
@@ -168,7 +168,7 @@ export async function fetchAllEntries(): Promise<ContentItem[]> {
     fetchProjects(),
     fetchWritings(),
     fetchBooks(),
-    fetchOutgoingLinks()
+    Outgoing()
   ]);
   return [...projects, ...writings, ...books, ...outgoingLinks];
 }

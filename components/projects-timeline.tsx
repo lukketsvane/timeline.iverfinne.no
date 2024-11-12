@@ -12,20 +12,20 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Toast, ToastTitle, ToastDescription } from "@/components/ui/toast"
 import ReactMarkdown from 'react-markdown'
 import Image from 'next/image'
-import { fetchProjects, fetchWritings, fetchBooks, fetchOutgoingLinks, ContentItem } from "@/lib/github"
+import { fetchProjects, fetchWritings, fetchBooks, Outgoing, ContentItem } from "@/lib/github"
 
 const categoryColors = {
-  project: "bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200",
-  writing: "bg-violet-50 hover:bg-violet-100 text-violet-700 border-violet-200",
-  book: "bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-200",
-  outgoing_link: "bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200"
+  project: "bg-secondary text-secondary-foreground",
+  writing: "bg-secondary text-secondary-foreground",
+  book: "bg-secondary text-secondary-foreground",
+  outgoing: "bg-secondary text-secondary-foreground"
 } as const
 
 const selectedCategoryColors = {
-  project: "bg-emerald-500 hover:bg-emerald-600 text-white",
-  writing: "bg-violet-500 hover:bg-violet-600 text-white",
-  book: "bg-amber-500 hover:bg-amber-600 text-white",
-  outgoing_link: "bg-blue-500 hover:bg-blue-600 text-white"
+  project: "bg-primary text-primary-foreground",
+  writing: "bg-primary text-primary-foreground",
+  book: "bg-primary text-primary-foreground",
+  outgoing: "bg-primary text-primary-foreground"
 } as const
 
 const Rating: React.FC<{ rating: number }> = React.memo(({ rating }) => {
@@ -35,13 +35,13 @@ const Rating: React.FC<{ rating: number }> = React.memo(({ rating }) => {
   return (
     <div className="flex items-center gap-0.5">
       {[...Array(fullStars)].map((_, i) => (
-        <Star key={i} className="w-4 h-4 fill-amber-500 text-amber-500" />
+        <Star key={i} className="w-4 h-4 fill-primary text-primary" />
       ))}
-      {hasHalfStar && <Star className="w-4 h-4 fill-amber-500 text-amber-500" />}
+      {hasHalfStar && <Star className="w-4 h-4 fill-primary text-primary" />}
       {[...Array(10 - Math.ceil(rating))].map((_, i) => (
-        <Star key={`empty-${i}`} className="w-4 h-4 text-gray-300" />
+        <Star key={`empty-${i}`} className="w-4 h-4 text-muted-foreground" />
       ))}
-      <span className="ml-2 text-sm text-gray-600">{rating.toFixed(1)}/10</span>
+      <span className="ml-2 text-sm text-muted-foreground">{rating.toFixed(1)}/10</span>
     </div>
   )
 })
@@ -56,7 +56,7 @@ const EntryIcon: React.FC<{ type: ContentItem['type'] }> = React.memo(({ type })
       return <Pen className="w-4 h-4" />
     case 'book':
       return <Book className="w-4 h-4" />
-    case 'outgoing_link':
+    case 'outgoing':
       return <ExternalLink className="w-4 h-4" />
   }
 })
@@ -81,7 +81,7 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
           fetchProjects(),
           fetchWritings(),
           fetchBooks(),
-          fetchOutgoingLinks()
+          Outgoing()
         ])
         
         const allEntries: ContentItem[] = [...projects, ...writings, ...books, ...outgoingLinks]
@@ -153,7 +153,7 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
   }, [allTags, showAllTags])
 
   const handleEntryClick = React.useCallback((entry: ContentItem) => {
-    if (entry.type === 'outgoing_link') {
+    if (entry.type === 'outgoing') {
       window.open(entry.url, '_blank', 'noopener,noreferrer')
     } else {
       setExpandedEntry(entry)
@@ -162,7 +162,7 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
   }, [])
 
   const handleShareClick = React.useCallback((entry: ContentItem) => {
-    const url = entry.type === 'outgoing_link' && entry.url 
+    const url = entry.type === 'outgoing' && entry.url 
       ? entry.url 
       : `${window.location.origin}/${entry.type}/${entry.slug}`
     
@@ -203,7 +203,7 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
 
   if (error) {
     return (
-      <div className="flex justify-center items-center h-screen text-red-500">
+      <div className="flex justify-center items-center h-screen text-destructive">
         {error}
       </div>
     )
@@ -212,8 +212,8 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
   return (
     <div className="bg-background">
       <div className="container mx-auto p-4 lg:p-8">
-        <div className="grid gap-8 lg:grid-cols-[320px,1fr]">
-          <aside className="space-y-6">
+        <div className="grid gap-8 lg:grid-cols-[250px,1fr]">
+          <aside className="space-y-6 w-[250px]">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
@@ -229,7 +229,7 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
               <div>
                 <Label className="text-base">Categories</Label>
                 <div className="flex flex-wrap gap-2 mt-2">
-                  {['project', 'writing', 'book', 'outgoing_link'].map((category) => (
+                  {['project', 'writing', 'book', 'outgoing'].map((category) => (
                     <Badge
                       key={category}
                       className={`cursor-pointer transition-colors ${
@@ -241,7 +241,7 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
                     >
                       <span className="flex items-center gap-1.5">
                         <EntryIcon type={category as ContentItem['type']} />
-                        {category === 'outgoing_link' ? 'External' : category.charAt(0).toUpperCase() + category.slice(1)}
+                        {category === 'outgoing' ? 'External' : category.charAt(0).toUpperCase() + category.slice(1)}
                       </span>
                     </Badge>
                   ))}
@@ -256,8 +256,8 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
                       key={tag}
                       className={`cursor-pointer transition-colors ${
                         activeFilters.includes(tag)
-                          ? "bg-gray-900 hover:bg-gray-800 text-white"
-                          : "bg-gray-50 hover:bg-gray-100 text-gray-700"
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-secondary text-secondary-foreground"
                       }`}
                       onClick={() => toggleFilter(tag)}
                     >
@@ -285,7 +285,7 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
 
           <main>
             <div className="relative">
-              <div className="absolute left-8 md:left-16 top-0 h-full w-px bg-border" />
+              <div className="absolute left-24 md:left-32 top-0 h-full w-px bg-border" />
               <div className="space-y-8 md:space-y-12">
                 {filteredEntries.map((entry, index) => (
                   <motion.div
@@ -293,20 +293,20 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: index * 0.1, duration: 0.3 }}
-                    className="relative pl-24 md:pl-32"
+                    className="relative pl-28 md:pl-36"
                   >
-                    <time className="absolute left-0 top-0 text-base md:text-lg lg:text-xl font-bold text-muted-foreground">
+                    <time className="absolute left-0 top-0 text-base md:text-lg lg:text-xl font-bold text-foreground w-24 md:w-32 pr-4">
                       {formatDate(entry.date)}
                     </time>
-                    <div className="absolute left-[90px] md:left-[124px] top-[10px] h-3 w-3 rounded-full border-2 border-primary bg-background" />
+                    <div className="absolute left-[110px] md:left-[150px] top-[10px] h-3 w-3 rounded-full border-2 border-primary bg-background" />
                     <Card className="overflow-hidden">
                       <CardContent className="p-4 md:p-6">
                         <div className="flex items-center gap-2 mb-2">
                           <EntryIcon type={entry.type} />
                           <span className={`text-xs md:text-sm font-medium capitalize ${
-                            categoryColors[entry.type].split(' ')[2]
+                            categoryColors[entry.type].split(' ')[1]
                           }`}>
-                            {entry.type === 'outgoing_link' ? 'External' : entry.type}
+                            {entry.type === 'outgoing' ? 'External' : entry.type}
                           </span>
                         </div>
                         <div className="flex items-start gap-4">
@@ -322,27 +322,27 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
                             </div>
                           )}
                           <div className="flex-grow">
-                            {entry.type === 'outgoing_link' ? (
+                            {entry.type === 'outgoing' ? (
                               <a
                                 href={entry.url}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="text-lg md:text-xl font-semibold text-blue-500 hover:text-blue-600 transition-colors"
+                                className="text-lg md:text-xl font-semibold text-primary hover:underline"
                               >
                                 {entry.title}
                               </a>
                             ) : (
-                              <h2 className="text-lg md:text-xl font-semibold text-blue-500 hover:text-blue-600 transition-colors">
+                              <h2 className="text-lg md:text-xl font-semibold text-primary hover:underline">
                                 <button className="text-left" onClick={() => handleEntryClick(entry)}>
                                   {entry.title}
                                 </button>
                               </h2>
                             )}
                             {entry.type === 'book' && entry.rating !== undefined && (
-                                <div className="mt-2">
-                                  <Rating rating={entry.rating} />
-                                </div>
-                              )}
+                              <div className="mt-2">
+                                <Rating rating={entry.rating} />
+                              </div>
+                            )}
                             <p className="text-sm md:text-base text-muted-foreground mt-2">
                               {entry.description}
                             </p>
@@ -353,14 +353,14 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
                             {entry.tags?.map((tag, tagIndex) => (
                               <Badge 
                                 key={tagIndex} 
-                                className="bg-gray-50 text-gray-700 shrink-0 text-xs md:text-sm"
+                                className="bg-secondary text-secondary-foreground shrink-0 text-xs md:text-sm"
                               >
                                 {tag}
                               </Badge>
                             ))}
                           </div>
                         </ScrollArea>
-                        {entry.type !== 'outgoing_link' && (
+                        {entry.type !== 'outgoing' && (
                           <Button
                             variant="ghost"
                             size="sm"

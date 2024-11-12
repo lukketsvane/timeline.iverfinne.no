@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
+import { Metadata } from 'next'
 import ProjectsTimeline from '@/components/projects-timeline'
-import { fetchProjects, fetchWritings, fetchBooks, fetchOutgoingLinks, ContentItem } from '@/lib/github'
+import { fetchProjects, fetchWritings, fetchBooks, Outgoing, ContentItem, fetchAllEntries, fetchAllSlugs, fetchEntryBySlug } from '@/lib/github'
 
 export async function generateStaticParams() {
   const slugs = await fetchAllSlugs()
@@ -8,8 +9,7 @@ export async function generateStaticParams() {
 }
 
 export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
-  const allEntries = await fetchAllEntries()
-  const entry = allEntries.find(e => e.slug === params.slug)
+  const entry = await fetchEntryBySlug(params.slug)
   
   if (!entry) {
     return {
@@ -25,8 +25,7 @@ export async function generateMetadata({ params }: { params: { slug: string } })
 }
 
 export default async function EntryPage({ params }: { params: { slug: string } }) {
-  const allEntries = await fetchAllEntries()
-  const entry = allEntries.find(e => e.slug === params.slug)
+  const entry = await fetchEntryBySlug(params.slug)
 
   if (!entry) {
     notFound()
@@ -38,23 +37,3 @@ export default async function EntryPage({ params }: { params: { slug: string } }
     </main>
   )
 }
-
-async function fetchAllEntries(): Promise<ContentItem[]> {
-  const [projects, writings, books, outgoingLinks] = await Promise.all([
-    fetchProjects(),
-    fetchWritings(),
-    fetchBooks(),
-    fetchOutgoingLinks()
-  ])
-  return [...projects, ...writings, ...books, ...outgoingLinks]
-}
-
-async function fetchAllSlugs() {
-  const allEntries = await fetchAllEntries();
-  return allEntries.map(entry => entry.slug);
-}
-
-type Metadata = {
-  title: string;
-  description: string;
-};
