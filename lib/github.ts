@@ -4,31 +4,31 @@ const octokit = new Octokit({
   auth: process.env.GITHUB_PAT 
 })
 
-export interface Project {
+export interface ContentItem {
   title: string
   description: string
   date: string
   tags: string[]
   slug: string
   content: string
-  type: string
+  type: 'project' | 'writing' | 'book'
   category: string
 }
 
-export async function fetchProjects(): Promise<Project[]> {
+async function fetchContentFromGitHub(path: string, type: 'project' | 'writing' | 'book'): Promise<ContentItem[]> {
   try {
-    const { data: projectsData } = await octokit.repos.getContent({
+    const { data: contentData } = await octokit.repos.getContent({
       owner: 'lukketsvane',
       repo: 'personal-web',
-      path: 'projects'
+      path: path
     })
 
-    if (!Array.isArray(projectsData)) {
+    if (!Array.isArray(contentData)) {
       throw new Error('Unexpected response format from GitHub API')
     }
 
-    const projects = await Promise.all(
-      projectsData
+    const content = await Promise.all(
+      contentData
         .filter(file => file.type === 'file' && file.name.endsWith('.mdx'))
         .map(async (file) => {
           const { data } = await octokit.repos.getContent({
@@ -54,22 +54,44 @@ export async function fetchProjects(): Promise<Project[]> {
               tags: frontMatterObj.tags ? frontMatterObj.tags.split(',').map(tag => tag.trim()) : [],
               slug: file.name.replace('.mdx', ''),
               content: mdContent.trim(),
-              type: 'project',
-              category: frontMatterObj.category || 'project'
+              type: type,
+              category: frontMatterObj.category || type
             }
           }
           return null
         })
     )
 
-    return projects.filter((project): project is Project => project !== null)
+    return content.filter((item): item is ContentItem => item !== null)
   } catch (error) {
-    console.error('Error fetching projects:', error)
+    console.error(`Error fetching ${type}s:`, error)
     return []
   }
 }
 
-export async function getProjectBySlug(slug: string): Promise<Project | null> {
+export async function fetchProjects(): Promise<ContentItem[]> {
+  return fetchContentFromGitHub('projects', 'project')
+}
+
+export async function fetchWritings(): Promise<ContentItem[]> {
+  return fetchContentFromGitHub('writings', 'writing')
+}
+
+export async function fetchBooks(): Promise<ContentItem[]> {
+  return fetchContentFromGitHub('books', 'book')
+}
+
+export async function getProjectBySlug(slug: string): Promise<ContentItem | null> {
   const projects = await fetchProjects()
   return projects.find(project => project.slug === slug) || null
+}
+
+export async function getWritingBySlug(slug: string): Promise<ContentItem | null> {
+  const writings = await fetchWritings()
+  return writings.find(writing => writing.slug === slug) || null
+}
+
+export async function getBookBySlug(slug: string): Promise<ContentItem | null> {
+  const books = await fetchBooks()
+  return books.find(book => book.slug === slug) || null
 }

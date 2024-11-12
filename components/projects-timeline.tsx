@@ -2,42 +2,32 @@
 
 import * as React from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Search, ChevronLeft, ExternalLink, ChevronDown, ChevronUp, Share2 } from "lucide-react"
+import { Search, ChevronLeft, ChevronDown, ChevronUp, Share2, Book, Pen, Code } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import Link from "next/link"
-import { useRouter, usePathname } from 'next/navigation'
 import ReactMarkdown from 'react-markdown'
 import Image from 'next/image'
-import { Project, fetchProjects } from "@/lib/github"
+import { fetchProjects, fetchWritings, fetchBooks, ContentItem } from "@/lib/github"
 
 interface ImageGridProps {
-  images: {
-    src: string;
-    alt: string;
-    caption: string;
-  }[];
+  imagePaths: string[];
 }
 
-const ImageGrid: React.FC<ImageGridProps> = ({ images }) => {
+const ImageGrid: React.FC<ImageGridProps> = ({ imagePaths }) => {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      {images.map((image, index) => (
+    <div className="grid grid-cols-2 gap-4">
+      {imagePaths.map((src, index) => (
         <div key={index} className="flex flex-col items-center">
-          <div className="relative w-full aspect-video">
-            <Image
-              src={image.src}
-              alt={image.alt}
-              layout="fill"
-              objectFit="cover"
-              className="rounded-lg"
-            />
-          </div>
-          <p className="mt-2 text-sm text-center">{image.caption}</p>
+          <Image
+            src={src}
+            alt={`Content image ${index + 1}`}
+            width={300}
+            height={200}
+            className="w-full rounded-lg mb-2"
+          />
         </div>
       ))}
     </div>
@@ -45,73 +35,71 @@ const ImageGrid: React.FC<ImageGridProps> = ({ images }) => {
 }
 
 export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string }) {
-  const [projects, setProjects] = React.useState<Project[]>([])
+  const [entries, setEntries] = React.useState<ContentItem[]>([])
   const [searchQuery, setSearchQuery] = React.useState("")
   const [activeFilters, setActiveFilters] = React.useState<string[]>([])
+  const [activeCategories, setActiveCategories] = React.useState<string[]>([])
   const [isLoading, setIsLoading] = React.useState(true)
-  const [expandedProject, setExpandedProject] = React.useState<Project | null>(null)
+  const [expandedEntry, setExpandedEntry] = React.useState<ContentItem | null>(null)
   const [error, setError] = React.useState<string | null>(null)
   const [showAllTags, setShowAllTags] = React.useState(false)
-  const router = useRouter()
-  const pathname = usePathname()
 
   React.useEffect(() => {
-    async function loadProjects() {
+    async function loadEntries() {
       try {
-        const fetchedProjects = await fetchProjects()
-        setProjects(fetchedProjects)
+        const [projects, writings, books] = await Promise.all([
+          fetchProjects(),
+          fetchWritings(),
+          fetchBooks()
+        ])
+        
+        const allEntries: ContentItem[] = [...projects, ...writings, ...books]
+          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+
+        setEntries(allEntries)
         setIsLoading(false)
       } catch (error) {
-        console.error('Error fetching projects:', error)
-        setError('Failed to load projects. Please try again later.')
+        console.error('Error fetching entries:', error)
+        setError('Failed to load content. Please try again later.')
         setIsLoading(false)
       }
     }
 
-    loadProjects()
+    loadEntries()
   }, [])
 
   React.useEffect(() => {
-    if (initialSlug && projects.length > 0) {
-      const project = projects.find(p => p.slug === initialSlug)
-      if (project) {
-        setExpandedProject(project)
+    if (initialSlug && entries.length > 0) {
+      const entry = entries.find(e => e.slug === initialSlug)
+      if (entry) {
+        setExpandedEntry(entry)
       }
     }
-  }, [initialSlug, projects])
-
-  React.useEffect(() => {
-    const slug = pathname.split('/').pop()
-    if (slug) {
-      const project = projects.find(p => p.slug === slug)
-      if (project) {
-        setExpandedProject(project)
-      }
-    }
-  }, [pathname, projects])
+  }, [initialSlug, entries])
 
   const allTags = React.useMemo(() => {
     const tags = new Set<string>()
-    projects.forEach(project => {
-      project.tags.forEach(tag => tags.add(tag))
+    entries.forEach(entry => {
+      entry.tags?.forEach(tag => tags.add(tag))
     })
     return Array.from(tags)
-  }, [projects])
+  }, [entries])
 
-  const filteredProjects = React.useMemo(() => {
-    return projects.filter(project => {
+  const filteredEntries = React.useMemo(() => {
+    return entries.filter(entry => {
       const matchesSearch = 
-        project.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        project.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        project.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()))
+        entry.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        entry.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        entry.tags?.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()))
       
-      if (activeFilters.length === 0) return matchesSearch
+      const matchesCategory = activeCategories.length === 0 || activeCategories.includes(entry.type)
       
-      return matchesSearch && (
-        project.tags.some(tag => activeFilters.includes(tag))
-      )
+      const matchesFilter = activeFilters.length === 0 || 
+        entry.tags?.some(tag => activeFilters.includes(tag))
+      
+      return matchesSearch && matchesCategory && matchesFilter
     })
-  }, [projects, searchQuery, activeFilters])
+  }, [entries, searchQuery, activeFilters, activeCategories])
 
   const toggleFilter = (filter: string) => {
     setActiveFilters(prev => 
@@ -121,17 +109,25 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
     )
   }
 
+  const toggleCategory = (category: string) => {
+    setActiveCategories(prev => 
+      prev.includes(category) 
+        ? prev.filter(c => c !== category)
+        : [...prev, category]
+    )
+  }
+
   const displayedTags = React.useMemo(() => {
     return showAllTags ? allTags : allTags.slice(0, 10)
   }, [allTags, showAllTags])
 
-  const handleProjectClick = (project: Project) => {
-    setExpandedProject(project)
-    window.history.pushState(null, '', `/${project.slug}`)
+  const handleEntryClick = (entry: ContentItem) => {
+    setExpandedEntry(entry)
+    window.history.pushState(null, '', `/${entry.type}/${entry.slug}`)
   }
 
-  const handleShareClick = (project: Project) => {
-    const url = `${window.location.origin}/${project.slug}`
+  const handleShareClick = (entry: ContentItem) => {
+    const url = `${window.location.origin}/${entry.type}/${entry.slug}`
     navigator.clipboard.writeText(url).then(() => {
       alert('Link copied to clipboard!')
     }).catch(err => {
@@ -142,6 +138,17 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
   const formatDate = (dateString: string) => {
     const date = new Date(dateString)
     return date.toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })
+  }
+
+  const getEntryIcon = (type: ContentItem['type']) => {
+    switch (type) {
+      case 'project':
+        return <Code className="w-4 h-4" />
+      case 'writing':
+        return <Pen className="w-4 h-4" />
+      case 'book':
+        return <Book className="w-4 h-4" />
+    }
   }
 
   if (isLoading) {
@@ -161,13 +168,28 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="bg-background">
       <div className="container mx-auto p-4 lg:p-8">
         <div className="grid gap-8 lg:grid-cols-[240px,1fr]">
           <aside className="space-y-6">
             <div className="space-y-4">
               <div>
-                <Label>tags</Label>
+                <Label>Categories</Label>
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {['project', 'writing', 'book'].map((category) => (
+                    <Badge
+                      key={category}
+                      variant={activeCategories.includes(category) ? "default" : "outline"}
+                      className="cursor-pointer bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200"
+                      onClick={() => toggleCategory(category)}
+                    >
+                      {category.charAt(0).toUpperCase() + category.slice(1)}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <Label>Tags</Label>
                 <div className="flex flex-wrap gap-2 mt-2">
                   {displayedTags.map(tag => (
                     <Badge
@@ -198,7 +220,7 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
             </div>
           </aside>
 
-          <main className="min-h-screen">
+          <main>
             <div className="mb-8">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -211,56 +233,58 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
                 />
               </div>
             </div>
-            <ScrollArea className="h-[calc(100vh-200px)]">
-              <div className="relative">
-                <div className="absolute left-4 top-0 h-full w-px bg-border md:left-8" />
-                <div className="space-y-12">
-                  {filteredProjects.map((project, index) => (
-                    <motion.div
-                      key={index}
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: index * 0.1, duration: 0.3 }}
-                      className="relative pl-10 md:pl-16"
-                    >
-                      <div className="absolute left-[14px] top-[22px] h-3 w-3 rounded-full border-2 border-primary bg-background md:left-[30px]" />
-                      <div className="flex flex-col gap-2">
-                        <time className="text-sm text-muted-foreground">{formatDate(project.date)}</time>
-                        <Card className="p-4 hover:shadow-md transition-shadow duration-200">
-                          <h2 className="font-semibold hover:text-primary">
-                            <button
-                              className="text-left"
-                              onClick={() => handleProjectClick(project)}
-                            >
-                              {project.title}
-                            </button>
-                          </h2>
-                          <p className="mt-1 text-sm text-muted-foreground">
-                            {project.description}
-                          </p>
-                          <div className="mt-4 flex flex-wrap gap-2">
-                            {project.tags.map((tag, tagIndex) => (
-                              <Badge key={tagIndex} variant="secondary">
-                                {tag}
-                              </Badge>
-                            ))}
-                          </div>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="mt-2"
-                            onClick={() => handleShareClick(project)}
+            <div className="relative">
+              <div className="absolute left-4 top-0 h-full w-px bg-border md:left-8" />
+              <div className="space-y-12">
+                {filteredEntries.map((entry, index) => (
+                  <motion.div
+                    key={entry.slug}
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: index * 0.1, duration: 0.3 }}
+                    className="relative pl-10 md:pl-16"
+                  >
+                    <div className="absolute left-[14px] top-[22px] h-3 w-3 rounded-full border-2 border-primary bg-background md:left-[30px]" />
+                    <div className="flex flex-col gap-2">
+                      <time className="text-sm text-muted-foreground">{formatDate(entry.date)}</time>
+                      <Card className="p-4 hover:shadow-md transition-shadow duration-200">
+                        <div className="flex items-center gap-2 mb-2">
+                          {getEntryIcon(entry.type)}
+                          <span className="text-sm font-medium capitalize">{entry.type}</span>
+                        </div>
+                        <h2 className="font-semibold hover:text-primary">
+                          <button
+                            className="text-left"
+                            onClick={() => handleEntryClick(entry)}
                           >
-                            <Share2 className="mr-2 h-4 w-4" />
-                            Share
-                          </Button>
-                        </Card>
-                      </div>
-                    </motion.div>
-                  ))}
-                </div>
+                            {entry.title}
+                          </button>
+                        </h2>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          {entry.description}
+                        </p>
+                        <div className="mt-4 flex flex-wrap gap-2">
+                          {entry.tags?.map((tag, tagIndex) => (
+                            <Badge key={tagIndex} variant="secondary">
+                              {tag}
+                            </Badge>
+                          ))}
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="mt-2"
+                          onClick={() => handleShareClick(entry)}
+                        >
+                          <Share2 className="mr-2 h-4 w-4" />
+                          Share
+                        </Button>
+                      </Card>
+                    </div>
+                  </motion.div>
+                ))}
               </div>
-            </ScrollArea>
+            </div>
           </main>
         </div>
       </div>
@@ -271,7 +295,7 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
       </Button>
 
       <AnimatePresence mode="wait">
-        {expandedProject && (
+        {expandedEntry && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -289,7 +313,7 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
                 variant="ghost"
                 className="mb-6"
                 onClick={() => {
-                  setExpandedProject(null)
+                  setExpandedEntry(null)
                   window.history.pushState(null, '', '/')
                 }}
               >
@@ -303,10 +327,14 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
                   transition={{ delay: 0.2, duration: 0.3 }}
                   className="space-y-4"
                 >
-                  <time className="text-sm text-muted-foreground">{formatDate(expandedProject.date)}</time>
-                  <h1 className="text-4xl font-bold">{expandedProject.title}</h1>
+                  <div className="flex items-center gap-2">
+                    {getEntryIcon(expandedEntry.type)}
+                    <span className="text-sm font-medium capitalize">{expandedEntry.type}</span>
+                  </div>
+                  <time className="text-sm text-muted-foreground">{formatDate(expandedEntry.date)}</time>
+                  <h1 className="text-4xl font-bold">{expandedEntry.title}</h1>
                   <div className="flex flex-wrap gap-2">
-                    {expandedProject.tags.map((tag, index) => (
+                    {expandedEntry.tags?.map((tag, index) => (
                       <Badge key={index} variant="secondary">
                         {tag}
                       </Badge>
@@ -324,7 +352,7 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
                       img: ({ ...props }) => {
                         const src = props.src?.startsWith('/') 
                           ? props.src 
-                          : `/${props.src}`
+                          : `/images/${props.src}`
                         return (
                           <Image
                             src={src}
@@ -376,26 +404,14 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
                         ) : (
                           <code className="bg-muted px-1 py-0.5 rounded" {...props}>
                             {children}
-                </code>
+                          </code>
                         )
                       },
                     }}
                   >
-                    {expandedProject.content}
+                    {expandedEntry.content}
                   </ReactMarkdown>
                 </motion.div>
-                <ImageGrid
-                  images={[
-                    { src: "/public/images/coral/coral_1.gif", alt: "Innovative Design Process", caption: "Innovative Design Process" },
-                    { src: "/public/images/coral/coral_11.png", alt: "Optimized Product Design", caption: "Optimized Product Design" },
-                    { src: "/public/images/coral/coral_2.gif", alt: "Automated Workflow Application", caption: "Automated Workflow Application" },
-                    { src: "/public/images/coral/coral_5.gif", alt: "AI-Driven Design Optimization", caption: "AI-Driven Design Optimization" },
-                    { src: "/public/images/coral/coral_1.gif", alt: "Innovative Design Process", caption: "Innovative Design Process" },
-                    { src: "/public/images/coral/coral_11.png", alt: "Optimized Product Design", caption: "Optimized Product Design" },
-                    { src: "/public/images/coral/coral_2.gif", alt: "Automated Workflow Application", caption: "Automated Workflow Application" },
-                    { src: "/public/images/coral/coral_5.gif", alt: "AI-Driven Design Optimization", caption: "AI-Driven Design Optimization" },
-                  ]}
-                />
               </div>
             </motion.article>
           </motion.div>
