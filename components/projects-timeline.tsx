@@ -12,7 +12,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Toast, ToastTitle, ToastDescription } from "@/components/ui/toast"
 import ReactMarkdown from 'react-markdown'
 import Image from 'next/image'
-import { fetchProjects, fetchWritings, fetchBooks, Outgoing, ContentItem } from "@/lib/github"
+import { fetchProjects, fetchWriting, fetchBooks, Outgoing, ContentItem } from "@/lib/github"
 import { ErrorBoundary } from 'react-error-boundary'
 
 const categoryColors = {
@@ -109,15 +109,31 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
 
   const loadEntries = React.useCallback(async () => {
     try {
-      const [projects, writings, books, outgoingLinks] = await Promise.all([
+      console.log('Fetching entries...');
+      const [projects, writing, books, outgoingLinks] = await Promise.all([
         fetchProjects(),
-        fetchWritings(),
+        fetchWriting(),
         fetchBooks(),
         Outgoing()
       ])
       
-      const allEntries: ContentItem[] = [...projects, ...writings, ...books, ...outgoingLinks]
+      console.log('Fetched entries:', {
+        projects: projects.length,
+        writing: writing.length,
+        books: books.length,
+        outgoingLinks: outgoingLinks.length
+      });
+
+      const allEntries: ContentItem[] = [...projects, ...writing, ...books, ...outgoingLinks]
         .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+
+      console.log('Total entries:', allEntries.length);
+      console.log('Entries by type:', {
+        project: allEntries.filter(e => e.type === 'project').length,
+        writing: allEntries.filter(e => e.type === 'writing').length,
+        book: allEntries.filter(e => e.type === 'book').length,
+        outgoing: allEntries.filter(e => e.type === 'outgoing').length
+      });
 
       setEntries(allEntries)
       setIsLoading(false)
@@ -150,7 +166,7 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
   }, [entries])
 
   const filteredEntries = React.useMemo(() => {
-    return entries.filter(entry => {
+    const filtered = entries.filter(entry => {
       const matchesSearch = 
         entry.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         entry.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -163,6 +179,18 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
       
       return matchesSearch && matchesCategory && matchesFilter
     })
+
+    console.log('Filtered entries:', {
+      total: filtered.length,
+      byType: {
+        project: filtered.filter(e => e.type === 'project').length,
+        writing: filtered.filter(e => e.type === 'writing').length,
+        book: filtered.filter(e => e.type === 'book').length,
+        outgoing: filtered.filter(e => e.type === 'outgoing').length
+      }
+    });
+
+    return filtered;
   }, [entries, searchQuery, activeFilters, activeCategories])
 
   const toggleFilter = React.useCallback((filter: string) => {
@@ -245,24 +273,25 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
 
   return (
     <div className="bg-background">
-      <div className="container mx-auto p-4 lg:p-8">
+      <div className="container mx-auto px-4 py-6 lg:p-8">
         <div className="grid gap-8 lg:grid-cols-[250px,1fr]">
-          <aside className="space-y-6 w-full lg:w-[250px]">
+          <aside className="space-y-8 w-full lg:w-[250px] mb-8 lg:mb-0">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
               <Input
                 type="search"
                 placeholder="Type here to search"
-                className="pl-10 w-full"
+                className="pl-10"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 aria-label="Search entries"
               />
             </div>
-            <div className="space-y-4 w-full">
-              <div className="w-full">
+            
+            <div className="space-y-4">
+              <div>
                 <Label className="text-base">Categories</Label>
-                <div className="flex flex-wrap gap-2 mt-2 w-full">
+                <div className="flex flex-wrap gap-2 mt-2">
                   {['project', 'writing', 'book', 'outgoing'].map((category) => (
                     <Badge
                       key={category}
@@ -291,9 +320,9 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
                 </div>
               </div>
 
-              <div className="w-full">
+              <div>
                 <Label className="text-base">Tags</Label>
-                <div className="flex flex-wrap gap-2 mt-2 w-full">
+                <div className="flex flex-wrap gap-2 mt-2">
                   {displayedTags.map(tag => (
                     <Badge
                       key={tag}
@@ -335,8 +364,8 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
               </div>
             </div>
           </aside>
-          <div className="w-full h-px bg-border lg:hidden" aria-hidden="true" />
-          <main>
+
+          <main className="w-full">
             <ErrorBoundary
               FallbackComponent={ErrorFallback}
               onReset={() => {
@@ -345,7 +374,7 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
             >
               <div className="relative">
                 <div className="absolute left-0 top-0 bottom-0 w-px bg-border" aria-hidden="true" />
-                <div className="space-y-8 md:space-y-12">
+                <div className="space-y-6 md:space-y-8">
                   {filteredEntries.map((entry, index) => (
                     <motion.div
                       key={entry.slug}

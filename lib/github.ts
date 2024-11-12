@@ -18,8 +18,9 @@ export interface ContentItem {
   rating?: number
 }
 
-async function fetchContentFromGitHub(path: string, type: 'project' | 'writing' | 'book'): Promise<ContentItem[]> {
+async function fetchContentFromGitHub(path: string, type: 'project' | 'writing' | 'book' | 'outgoing'): Promise<ContentItem[]> {
   try {
+    console.log(`Fetching ${type}s from GitHub...`);
     const { data: contentData } = await octokit.repos.getContent({
       owner: 'lukketsvane',
       repo: 'personal-web',
@@ -30,10 +31,13 @@ async function fetchContentFromGitHub(path: string, type: 'project' | 'writing' 
       throw new Error('Unexpected response format from GitHub API')
     }
 
+    console.log(`Found ${contentData.length} files in ${path}`);
+
     const content = await Promise.all(
       contentData
         .filter(file => file.type === 'file' && file.name.endsWith('.mdx'))
         .map(async (file) => {
+          console.log(`Processing file: ${file.name}`);
           const { data } = await octokit.repos.getContent({
             owner: 'lukketsvane',
             repo: 'personal-web',
@@ -67,7 +71,9 @@ async function fetchContentFromGitHub(path: string, type: 'project' | 'writing' 
         })
     )
 
-    return content.filter((item): item is ContentItem => item !== null)
+    const validContent = content.filter((item): item is ContentItem => item !== null);
+    console.log(`Processed ${validContent.length} valid ${type} items`);
+    return validContent;
   } catch (error) {
     console.error(`Error fetching ${type}s:`, error)
     return []
@@ -78,8 +84,11 @@ export async function fetchProjects(): Promise<ContentItem[]> {
   return fetchContentFromGitHub('projects', 'project')
 }
 
-export async function fetchWritings(): Promise<ContentItem[]> {
-  return fetchContentFromGitHub('writings', 'writing')
+export async function fetchWriting(): Promise<ContentItem[]> {
+  console.log('Fetching writing...');
+  const writing = await fetchContentFromGitHub('writing', 'writing');
+  console.log(`Fetched ${writing.length} writing`);
+  return writing;
 }
 
 export async function fetchBooks(): Promise<ContentItem[]> {
@@ -149,8 +158,8 @@ export async function getProjectBySlug(slug: string): Promise<ContentItem | null
 }
 
 export async function getWritingBySlug(slug: string): Promise<ContentItem | null> {
-  const writings = await fetchWritings()
-  return writings.find(writing => writing.slug === slug) || null
+  const writing = await fetchWriting()
+  return writing.find(writing => writing.slug === slug) || null
 }
 
 export async function getBookBySlug(slug: string): Promise<ContentItem | null> {
@@ -164,13 +173,13 @@ export async function getOutgoingLinkBySlug(slug: string): Promise<ContentItem |
 }
 
 export async function fetchAllEntries(): Promise<ContentItem[]> {
-  const [projects, writings, books, outgoingLinks] = await Promise.all([
+  const [projects, writing, books, outgoingLinks] = await Promise.all([
     fetchProjects(),
-    fetchWritings(),
+    fetchWriting(),
     fetchBooks(),
     Outgoing()
   ]);
-  return [...projects, ...writings, ...books, ...outgoingLinks];
+  return [...projects, ...writing, ...books, ...outgoingLinks];
 }
 
 export async function fetchEntryBySlug(slug: string): Promise<ContentItem | null> {
