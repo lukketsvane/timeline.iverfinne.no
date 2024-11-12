@@ -1,22 +1,17 @@
-"use client"
+'use client'
 
 import * as React from "react"
-import { Search } from "lucide-react"
+import { motion, AnimatePresence } from "framer-motion"
+import { Search, ChevronLeft, ExternalLink } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { cn } from "@/lib/utils"
 import { Octokit } from "@octokit/rest"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
-import { ScrollArea } from "@/components/ui/scroll-area"
+import Link from "next/link"
 import ReactMarkdown from 'react-markdown'
 
 interface Project {
@@ -29,6 +24,7 @@ interface Project {
   content: string
   slug: string
   imagePaths: string[]
+  url?: string
 }
 
 const octokit = new Octokit({ 
@@ -98,7 +94,8 @@ export default function ProjectsTimeline() {
                 category: frontMatterObj.category || file.path.split('/')[0],
                 content: mdContent,
                 slug: file.name.replace('.mdx', ''),
-                imagePaths
+                imagePaths,
+                url: frontMatterObj.url || ''
               } as Project
             }
           })
@@ -159,7 +156,8 @@ export default function ProjectsTimeline() {
     return projects.filter(project => {
       const matchesSearch = 
         project.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        project.description.toLowerCase().includes(searchQuery.toLowerCase())
+        project.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        project.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()))
       
       if (activeFilters.length === 0) return matchesSearch
       
@@ -204,141 +202,189 @@ export default function ProjectsTimeline() {
   }
 
   return (
-    <div className="container mx-auto p-4 lg:p-8">
-      <div className="grid gap-8 lg:grid-cols-[240px,1fr]">
-        {/* Sidebar */}
-        <aside className="space-y-6">
-          <div className="space-y-4">
-            <div>
-              <Label>type</Label>
-              <div className="flex flex-wrap gap-2 mt-2">
-                {types.map(type => (
-                  <Badge
-                    key={type}
-                    variant={activeFilters.includes(type) ? "default" : "outline"}
-                    className="cursor-pointer hover:bg-muted-foreground/20"
-                    onClick={() => toggleFilter(type)}
-                  >
-                    {type}
-                  </Badge>
-                ))}
-              </div>
+    <div className="min-h-screen bg-background">
+      <AnimatePresence mode="wait">
+        {expandedProject ? (
+          <motion.article
+            key="article"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.3 }}
+            className="relative z-10 mx-auto max-w-4xl p-6 bg-background rounded-lg shadow-lg"
+          >
+            <Button
+              variant="ghost"
+              className="mb-6"
+              onClick={() => setExpandedProject(null)}
+            >
+              <ChevronLeft className="mr-2 h-4 w-4" />
+              Back to Timeline
+            </Button>
+            <div className="space-y-6">
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2, duration: 0.3 }}
+                className="space-y-2"
+              >
+                <time className="text-sm text-muted-foreground">{expandedProject.date}</time>
+                <h1 className="text-4xl font-bold">{expandedProject.title}</h1>
+                <div className="flex flex-wrap gap-2">
+                  {expandedProject.tags.map((tag, index) => (
+                    <Badge key={index} variant="secondary">
+                      {tag}
+                    </Badge>
+                  ))}
+                </div>
+              </motion.div>
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3, duration: 0.3 }}
+                className="prose prose-neutral dark:prose-invert"
+              >
+                <ReactMarkdown>{expandedProject.content}</ReactMarkdown>
+              </motion.div>
+              {expandedProject.url && (
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.6, duration: 0.3 }}
+                >
+                  <Button variant="outline" asChild>
+                    <Link href={expandedProject.url} target="_blank">
+                      View Project
+                      <ExternalLink className="ml-2 h-4 w-4" />
+                    </Link>
+                  </Button>
+                </motion.div>
+              )}
             </div>
-            <div>
-              <Label>categories</Label>
-              <div className="flex flex-wrap gap-2 mt-2">
-                {categories.map(category => (
-                  <Badge
-                    key={category}
-                    variant={activeFilters.includes(category) ? "default" : "outline"}
-                    className="cursor-pointer bg-green-50 hover:bg-green-100 text-green-700 border-green-200"
-                    onClick={() => toggleFilter(category)}
-                  >
-                    {category}
-                  </Badge>
-                ))}
-              </div>
-            </div>
-            <div>
-              <Label>tags</Label>
-              <div className="flex flex-wrap gap-2 mt-2">
-                {allTags.map(tag => (
-                  <Badge
-                    key={tag}
-                    variant={activeFilters.includes(tag) ? "default" : "outline"}
-                    className="cursor-pointer bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200"
-                    onClick={() => toggleFilter(tag)}
-                  >
-                    {tag}
-                  </Badge>
-                ))}
-              </div>
-            </div>
-          </div>
-        </aside>
-
-        {/* Main Content */}
-        <main className="min-h-screen">
-          <div className="relative mb-8">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Type here to search"
-              className="pl-10"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
-
-          <div className="relative pl-8 border-l-2 border-muted space-y-12">
-            {filteredProjects.map((project, index) => (
-              <div key={index} className="relative">
-                <div className="absolute -left-[41px] h-5 w-5 rounded-full border-4 border-background bg-muted" />
-                <time className="block text-sm text-muted-foreground mb-2">
-                  {project.date}
-                </time>
-                <div className="space-y-3">
-                  <h3 className="text-xl font-semibold">
-                    {project.title}
-                  </h3>
-                  <p className="text-muted-foreground">
-                    {project.description}
-                  </p>
-                  <div className="flex gap-2">
-                    {project.tags.map(tag => (
-                      <Badge
-                        key={tag}
-                        variant="outline"
-                        className={cn(
-                          "cursor-pointer",
-                          activeFilters.includes(tag) && "bg-primary text-primary-foreground"
-                        )}
-                        onClick={() => toggleFilter(tag)}
-                      >
-                        {tag}
-                      </Badge>
-                    ))}
-                  </div>
-                  {project.imagePaths.length > 0 && (
-                    <div className="flex gap-2 overflow-x-auto">
-                      {project.imagePaths.slice(0, 3).map((imagePath, index) => (
-                        <img
-                          key={index}
-                          src={imagePath}
-                          alt={`${project.title} image ${index + 1}`}
-                          className="w-24 h-24 object-cover rounded"
-                        />
+          </motion.article>
+        ) : (
+          <motion.div
+            key="timeline"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3 }}
+            className="container mx-auto p-4 lg:p-8"
+          >
+            <div className="grid gap-8 lg:grid-cols-[240px,1fr]">
+              {/* Sidebar */}
+              <aside className="space-y-6">
+                <div className="space-y-4">
+                  <div>
+                    <Label>type</Label>
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {types.map(type => (
+                        <Badge
+                          key={type}
+                          variant={activeFilters.includes(type) ? "default" : "outline"}
+                          className="cursor-pointer hover:bg-muted-foreground/20"
+                          onClick={() => toggleFilter(type)}
+                        >
+                          {type}
+                        </Badge>
                       ))}
                     </div>
-                  )}
-                  <Dialog>
-                    <DialogTrigger asChild>
-                      <Button variant="outline" onClick={() => setExpandedProject(project)}>
-                        Read more
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="max-w-4xl max-h-[80vh]">
-                      <DialogHeader>
-                        <DialogTitle>{expandedProject?.title}</DialogTitle>
-                        <DialogDescription>
-                          {expandedProject?.date} - {expandedProject?.category}
-                        </DialogDescription>
-                      </DialogHeader>
-                      <ScrollArea className="mt-4 h-full max-h-[calc(80vh-100px)]">
-                        <div className="prose dark:prose-invert max-w-none">
-                          <ReactMarkdown>
-                            {expandedProject?.content || ''}
-                          </ReactMarkdown>
-                        </div>
-                      </ScrollArea>
-                    </DialogContent>
-                  </Dialog>
+                  </div>
+                  <div>
+                    <Label>categories</Label>
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {categories.map(category => (
+                        <Badge
+                          key={category}
+                          variant={activeFilters.includes(category) ? "default" : "outline"}
+                          className="cursor-pointer bg-green-50 hover:bg-green-100 text-green-700 border-green-200"
+                          onClick={() => toggleFilter(category)}
+                        >
+                          {category}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <Label>tags</Label>
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {allTags.map(tag => (
+                        <Badge
+                          key={tag}
+                          variant={activeFilters.includes(tag) ? "default" : "outline"}
+                          className="cursor-pointer bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200"
+                          onClick={() => toggleFilter(tag)}
+                        >
+                          {tag}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        </main>
-      </div>
+              </aside>
 
+              {/* Main Content */}
+              <main className="min-h-screen">
+                <div className="mb-8 space-y-4">
+                  <h1 className="text-xl font-semibold">build-in-public log</h1>
+                  <p className="text-sm text-muted-foreground">some of my tools and experiments</p>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      type="search"
+                      placeholder="Type here to search"
+                      className="pl-10 max-w-md"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <ScrollArea className="h-[calc(100vh-200px)]">
+                  <div className="relative">
+                    <div className="absolute left-4 top-0 h-full w-px bg-border md:left-8" />
+                    <div className="space-y-12">
+                      {filteredProjects.map((project, index) => (
+                        <motion.div
+                          key={index}
+                          initial={{ opacity: 0, x: -20 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: index * 0.1, duration: 0.3 }}
+                          className="relative pl-10 md:pl-16"
+                        >
+                          <div className="absolute left-[14px] top-[22px] h-3 w-3 rounded-full border-2 border-primary bg-background md:left-[30px]" />
+                          <div className="flex flex-col gap-2">
+                            <time className="text-sm text-muted-foreground">{project.date}</time>
+                            <Card className="p-4 hover:shadow-md transition-shadow duration-200">
+                              <h2 className="font-semibold hover:text-primary">
+                                <button
+                                  className="text-left"
+                                  onClick={() => setExpandedProject(project)}
+                                >
+                                  {project.title}
+                                </button>
+                              </h2>
+                              <p className="mt-1 text-sm text-muted-foreground">
+                                {project.description}
+                              </p>
+                              <div className="mt-4 flex flex-wrap gap-2">
+                                {project.tags.map((tag, tagIndex) => (
+                                  <Badge key={tagIndex} variant="secondary">
+                                    {tag}
+                                  </Badge>
+                                ))}
+                              </div>
+                            </Card>
+                          </div>
+                        </motion.div>
+                      ))}
+                    </div>
+                  </div>
+                </ScrollArea>
+              </main>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
       <Button 
         className="fixed bottom-6 right-6 bg-black text-white hover:bg-black/90"
       >

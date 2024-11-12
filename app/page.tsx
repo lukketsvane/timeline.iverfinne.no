@@ -1,8 +1,8 @@
-import ProjectsTimeline from '@/components/projects-timeline'
+import ProjectsTimeline from '../components/projects-timeline'
 
 export const metadata = {
   title: 'Projects Timeline',
-  description: 'A timeline of projects and writings from my personal web',
+  description: 'A timeline of my projects and writings',
 }
 
 export default function Home() {
