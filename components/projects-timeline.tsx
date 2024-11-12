@@ -9,50 +9,37 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Octokit } from "@octokit/rest"
 import Link from "next/link"
 import { useRouter, usePathname } from 'next/navigation'
 import ReactMarkdown from 'react-markdown'
 import Image from 'next/image'
-import { Project } from "@/lib/github"
-
-const octokit = new Octokit({ 
-  auth: process.env.NEXT_PUBLIC_GITHUB_PAT || process.env.GITHUB_PAT 
-})
+import { Project, fetchProjects } from "@/lib/github"
 
 interface ImageGridProps {
-  images: string[]
+  images: {
+    src: string;
+    alt: string;
+    caption: string;
+  }[];
 }
 
 const ImageGrid: React.FC<ImageGridProps> = ({ images }) => {
   return (
-    <div className="flex flex-wrap gap-4">
-      <div className="w-full md:w-[calc(50%-0.5rem)]">
-        {images.slice(0, Math.ceil(images.length / 2)).map((src, index) => (
-          <div key={index} className="mb-4 last:mb-0">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {images.map((image, index) => (
+        <div key={index} className="flex flex-col items-center">
+          <div className="relative w-full aspect-video">
             <Image
-              src={src}
-              alt={`Gradient Image ${index * 2 + 1}`}
-              width={600}
-              height={400}
-              className="w-full rounded-lg"
+              src={image.src}
+              alt={image.alt}
+              layout="fill"
+              objectFit="cover"
+              className="rounded-lg"
             />
           </div>
-        ))}
-      </div>
-      <div className="w-full md:w-[calc(50%-0.5rem)]">
-        {images.slice(Math.ceil(images.length / 2)).map((src, index) => (
-          <div key={index} className="mb-4 last:mb-0">
-            <Image
-              src={src}
-              alt={`Gradient Image ${index * 2 + 2}`}
-              width={600}
-              height={400}
-              className="w-full rounded-lg"
-            />
-          </div>
-        ))}
-      </div>
+          <p className="mt-2 text-sm text-center">{image.caption}</p>
+        </div>
+      ))}
     </div>
   )
 }
@@ -69,49 +56,10 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
   const pathname = usePathname()
 
   React.useEffect(() => {
-    async function fetchProjects() {
+    async function loadProjects() {
       try {
-        const fetchedProjects = await octokit.repos.getContent({
-          owner: 'lukketsvane',
-          repo: 'personal-web',
-          path: 'projects'
-        })
-
-        if (Array.isArray(fetchedProjects.data)) {
-          const projectsData = await Promise.all(
-            fetchedProjects.data
-              .filter(file => file.type === 'file' && file.name.endsWith('.mdx'))
-              .map(async (file) => {
-                const { data } = await octokit.repos.getContent({
-                  owner: 'lukketsvane',
-                  repo: 'personal-web',
-                  path: file.path,
-                })
-
-                if ('content' in data) {
-                  const content = Buffer.from(data.content, 'base64').toString()
-                  const [, frontMatter, mdContent] = content.split('---')
-                  const frontMatterObj = Object.fromEntries(
-                    frontMatter.trim().split('\n').map(line => {
-                      const [key, ...valueParts] = line.split(':')
-                      return [key.trim(), valueParts.join(':').trim()]
-                    })
-                  )
-
-                  return {
-                    title: frontMatterObj.title || file.name.replace('.mdx', ''),
-                    description: frontMatterObj.description || '',
-                    date: frontMatterObj.date || new Date().toISOString().split('T')[0],
-                    tags: frontMatterObj.tags ? frontMatterObj.tags.split(',').map(tag => tag.trim()) : [],
-                    slug: file.name.replace('.mdx', ''),
-                    content: mdContent.trim()
-                  } as Project
-                }
-              })
-          )
-
-          setProjects(projectsData.filter((project): project is Project => project !== undefined))
-        }
+        const fetchedProjects = await fetchProjects()
+        setProjects(fetchedProjects)
         setIsLoading(false)
       } catch (error) {
         console.error('Error fetching projects:', error)
@@ -120,7 +68,7 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
       }
     }
 
-    fetchProjects()
+    loadProjects()
   }, [])
 
   React.useEffect(() => {
@@ -173,10 +121,6 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
     )
   }
 
-  const featuredProjects = React.useMemo(() => {
-    return projects.slice(0, 3)
-  }, [projects])
-
   const displayedTags = React.useMemo(() => {
     return showAllTags ? allTags : allTags.slice(0, 10)
   }, [allTags, showAllTags])
@@ -193,6 +137,11 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
     }).catch(err => {
       console.error('Failed to copy link: ', err)
     })
+  }
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString)
+    return date.toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })
   }
 
   if (isLoading) {
@@ -214,30 +163,6 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto p-4 lg:p-8">
-        <div className="text-center mb-12">
-          <h1 className="text-4xl font-bold mb-2">build-in-public log</h1>
-          <p className="text-lg text-muted-foreground mb-8">some of my tools and experiments.</p>
-          
-          <h2 className="text-2xl font-semibold text-primary mb-6">Featured Builds</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-            {featuredProjects.map((project, index) => (
-              <Card key={index} className="overflow-hidden">
-                <CardContent className="p-4">
-                  <h3 className="font-semibold mb-2">{project.title}</h3>
-                  <p className="text-sm text-muted-foreground mb-4">{project.description}</p>
-                  <div className="flex flex-wrap gap-2">
-                    {project.tags.slice(0, 3).map((tag, tagIndex) => (
-                      <Badge key={tagIndex} variant="secondary">
-                        {tag}
-                      </Badge>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-
         <div className="grid gap-8 lg:grid-cols-[240px,1fr]">
           <aside className="space-y-6">
             <div className="space-y-4">
@@ -300,7 +225,7 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
                     >
                       <div className="absolute left-[14px] top-[22px] h-3 w-3 rounded-full border-2 border-primary bg-background md:left-[30px]" />
                       <div className="flex flex-col gap-2">
-                        <time className="text-sm text-muted-foreground">{project.date}</time>
+                        <time className="text-sm text-muted-foreground">{formatDate(project.date)}</time>
                         <Card className="p-4 hover:shadow-md transition-shadow duration-200">
                           <h2 className="font-semibold hover:text-primary">
                             <button
@@ -342,7 +267,7 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
       <Button 
         className="fixed bottom-6 right-6 bg-black text-white hover:bg-black/90"
       >
-        Chat with Mini Yohei →
+        Chat with Mini Iver →
       </Button>
 
       <AnimatePresence mode="wait">
@@ -378,7 +303,7 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
                   transition={{ delay: 0.2, duration: 0.3 }}
                   className="space-y-4"
                 >
-                  <time className="text-sm text-muted-foreground">{expandedProject.date}</time>
+                  <time className="text-sm text-muted-foreground">{formatDate(expandedProject.date)}</time>
                   <h1 className="text-4xl font-bold">{expandedProject.title}</h1>
                   <div className="flex flex-wrap gap-2">
                     {expandedProject.tags.map((tag, index) => (
@@ -396,16 +321,20 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
                 >
                   <ReactMarkdown
                     components={{
-                      img: ({ ...props }) => (
-                        <Image
-                          {...props}
-                          src={props.src || ''}
-                          alt={props.alt || ''}
-                          width={600}
-                          height={400}
-                          className="rounded-lg shadow-md"
-                        />
-                      ),
+                      img: ({ ...props }) => {
+                        const src = props.src?.startsWith('/') 
+                          ? props.src 
+                          : `/${props.src}`
+                        return (
+                          <Image
+                            src={src}
+                            alt={props.alt || ''}
+                            width={600}
+                            height={400}
+                            className="rounded-lg shadow-md"
+                          />
+                        )
+                      },
                       video: ({ ...props }) => (
                         <video
                           {...props}
@@ -447,7 +376,7 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
                         ) : (
                           <code className="bg-muted px-1 py-0.5 rounded" {...props}>
                             {children}
-                          </code>
+                </code>
                         )
                       },
                     }}
@@ -455,6 +384,18 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
                     {expandedProject.content}
                   </ReactMarkdown>
                 </motion.div>
+                <ImageGrid
+                  images={[
+                    { src: "/public/images/coral/coral_1.gif", alt: "Innovative Design Process", caption: "Innovative Design Process" },
+                    { src: "/public/images/coral/coral_11.png", alt: "Optimized Product Design", caption: "Optimized Product Design" },
+                    { src: "/public/images/coral/coral_2.gif", alt: "Automated Workflow Application", caption: "Automated Workflow Application" },
+                    { src: "/public/images/coral/coral_5.gif", alt: "AI-Driven Design Optimization", caption: "AI-Driven Design Optimization" },
+                    { src: "/public/images/coral/coral_1.gif", alt: "Innovative Design Process", caption: "Innovative Design Process" },
+                    { src: "/public/images/coral/coral_11.png", alt: "Optimized Product Design", caption: "Optimized Product Design" },
+                    { src: "/public/images/coral/coral_2.gif", alt: "Automated Workflow Application", caption: "Automated Workflow Application" },
+                    { src: "/public/images/coral/coral_5.gif", alt: "AI-Driven Design Optimization", caption: "AI-Driven Design Optimization" },
+                  ]}
+                />
               </div>
             </motion.article>
           </motion.div>
