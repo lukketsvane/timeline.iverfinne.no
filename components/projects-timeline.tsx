@@ -2,33 +2,50 @@
 
 import * as React from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Search, ChevronLeft, ChevronDown, ChevronUp, Share2, Book, Pen, Code } from "lucide-react"
+import { Search, ChevronLeft, ChevronDown, ChevronUp, Share2, Book, Pen, Code, Star } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import ReactMarkdown from 'react-markdown'
 import Image from 'next/image'
 import { fetchProjects, fetchWritings, fetchBooks, ContentItem } from "@/lib/github"
 
-interface ImageGridProps {
-  imagePaths: string[];
+const categoryColors = {
+  project: "bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200",
+  writing: "bg-violet-50 hover:bg-violet-100 text-violet-700 border-violet-200",
+  book: "bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-200"
 }
 
-const ImageGrid: React.FC<ImageGridProps> = ({ imagePaths }) => {
+const selectedCategoryColors = {
+  project: "bg-emerald-500 hover:bg-emerald-600 text-white",
+  writing: "bg-violet-500 hover:bg-violet-600 text-white",
+  book: "bg-amber-500 hover:bg-amber-600 text-white"
+}
+
+function extractImageUrl(htmlString: string) {
+  const match = htmlString.match(/src="([^"]+)"/)
+  return match ? match[1] : null
+}
+
+interface RatingProps {
+  rating: number;
+}
+
+const Rating: React.FC<RatingProps> = ({ rating }) => {
+  const fullStars = Math.floor(rating)
+  const hasHalfStar = rating % 1 >= 0.5
+  
   return (
-    <div className="grid grid-cols-2 gap-4">
-      {imagePaths.map((src, index) => (
-        <div key={index} className="flex flex-col items-center">
-          <Image
-            src={src}
-            alt={`Content image ${index + 1}`}
-            width={300}
-            height={200}
-            className="w-full rounded-lg mb-2"
-          />
-        </div>
+    <div className="flex items-center gap-0.5">
+      {[...Array(fullStars)].map((_, i) => (
+        <Star key={i} className="w-4 h-4 fill-amber-500 text-amber-500" />
+      ))}
+      {hasHalfStar && <Star className="w-4 h-4 fill-amber-500 text-amber-500" />}
+      {[...Array(5 - Math.ceil(rating))].map((_, i) => (
+        <Star key={`empty-${i}`} className="w-4 h-4 text-gray-300" />
       ))}
     </div>
   )
@@ -54,7 +71,11 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
         ])
         
         const allEntries: ContentItem[] = [...projects, ...writings, ...books]
-          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+          .map(entry => ({
+            ...entry,
+            date: new Date(entry.date).getTime() ? new Date(entry.date) : new Date(0)
+          }))
+          .sort((a, b) => b.date.getTime() - a.date.getTime())
 
         setEntries(allEntries)
         setIsLoading(false)
@@ -135,9 +156,12 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
     })
   }
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString)
-    return date.toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })
+  const formatDate = (date: Date) => {
+    return new Intl.DateTimeFormat('en-US', {
+      month: '2-digit',
+      day: '2-digit',
+      year: 'numeric'
+    }).format(date)
   }
 
   const getEntryIcon = (type: ContentItem['type']) => {
@@ -172,69 +196,80 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
       <div className="container mx-auto p-4 lg:p-8">
         <div className="grid gap-8 lg:grid-cols-[240px,1fr]">
           <aside className="space-y-6">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                type="search"
+                placeholder="Type here to search"
+                className="pl-10"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+            
             <div className="space-y-4">
               <div>
-                <Label>Categories</Label>
+                <Label className="text-base">Categories</Label>
                 <div className="flex flex-wrap gap-2 mt-2">
                   {['project', 'writing', 'book'].map((category) => (
                     <Badge
                       key={category}
-                      variant={activeCategories.includes(category) ? "default" : "outline"}
-                      className="cursor-pointer bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200"
+                      className={`cursor-pointer transition-colors ${
+                        activeCategories.includes(category)
+                          ? selectedCategoryColors[category]
+                          : categoryColors[category]
+                      }`}
                       onClick={() => toggleCategory(category)}
                     >
-                      {category.charAt(0).toUpperCase() + category.slice(1)}
+                      <span className="flex items-center gap-1.5">
+                        {getEntryIcon(category)}
+                        {category.charAt(0).toUpperCase() + category.slice(1)}
+                      </span>
                     </Badge>
                   ))}
                 </div>
               </div>
+
               <div>
-                <Label>Tags</Label>
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {displayedTags.map(tag => (
-                    <Badge
-                      key={tag}
-                      variant={activeFilters.includes(tag) ? "default" : "outline"}
-                      className="cursor-pointer bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200"
-                      onClick={() => toggleFilter(tag)}
-                    >
-                      {tag}
-                    </Badge>
-                  ))}
-                  {allTags.length > 10 && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setShowAllTags(!showAllTags)}
-                      className="text-muted-foreground"
-                    >
-                      {showAllTags ? (
-                        <>Show Less <ChevronUp className="ml-1 h-4 w-4" /></>
-                      ) : (
-                        <>Show More <ChevronDown className="ml-1 h-4 w-4" /></>
-                      )}
-                    </Button>
-                  )}
-                </div>
+                <Label className="text-base">Tags</Label>
+                <ScrollArea className="h-[200px] w-full rounded-md border p-4">
+                  <div className="flex flex-wrap gap-2">
+                    {displayedTags.map(tag => (
+                      <Badge
+                        key={tag}
+                        className={`cursor-pointer transition-colors ${
+                          activeFilters.includes(tag)
+                            ? "bg-gray-900 hover:bg-gray-800 text-white"
+                            : "bg-gray-50 hover:bg-gray-100 text-gray-700"
+                        }`}
+                        onClick={() => toggleFilter(tag)}
+                      >
+                        {tag}
+                      </Badge>
+                    ))}
+                  </div>
+                </ScrollArea>
+                {allTags.length > 10 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowAllTags(!showAllTags)}
+                    className="mt-2 text-muted-foreground"
+                  >
+                    {showAllTags ? (
+                      <>Show Less <ChevronUp className="ml-1 h-4 w-4" /></>
+                    ) : (
+                      <>Show More <ChevronDown className="ml-1 h-4 w-4" /></>
+                    )}
+                  </Button>
+                )}
               </div>
             </div>
           </aside>
 
           <main>
-            <div className="mb-8">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  type="search"
-                  placeholder="Type here to search"
-                  className="pl-10 max-w-md"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
-              </div>
-            </div>
             <div className="relative">
-              <div className="absolute left-4 top-0 h-full w-px bg-border md:left-8" />
+              <div className="absolute left-16 top-0 h-full w-px bg-border" />
               <div className="space-y-12">
                 {filteredEntries.map((entry, index) => (
                   <motion.div
@@ -242,45 +277,68 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: index * 0.1, duration: 0.3 }}
-                    className="relative pl-10 md:pl-16"
+                    className="relative pl-32"
                   >
-                    <div className="absolute left-[14px] top-[22px] h-3 w-3 rounded-full border-2 border-primary bg-background md:left-[30px]" />
-                    <div className="flex flex-col gap-2">
-                      <time className="text-sm text-muted-foreground">{formatDate(entry.date)}</time>
-                      <Card className="p-4 hover:shadow-md transition-shadow duration-200">
+                    <time className="absolute left-0 top-0 text-sm font-medium text-muted-foreground">
+                      {formatDate(entry.date)}
+                    </time>
+                    <div className="absolute left-[62px] top-[10px] h-3 w-3 rounded-full border-2 border-primary bg-background" />
+                    <Card className="overflow-hidden">
+                      <CardContent className="p-6">
                         <div className="flex items-center gap-2 mb-2">
                           {getEntryIcon(entry.type)}
-                          <span className="text-sm font-medium capitalize">{entry.type}</span>
+                          <span className={`text-sm font-medium capitalize ${
+                            categoryColors[entry.type].split(' ')[2]
+                          }`}>
+                            {entry.type}
+                          </span>
                         </div>
-                        <h2 className="font-semibold hover:text-primary">
-                          <button
-                            className="text-left"
-                            onClick={() => handleEntryClick(entry)}
-                          >
+                        <h2 className="text-xl font-semibold text-blue-500 hover:text-blue-600 transition-colors">
+                          <button className="text-left" onClick={() => handleEntryClick(entry)}>
                             {entry.title}
                           </button>
                         </h2>
-                        <p className="mt-1 text-sm text-muted-foreground">
+                        {entry.type === 'book' && entry.rating && (
+                          <div className="mt-2">
+                            <Rating rating={entry.rating} />
+                          </div>
+                        )}
+                        {entry.image && (
+                          <div className="relative w-full h-48 my-4">
+                            <Image
+                              src={extractImageUrl(entry.image) || entry.image}
+                              alt={entry.title}
+                              fill
+                              className="object-cover rounded-lg"
+                            />
+                          </div>
+                        )}
+                        <p className="text-muted-foreground">
                           {entry.description}
                         </p>
-                        <div className="mt-4 flex flex-wrap gap-2">
-                          {entry.tags?.map((tag, tagIndex) => (
-                            <Badge key={tagIndex} variant="secondary">
-                              {tag}
-                            </Badge>
-                          ))}
-                        </div>
+                        <ScrollArea className="w-full whitespace-nowrap mt-4">
+                          <div className="flex gap-2">
+                            {entry.tags?.map((tag, tagIndex) => (
+                              <Badge 
+                                key={tagIndex} 
+                                className="bg-gray-50 text-gray-700 shrink-0"
+                              >
+                                {tag}
+                              </Badge>
+                            ))}
+                          </div>
+                        </ScrollArea>
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="mt-2"
+                          className="mt-4"
                           onClick={() => handleShareClick(entry)}
                         >
                           <Share2 className="mr-2 h-4 w-4" />
                           Share
                         </Button>
-                      </Card>
-                    </div>
+                      </CardContent>
+                    </Card>
                   </motion.div>
                 ))}
               </div>
@@ -288,6 +346,7 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
           </main>
         </div>
       </div>
+
       <Button 
         className="fixed bottom-6 right-6 bg-black text-white hover:bg-black/90"
       >
@@ -333,6 +392,9 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
                   </div>
                   <time className="text-sm text-muted-foreground">{formatDate(expandedEntry.date)}</time>
                   <h1 className="text-4xl font-bold">{expandedEntry.title}</h1>
+                  {expandedEntry.type === 'book' && expandedEntry.rating && (
+                    <Rating rating={expandedEntry.rating} />
+                  )}
                   <div className="flex flex-wrap gap-2">
                     {expandedEntry.tags?.map((tag, index) => (
                       <Badge key={index} variant="secondary">
@@ -363,16 +425,18 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
                           />
                         )
                       },
-                      video: ({ ...props }) => (
+                      video: ({ src, ...props }) => (
                         <video
-                          {...props}
+                          src={src}
+                          autoPlay
+                          loop
+                          muted
+                          playsInline
+                          className="w-full rounded-lg shadow-md my-5"
                           style={{
-                            width: "100%",
                             borderRadius: "8px",
-                            marginTop: "20px",
-                            marginBottom: "20px"
                           }}
-                          className="rounded-lg shadow-md"
+                          {...props}
                         />
                       ),
                       h2: ({ ...props }) => (
