@@ -9,8 +9,7 @@ export const metadata = {
 export default function Home() {
   return (
     <main className="min-h-screen bg-background">
-      <div className="container ">
-
+      <div className="container mx-auto py-8">
         <FeaturedBuilds />
       </div>
       <ProjectsTimeline />

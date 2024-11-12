@@ -13,19 +13,20 @@ import { Toast, ToastTitle, ToastDescription } from "@/components/ui/toast"
 import ReactMarkdown from 'react-markdown'
 import Image from 'next/image'
 import { fetchProjects, fetchWritings, fetchBooks, Outgoing, ContentItem } from "@/lib/github"
+import { ErrorBoundary } from 'react-error-boundary'
 
 const categoryColors = {
-  project: "bg-secondary text-secondary-foreground",
-  writing: "bg-secondary text-secondary-foreground",
-  book: "bg-secondary text-secondary-foreground",
-  outgoing: "bg-secondary text-secondary-foreground"
+  project: "bg-blue-500 text-white",
+  writing: "bg-green-500 text-white",
+  book: "text-purple-500",
+  outgoing: "bg-orange-500 text-white"
 } as const
 
 const selectedCategoryColors = {
-  project: "bg-primary text-primary-foreground",
-  writing: "bg-primary text-primary-foreground",
-  book: "bg-primary text-primary-foreground",
-  outgoing: "bg-primary text-primary-foreground"
+  project: "bg-blue-700 text-white",
+  writing: "bg-green-700 text-white",
+  book: "text-purple-700",
+  outgoing: "bg-orange-700 text-white"
 } as const
 
 const Rating: React.FC<{ rating: number }> = React.memo(({ rating }) => {
@@ -33,13 +34,13 @@ const Rating: React.FC<{ rating: number }> = React.memo(({ rating }) => {
   const hasHalfStar = rating % 1 >= 0.5
 
   return (
-    <div className="flex items-center gap-0.5">
+    <div className="flex items-center gap-0.5" aria-label={`Rating: ${rating} out of 10`}>
       {[...Array(fullStars)].map((_, i) => (
-        <Star key={i} className="w-4 h-4 fill-primary text-primary" />
+        <Star key={i} className="w-4 h-4 fill-primary text-primary" aria-hidden="true" />
       ))}
-      {hasHalfStar && <Star className="w-4 h-4 fill-primary text-primary" />}
+      {hasHalfStar && <Star className="w-4 h-4 fill-primary text-primary" aria-hidden="true" />}
       {[...Array(10 - Math.ceil(rating))].map((_, i) => (
-        <Star key={`empty-${i}`} className="w-4 h-4 text-muted-foreground" />
+        <Star key={`empty-${i}`} className="w-4 h-4 text-muted-foreground" aria-hidden="true" />
       ))}
       <span className="ml-2 text-sm text-muted-foreground">{rating.toFixed(1)}/10</span>
     </div>
@@ -51,17 +52,49 @@ Rating.displayName = 'Rating'
 const EntryIcon: React.FC<{ type: ContentItem['type'] }> = React.memo(({ type }) => {
   switch (type) {
     case 'project':
-      return <Code className="w-4 h-4" />
+      return <Code className="w-4 h-4" aria-hidden="true" />
     case 'writing':
-      return <Pen className="w-4 h-4" />
+      return <Pen className="w-4 h-4" aria-hidden="true" />
     case 'book':
-      return <Book className="w-4 h-4" />
+      return <Book className="w-4 h-4" aria-hidden="true" />
     case 'outgoing':
-      return <ExternalLink className="w-4 h-4" />
+      return <ExternalLink className="w-4 h-4" aria-hidden="true" />
   }
 })
 
 EntryIcon.displayName = 'EntryIcon'
+
+const LazyImage: React.FC<{ src: string; alt: string; width: number; height: number }> = React.memo(({ src, alt, width, height }) => {
+  const [isLoaded, setIsLoaded] = React.useState(false)
+
+  return (
+    <div className={`transition-opacity duration-300 ${isLoaded ? 'opacity-100' : 'opacity-0'}`}>
+      <Image
+        src={src}
+        alt={alt}
+        width={width}
+        height={height}
+        className="object-cover rounded-sm"
+        onLoad={() => setIsLoaded(true)}
+        loading="lazy"
+      />
+    </div>
+  )
+})
+
+LazyImage.displayName = 'LazyImage'
+
+function ErrorFallback({error, resetErrorBoundary}: {error: Error, resetErrorBoundary: () => void}) {
+  return (
+    <div role="alert" className="p-4 bg-red-100 text-red-700 rounded-md">
+      <p className="font-bold">Something went wrong:</p>
+      <pre className="mt-2 text-sm">{error.message}</pre>
+      <button onClick={resetErrorBoundary} className="mt-4 px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 transition-colors">
+        Try again
+      </button>
+    </div>
+  )
+}
 
 export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string }) {
   const [entries, setEntries] = React.useState<ContentItem[]>([])
@@ -74,30 +107,30 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
   const [showAllTags, setShowAllTags] = React.useState(false)
   const [showToast, setShowToast] = React.useState(false)
 
-  React.useEffect(() => {
-    async function loadEntries() {
-      try {
-        const [projects, writings, books, outgoingLinks] = await Promise.all([
-          fetchProjects(),
-          fetchWritings(),
-          fetchBooks(),
-          Outgoing()
-        ])
-        
-        const allEntries: ContentItem[] = [...projects, ...writings, ...books, ...outgoingLinks]
-          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+  const loadEntries = React.useCallback(async () => {
+    try {
+      const [projects, writings, books, outgoingLinks] = await Promise.all([
+        fetchProjects(),
+        fetchWritings(),
+        fetchBooks(),
+        Outgoing()
+      ])
+      
+      const allEntries: ContentItem[] = [...projects, ...writings, ...books, ...outgoingLinks]
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
 
-        setEntries(allEntries)
-        setIsLoading(false)
-      } catch (error) {
-        console.error('Error fetching entries:', error)
-        setError('Failed to load content. Please try again later.')
-        setIsLoading(false)
-      }
+      setEntries(allEntries)
+      setIsLoading(false)
+    } catch (error) {
+      console.error('Error fetching entries:', error)
+      setError('Failed to load content. Please try again later.')
+      setIsLoading(false)
     }
-
-    loadEntries()
   }, [])
+
+  React.useEffect(() => {
+    loadEntries()
+  }, [loadEntries])
 
   React.useEffect(() => {
     if (initialSlug && entries.length > 0) {
@@ -195,15 +228,16 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
 
   if (isLoading) {
     return (
-      <div className="flex justify-center items-center h-screen">
+      <div className="flex justify-center items-center h-screen" aria-live="polite" aria-busy="true">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        <span className="sr-only">Loading...</span>
       </div>
     )
   }
 
   if (error) {
     return (
-      <div className="flex justify-center items-center h-screen text-destructive">
+      <div className="flex justify-center items-center h-screen text-destructive" role="alert">
         {error}
       </div>
     )
@@ -213,31 +247,40 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
     <div className="bg-background">
       <div className="container mx-auto p-4 lg:p-8">
         <div className="grid gap-8 lg:grid-cols-[250px,1fr]">
-          <aside className="space-y-6 w-[250px]">
+          <aside className="space-y-6 w-full lg:w-[250px]">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
               <Input
                 type="search"
                 placeholder="Type here to search"
-                className="pl-10"
+                className="pl-10 w-full"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
+                aria-label="Search entries"
               />
             </div>
-            
-            <div className="space-y-4">
-              <div>
+            <div className="space-y-4 w-full">
+              <div className="w-full">
                 <Label className="text-base">Categories</Label>
-                <div className="flex flex-wrap gap-2 mt-2">
+                <div className="flex flex-wrap gap-2 mt-2 w-full">
                   {['project', 'writing', 'book', 'outgoing'].map((category) => (
                     <Badge
                       key={category}
                       className={`cursor-pointer transition-colors ${
                         activeCategories.includes(category)
                           ? selectedCategoryColors[category as keyof typeof selectedCategoryColors]
-                          : categoryColors[category as keyof typeof categoryColors]
+                          : "bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-200"
                       }`}
                       onClick={() => toggleCategory(category)}
+                      role="checkbox"
+                      aria-checked={activeCategories.includes(category)}
+                      tabIndex={0}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          toggleCategory(category)
+                        }
+                      }}
                     >
                       <span className="flex items-center gap-1.5">
                         <EntryIcon type={category as ContentItem['type']} />
@@ -248,9 +291,9 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
                 </div>
               </div>
 
-              <div>
+              <div className="w-full">
                 <Label className="text-base">Tags</Label>
-                <div className="flex flex-wrap gap-2 mt-2">
+                <div className="flex flex-wrap gap-2 mt-2 w-full">
                   {displayedTags.map(tag => (
                     <Badge
                       key={tag}
@@ -260,6 +303,15 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
                           : "bg-secondary text-secondary-foreground"
                       }`}
                       onClick={() => toggleFilter(tag)}
+                      role="checkbox"
+                      aria-checked={activeFilters.includes(tag)}
+                      tabIndex={0}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          toggleFilter(tag)
+                        }
+                      }}
                     >
                       {tag}
                     </Badge>
@@ -271,112 +323,126 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
                     size="sm"
                     onClick={() => setShowAllTags(!showAllTags)}
                     className="mt-2 text-muted-foreground"
+                    aria-expanded={showAllTags}
                   >
                     {showAllTags ? (
-                      <>Show Less <ChevronUp className="ml-1 h-4 w-4" /></>
+                      <>Show Less <ChevronUp className="ml-1 h-4 w-4" aria-hidden="true" /></>
                     ) : (
-                      <>Show More <ChevronDown className="ml-1 h-4 w-4" /></>
+                      <>Show More <ChevronDown className="ml-1 h-4 w-4" aria-hidden="true" /></>
                     )}
                   </Button>
                 )}
               </div>
             </div>
           </aside>
-
+          <div className="w-full h-px bg-border lg:hidden" aria-hidden="true" />
           <main>
-            <div className="relative">
-              <div className="absolute left-24 md:left-32 top-0 h-full w-px bg-border" />
-              <div className="space-y-8 md:space-y-12">
-                {filteredEntries.map((entry, index) => (
-                  <motion.div
-                    key={entry.slug}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: index * 0.1, duration: 0.3 }}
-                    className="relative pl-28 md:pl-36"
-                  >
-                    <time className="absolute left-0 top-0 text-base md:text-lg lg:text-xl font-bold text-foreground w-24 md:w-32 pr-4">
-                      {formatDate(entry.date)}
-                    </time>
-                    <div className="absolute left-[110px] md:left-[150px] top-[10px] h-3 w-3 rounded-full border-2 border-primary bg-background" />
-                    <Card className="overflow-hidden">
-                      <CardContent className="p-4 md:p-6">
-                        <div className="flex items-center gap-2 mb-2">
-                          <EntryIcon type={entry.type} />
-                          <span className={`text-xs md:text-sm font-medium capitalize ${
-                            categoryColors[entry.type].split(' ')[1]
-                          }`}>
-                            {entry.type === 'outgoing' ? 'External' : entry.type}
-                          </span>
-                        </div>
-                        <div className="flex items-start gap-4">
-                          {entry.type === 'book' && entry.image && (
-                            <div className="flex-shrink-0">
-                              <Image
-                                src={entry.image}
-                                alt={entry.title}
-                                width={60}
-                                height={90}
-                                className="object-cover rounded-sm"
-                              />
-                            </div>
-                          )}
-                          <div className="flex-grow">
-                            {entry.type === 'outgoing' ? (
-                              <a
-                                href={entry.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-lg md:text-xl font-semibold text-primary hover:underline"
-                              >
-                                {entry.title}
-                              </a>
-                            ) : (
-                              <h2 className="text-lg md:text-xl font-semibold text-primary hover:underline">
-                                <button className="text-left" onClick={() => handleEntryClick(entry)}>
-                                  {entry.title}
-                                </button>
-                              </h2>
-                            )}
-                            {entry.type === 'book' && entry.rating !== undefined && (
-                              <div className="mt-2">
-                                <Rating rating={entry.rating} />
+            <ErrorBoundary
+              FallbackComponent={ErrorFallback}
+              onReset={() => {
+                loadEntries()
+              }}
+            >
+              <div className="relative">
+                <div className="absolute left-0 top-0 bottom-0 w-px bg-border" aria-hidden="true" />
+                <div className="space-y-8 md:space-y-12">
+                  {filteredEntries.map((entry, index) => (
+                    <motion.div
+                      key={entry.slug}
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: index * 0.1, duration: 0.3 }}
+                      className="relative pl-8 md:pl-10"
+                    >
+                      <div 
+                        className={`absolute left-[-6px] top-0 h-3 w-3 rounded-full border-2 ${
+                          entry.type === 'book' 
+                            ? 'border-purple-500 bg-background' 
+                            : `border-background ${categoryColors[entry.type].split(' ')[0]}`
+                        }`} 
+                        aria-hidden="true" 
+                      />
+                      <time className="block mb-2 text-sm md:text-base font-medium text-muted-foreground">
+                        {formatDate(entry.date)}
+                      </time>
+                      <Card className="overflow-hidden">
+                        <CardContent className="p-4 md:p-6">
+                          <div className="flex items-center gap-2 mb-2">
+                            <EntryIcon type={entry.type} />
+                            <span className={`text-xs md:text-sm font-medium capitalize ${
+                              categoryColors[entry.type]
+                            }`}>
+                              {entry.type === 'outgoing' ? 'External' : entry.type}
+                            </span>
+                          </div>
+                          <div className="flex items-start gap-4">
+                            {entry.type === 'book' && entry.image && (
+                              <div className="flex-shrink-0">
+                                <LazyImage
+                                  src={entry.image}
+                                  alt={entry.title}
+                                  width={60}
+                                  height={90}
+                                />
                               </div>
                             )}
-                            <p className="text-sm md:text-base text-muted-foreground mt-2">
-                              {entry.description}
-                            </p>
+                            <div className="flex-grow">
+                              {entry.type === 'outgoing' ? (
+                                <a
+                                  href={entry.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-lg md:text-xl font-semibold text-primary hover:underline"
+                                >
+                                  {entry.title}
+                                </a>
+                              ) : (
+                                <h2 className="text-lg md:text-xl font-semibold text-primary hover:underline">
+                                  <button className="text-left" onClick={() => handleEntryClick(entry)}>
+                                    {entry.title}
+                                  </button>
+                                </h2>
+                              )}
+                              {entry.type === 'book' && entry.rating !== undefined && (
+                                <div className="mt-2">
+                                  <Rating rating={entry.rating} />
+                                </div>
+                              )}
+                              <p className="text-sm md:text-base text-muted-foreground mt-2">
+                                {entry.description}
+                              </p>
+                            </div>
                           </div>
-                        </div>
-                        <ScrollArea className="w-full whitespace-nowrap mt-3 md:mt-4">
-                          <div className="flex gap-2">
-                            {entry.tags?.map((tag, tagIndex) => (
-                              <Badge 
-                                key={tagIndex} 
-                                className="bg-secondary text-secondary-foreground shrink-0 text-xs md:text-sm"
-                              >
-                                {tag}
-                              </Badge>
-                            ))}
-                          </div>
-                        </ScrollArea>
-                        {entry.type !== 'outgoing' && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="mt-3 md:mt-4 text-xs md:text-sm"
-                            onClick={() => handleShareClick(entry)}
-                          >
-                            <Share2 className="mr-2 h-3 w-3 md:h-4 md:w-4" />
-                            Share
-                          </Button>
-                        )}
-                      </CardContent>
-                    </Card>
-                  </motion.div>
-                ))}
+                          <ScrollArea className="w-full whitespace-nowrap mt-3 md:mt-4">
+                            <div className="flex gap-2">
+                              {entry.tags?.map((tag, tagIndex) => (
+                                <Badge 
+                                  key={tagIndex} 
+                                  className="bg-secondary text-secondary-foreground shrink-0 text-xs md:text-sm"
+                                >
+                                  {tag}
+                                </Badge>
+                              ))}
+                            </div>
+                          </ScrollArea>
+                          {entry.type !== 'outgoing' && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="mt-3 md:mt-4 text-xs md:text-sm"
+                              onClick={() => handleShareClick(entry)}
+                            >
+                              <Share2 className="mr-2 h-3 w-3 md:h-4 md:w-4" aria-hidden="true" />
+                              Share
+                            </Button>
+                          )}
+                        </CardContent>
+                      </Card>
+                    </motion.div>
+                  ))}
+                </div>
               </div>
-            </div>
+            </ErrorBoundary>
           </main>
         </div>
       </div>
@@ -387,16 +453,18 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
           className="p-2" 
           onClick={() => navigateTimeline('prev')} 
           disabled={currentIndex <= 0}
+          aria-label="Previous entry"
         >
-          <ChevronLeft className="h-6 w-6 md:h-8 md:w-8" />
+          <ChevronLeft className="h-6 w-6 md:h-8 md:w-8" aria-hidden="true" />
         </Button>
         <Button 
           variant="ghost"
           className="p-2"
           onClick={() => navigateTimeline('next')} 
           disabled={currentIndex >= filteredEntries.length - 1}
+          aria-label="Next entry"
         >
-          <ChevronRight className="h-6 w-6 md:h-8 md:w-8" />
+          <ChevronRight className="h-6 w-6 md:h-8 md:w-8" aria-hidden="true" />
         </Button>
       </div>
 
@@ -423,7 +491,7 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
                   window.history.pushState(null, '', '/')
                 }}
               >
-                <ChevronLeft className="mr-2 h-4 w-4" />
+                <ChevronLeft className="mr-2 h-4 w-4" aria-hidden="true" />
                 Back to Timeline
               </Button>
               <div className="space-y-6 md:space-y-8">
@@ -435,7 +503,9 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
                 >
                   <div className="flex items-center gap-2">
                     <EntryIcon type={expandedEntry.type} />
-                    <span className="text-sm font-medium capitalize">{expandedEntry.type}</span>
+                    <span className={`text-sm font-medium capitalize ${categoryColors[expandedEntry.type]}`}>
+                      {expandedEntry.type}
+                    </span>
                   </div>
                   <time className="text-sm text-muted-foreground">{formatDate(expandedEntry.date)}</time>
                   <h1 className="text-2xl md:text-4xl font-bold">{expandedEntry.title}</h1>
@@ -466,10 +536,11 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
                             : `/images/${props.src}`
                         return (
                           <div className="flex justify-between items-start gap-8">
-                            <img
+                            <LazyImage
                               src={src}
                               alt={props.alt || ''}
-                              className="w-full rounded-lg my-4 md:my-5"
+                              width={800}
+                              height={600}
                             />
                           </div>
                         )
