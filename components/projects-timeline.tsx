@@ -16,9 +16,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import ReactMarkdown from 'react-markdown'
 import Image from 'next/image'
+import Link from 'next/link'
+import { format, parse } from 'date-fns'
 
 interface Project {
   title: string
@@ -44,28 +45,22 @@ export default function ProjectsTimeline() {
   React.useEffect(() => {
     async function fetchProjects() {
       try {
-        console.log('Fetching projects...')
         const { data: projectsData } = await octokit.repos.getContent({
           owner: 'lukketsvane',
           repo: 'personal-web',
           path: 'projects'
         })
-        console.log('Projects data:', projectsData)
 
-        console.log('Fetching writing...')
         const { data: writingData } = await octokit.repos.getContent({
           owner: 'lukketsvane',
           repo: 'personal-web',
           path: 'writing'
         })
-        console.log('Writing data:', writingData)
 
         const allFiles = [...projectsData, ...writingData].filter(file => file.type === 'file' && file.name.endsWith('.mdx'))
-        console.log('All files:', allFiles)
 
         const projectsContent = await Promise.all(
           allFiles.map(async (file) => {
-            console.log(`Processing file: ${file.path}`)
             const { data } = await octokit.repos.getContent({
               owner: 'lukketsvane',
               repo: 'personal-web',
@@ -82,7 +77,7 @@ export default function ProjectsTimeline() {
               const frontMatterObj = frontMatter.split('\n').reduce((acc, line) => {
                 const [key, value] = line.split(':').map(str => str.trim())
                 if (key && value) {
-                  acc[key] = value.replace(/^['"](.*)['"]$/, '$1') // Remove quotes if present
+                  acc[key] = value.replace(/^['"](.*)['"]$/, '$1')
                 }
                 return acc
               }, {} as Record<string, string>)
@@ -90,11 +85,14 @@ export default function ProjectsTimeline() {
               const projectName = file.path.split('/').pop()?.replace('.mdx', '') || ''
               const projectImages = await fetchProjectImages(projectName)
 
-              console.log(`Processed ${file.path}`)
+              const formattedDate = frontMatterObj.date 
+                ? format(parse(frontMatterObj.date, 'yyyy-MM-dd', new Date()), 'MMMM d, yyyy')
+                : 'No date'
+
               return {
                 title: frontMatterObj.title || file.name.replace('.mdx', ''),
                 description: frontMatterObj.description || '',
-                date: frontMatterObj.date || 'No date',
+                date: formattedDate,
                 tags: frontMatterObj.tags ? frontMatterObj.tags.split(',').map(tag => tag.trim()) : [],
                 type: frontMatterObj.type || 'public',
                 category: frontMatterObj.category || 'uncategorized',
@@ -103,14 +101,11 @@ export default function ProjectsTimeline() {
                 images: projectImages
               } as Project
             }
-            console.log(`Skipped ${file.path} (no content)`)
             return null
           })
         )
 
         const filteredProjects = projectsContent.filter(Boolean) as Project[]
-        console.log('Filtered projects:', filteredProjects)
-
         setProjects(filteredProjects)
         setIsLoading(false)
       } catch (error) {
@@ -141,23 +136,9 @@ export default function ProjectsTimeline() {
     return []
   }
 
-  const allTags = React.useMemo(() => {
-    const tags = new Set<string>()
-    projects.forEach(project => {
-      project.tags.forEach(tag => tags.add(tag))
-    })
-    return Array.from(tags)
-  }, [projects])
-
-  const types = React.useMemo(() => 
-    Array.from(new Set(projects.map(p => p.type))),
-    [projects]
-  )
-
-  const categories = React.useMemo(() => 
-    Array.from(new Set(projects.map(p => p.category))),
-    [projects]
-  )
+  const types = ["public", "private", "prototype", "personal"]
+  const tutorials = ["video", "template", "live tweet"]
+  const categories = ["ai", "no code", "vc", "web3", "art", "dev"]
 
   const filteredProjects = React.useMemo(() => {
     return projects.filter(project => {
@@ -187,17 +168,6 @@ export default function ProjectsTimeline() {
     return <div className="flex justify-center items-center h-screen">Loading projects...</div>
   }
 
-  if (projects.length === 0) {
-    return (
-      <div className="flex flex-col justify-center items-center h-screen">
-        <p className="text-xl font-semibold mb-4">No projects found.</p>
-        <p className="text-muted-foreground">
-          Please check the console for error messages and ensure your GitHub token is correct.
-        </p>
-      </div>
-    )
-  }
-
   return (
     <div className="container mx-auto p-4 lg:p-8">
       <div className="grid gap-8 lg:grid-cols-[240px,1fr]">
@@ -205,13 +175,13 @@ export default function ProjectsTimeline() {
         <aside className="space-y-6">
           <div className="space-y-4">
             <div>
-              <Label>Type</Label>
+              <Label className="text-sm font-medium">type</Label>
               <div className="flex flex-wrap gap-2 mt-2">
                 {types.map(type => (
                   <Badge
                     key={type}
                     variant={activeFilters.includes(type) ? "default" : "outline"}
-                    className="cursor-pointer hover:bg-muted-foreground/20"
+                    className="cursor-pointer bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200"
                     onClick={() => toggleFilter(type)}
                   >
                     {type}
@@ -220,31 +190,31 @@ export default function ProjectsTimeline() {
               </div>
             </div>
             <div>
-              <Label>Categories</Label>
+              <Label className="text-sm font-medium">tutorials</Label>
               <div className="flex flex-wrap gap-2 mt-2">
-                {categories.map(category => (
+                {tutorials.map(tutorial => (
                   <Badge
-                    key={category}
-                    variant={activeFilters.includes(category) ? "default" : "outline"}
+                    key={tutorial}
+                    variant={activeFilters.includes(tutorial) ? "default" : "outline"}
                     className="cursor-pointer bg-green-50 hover:bg-green-100 text-green-700 border-green-200"
-                    onClick={() => toggleFilter(category)}
+                    onClick={() => toggleFilter(tutorial)}
                   >
-                    {category}
+                    {tutorial}
                   </Badge>
                 ))}
               </div>
             </div>
             <div>
-              <Label>Tags</Label>
+              <Label className="text-sm font-medium">categories</Label>
               <div className="flex flex-wrap gap-2 mt-2">
-                {allTags.map(tag => (
+                {categories.map(category => (
                   <Badge
-                    key={tag}
-                    variant={activeFilters.includes(tag) ? "default" : "outline"}
+                    key={category}
+                    variant={activeFilters.includes(category) ? "default" : "outline"}
                     className="cursor-pointer bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200"
-                    onClick={() => toggleFilter(tag)}
+                    onClick={() => toggleFilter(category)}
                   >
-                    {tag}
+                    {category}
                   </Badge>
                 ))}
               </div>
@@ -258,59 +228,42 @@ export default function ProjectsTimeline() {
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               placeholder="Type here to search"
-              className="pl-10"
+              className="pl-10 rounded-full border-gray-200"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
 
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          <div className="relative pl-8 border-l-2 border-gray-200 space-y-12">
             {filteredProjects.map((project, index) => (
-              <Card 
-                key={index} 
-                className="cursor-pointer hover:shadow-lg transition-shadow duration-200"
-                onClick={() => setExpandedProject(project)}
-              >
-                <CardHeader>
-                  <CardTitle>{project.title}</CardTitle>
-                  <time className="text-sm text-muted-foreground">
-                    {project.date}
-                  </time>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-muted-foreground mb-4">
+              <div key={index} className="relative">
+                <div className="absolute -left-[41px] h-5 w-5 rounded-full border-4 border-white bg-gray-200" />
+                <time className="block text-sm text-gray-500 mb-2">
+                  {project.date}
+                </time>
+                <div 
+                  className="space-y-2 cursor-pointer border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow duration-200"
+                  onClick={() => setExpandedProject(project)}
+                >
+                  <h3 className="text-xl font-semibold text-gray-900 hover:text-gray-700">
+                    {project.title}
+                  </h3>
+                  <p className="text-gray-600">
                     {project.description}
                   </p>
-                  {project.images.length > 0 && (
-                    <div className="relative w-full h-48 rounded-lg overflow-hidden mb-4">
-                      <Image
-                        src={project.images[0]}
-                        alt={project.title}
-                        layout="fill"
-                        objectFit="cover"
-                      />
-                    </div>
-                  )}
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex gap-2">
                     {project.tags.map(tag => (
                       <Badge
                         key={tag}
                         variant="outline"
-                        className={cn(
-                          "cursor-pointer",
-                          activeFilters.includes(tag) && "bg-primary text-primary-foreground"
-                        )}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleFilter(tag);
-                        }}
+                        className="bg-gray-50 text-gray-600 border-gray-200"
                       >
-                        {tag}
+                        {tag.replace(/[\[\]]/g, '').trim()}
                       </Badge>
                     ))}
                   </div>
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             ))}
           </div>
         </main>
@@ -346,7 +299,7 @@ export default function ProjectsTimeline() {
       </Dialog>
 
       <Button 
-        className="fixed bottom-6 right-6 bg-black text-white hover:bg-black/90"
+        className="fixed bottom-6 right-6 bg-black text-white hover:bg-black/90 rounded-none px-6"
       >
         Chat with Mini Yohei →
       </Button>

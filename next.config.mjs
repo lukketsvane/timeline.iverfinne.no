@@ -4,7 +4,12 @@ const nextConfig = {
     GITHUB_PAT: process.env.GITHUB_PAT,
   },
   images: {
-    domains: ['raw.githubusercontent.com'],
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: '**',
+      },
+    ],
   },
 }
 
