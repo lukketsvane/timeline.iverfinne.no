@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation'
 import { Metadata } from 'next'
 import ProjectsTimeline from '@/components/projects-timeline'
-import { fetchProjects, fetchWritings, fetchBooks, Outgoing, ContentItem, fetchAllEntries, fetchAllSlugs, fetchEntryBySlug } from '@/lib/github'
+import { fetchProjects, fetchWriting, fetchBooks, Outgoing, ContentItem, fetchAllEntries, fetchAllSlugs, fetchEntryBySlug } from '@/lib/github'
 
 export async function generateStaticParams() {
   const slugs = await fetchAllSlugs()

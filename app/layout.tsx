@@ -8,7 +8,7 @@ const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
   title: "Iver's Timeline",
-  description: 'A timeline of projects, writings, books, and external links',
+  description: 'A timeline of projects, writing, books, and external links',
 }
 
 export default function RootLayout({
