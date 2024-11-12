@@ -154,7 +154,7 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
 
   const handleEntryClick = React.useCallback((entry: ContentItem) => {
     if (entry.type === 'outgoing_link') {
-      window.open(entry.url, '_blank')
+      window.open(entry.url, '_blank', 'noopener,noreferrer')
     } else {
       setExpandedEntry(entry)
       window.history.pushState(null, '', `/${entry.type}/${entry.slug}`)
@@ -322,11 +322,22 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
                             </div>
                           )}
                           <div className="flex-grow">
-                            <h2 className="text-lg md:text-xl font-semibold text-blue-500 hover:text-blue-600 transition-colors">
-                              <button className="text-left" onClick={() => handleEntryClick(entry)}>
+                            {entry.type === 'outgoing_link' ? (
+                              <a
+                                href={entry.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-lg md:text-xl font-semibold text-blue-500 hover:text-blue-600 transition-colors"
+                              >
                                 {entry.title}
-                              </button>
-                            </h2>
+                              </a>
+                            ) : (
+                              <h2 className="text-lg md:text-xl font-semibold text-blue-500 hover:text-blue-600 transition-colors">
+                                <button className="text-left" onClick={() => handleEntryClick(entry)}>
+                                  {entry.title}
+                                </button>
+                              </h2>
+                            )}
                             {entry.type === 'book' && entry.rating !== undefined && (
                                 <div className="mt-2">
                                   <Rating rating={entry.rating} />
@@ -349,15 +360,17 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
                             ))}
                           </div>
                         </ScrollArea>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="mt-3 md:mt-4 text-xs md:text-sm"
-                          onClick={() => handleShareClick(entry)}
-                        >
-                          <Share2 className="mr-2 h-3 w-3 md:h-4 md:w-4" />
-                          Share
-                        </Button>
+                        {entry.type !== 'outgoing_link' && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="mt-3 md:mt-4 text-xs md:text-sm"
+                            onClick={() => handleShareClick(entry)}
+                          >
+                            <Share2 className="mr-2 h-3 w-3 md:h-4 md:w-4" />
+                            Share
+                          </Button>
+                        )}
                       </CardContent>
                     </Card>
                   </motion.div>
