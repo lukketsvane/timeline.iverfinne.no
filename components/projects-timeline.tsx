@@ -288,31 +288,31 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
 
           <main>
             <div className="relative">
-              <div className="absolute left-24 top-0 h-full w-px bg-border" />
-              <div className="space-y-12">
+              <div className="absolute left-8 md:left-32 top-0 h-full w-px bg-border" />
+              <div className="space-y-8 md:space-y-12">
                 {filteredEntries.map((entry, index) => (
                   <motion.div
                     key={entry.slug}
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: index * 0.1, duration: 0.3 }}
-                    className="relative pl-44"
+                    className="relative pl-16 md:pl-44"
                   >
-                    <time className="absolute left-0 top-0 text-xl font-semibold text-muted-foreground">
+                    <time className="absolute left-0 top-0 text-base md:text-xl font-bold text-muted-foreground">
                       {formatDate(entry.date)}
                     </time>
-                    <div className="absolute left-[94px] top-[10px] h-3 w-3 rounded-full border-2 border-primary bg-background" />
+                    <div className="absolute left-[30px] md:left-[126px] top-[10px] h-3 w-3 rounded-full border-2 border-primary bg-background" />
                     <Card className="overflow-hidden">
-                      <CardContent className="p-6">
+                      <CardContent className="p-3 md:p-4">
                         <div className="flex items-center gap-2 mb-2">
                           {getEntryIcon(entry.type)}
-                          <span className={`text-sm font-medium capitalize ${
+                          <span className={`text-xs md:text-sm font-medium capitalize ${
                             categoryColors[entry.type].split(' ')[2]
                           }`}>
                             {entry.type === 'outgoing_link' ? 'External' : entry.type}
                           </span>
                         </div>
-                        <h2 className="text-xl font-semibold text-blue-500 hover:text-blue-600 transition-colors">
+                        <h2 className="text-lg md:text-xl font-semibold text-blue-500 hover:text-blue-600 transition-colors">
                           <button className="text-left" onClick={() => handleEntryClick(entry)}>
                             {entry.title}
                           </button>
@@ -323,7 +323,7 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
                           </div>
                         )}
                         {entry.image && (
-                          <div className="relative w-full h-48 my-4">
+                          <div className="relative w-full h-32 md:h-48 my-3 md:my-4">
                             <Image
                               src={extractImageUrl(entry.image) || entry.image}
                               alt={entry.title}
@@ -332,15 +332,15 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
                             />
                           </div>
                         )}
-                        <p className="text-muted-foreground mt-2">
+                        <p className="text-sm md:text-base text-muted-foreground mt-2">
                           {entry.description}
                         </p>
-                        <ScrollArea className="w-full whitespace-nowrap mt-4">
+                        <ScrollArea className="w-full whitespace-nowrap mt-3 md:mt-4">
                           <div className="flex gap-2">
                             {entry.tags?.map((tag, tagIndex) => (
                               <Badge 
                                 key={tagIndex} 
-                                className="bg-gray-50 text-gray-700 shrink-0"
+                                className="bg-gray-50 text-gray-700 shrink-0 text-xs md:text-sm"
                               >
                                 {tag}
                               </Badge>
@@ -350,10 +350,10 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="mt-4"
+                          className="mt-3 md:mt-4 text-xs md:text-sm"
                           onClick={() => handleShareClick(entry)}
                         >
-                          <Share2 className="mr-2 h-4 w-4" />
+                          <Share2 className="mr-2 h-3 w-3 md:h-4 md:w-4" />
                           Share
                         </Button>
                       </CardContent>
@@ -373,7 +373,7 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
           onClick={() => navigateTimeline('prev')} 
           disabled={currentIndex <= 0}
         >
-          <ChevronLeft className="h-8 w-8" />
+          <ChevronLeft className="h-6 w-6 md:h-8 md:w-8" />
         </Button>
         <Button 
           variant="ghost"
@@ -381,7 +381,7 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
           onClick={() => navigateTimeline('next')} 
           disabled={currentIndex >= filteredEntries.length - 1}
         >
-          <ChevronRight className="h-8 w-8" />
+          <ChevronRight className="h-6 w-6 md:h-8 md:w-8" />
         </Button>
       </div>
 
@@ -398,11 +398,11 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
               transition={{ duration: 0.3 }}
-              className="relative z-10 mx-auto max-w-4xl p-6 bg-background rounded-lg shadow-lg mt-20 mb-20"
+              className="relative z-10 mx-auto max-w-4xl p-4 md:p-6 bg-background rounded-lg shadow-lg mt-16 mb-16 md:mt-20 md:mb-20"
             >
               <Button
                 variant="ghost"
-                className="mb-6"
+                className="mb-4 md:mb-6"
                 onClick={() => {
                   setExpandedEntry(null)
                   window.history.pushState(null, '', '/')
@@ -411,19 +411,19 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
                 <ChevronLeft className="mr-2 h-4 w-4" />
                 Back to Timeline
               </Button>
-              <div className="space-y-8">
+              <div className="space-y-6 md:space-y-8">
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.2, duration: 0.3 }}
-                  className="space-y-4"
+                  className="space-y-3 md:space-y-4"
                 >
                   <div className="flex items-center gap-2">
                     {getEntryIcon(expandedEntry.type)}
                     <span className="text-sm font-medium capitalize">{expandedEntry.type}</span>
                   </div>
                   <time className="text-sm text-muted-foreground">{formatDate(expandedEntry.date)}</time>
-                  <h1 className="text-4xl font-bold">{expandedEntry.title}</h1>
+                  <h1 className="text-2xl md:text-4xl font-bold">{expandedEntry.title}</h1>
                   {expandedEntry.type === 'book' && expandedEntry.rating && (
                     <Rating rating={expandedEntry.rating} />
                   )}
@@ -439,7 +439,7 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.3, duration: 0.3 }}
-                  className="prose prose-neutral dark:prose-invert max-w-none"
+                  className="prose prose-sm md:prose-base prose-neutral dark:prose-invert max-w-none"
                 >
                   <ReactMarkdown
                     components={{
@@ -454,7 +454,7 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
                             <img
                               src={src}
                               alt={props.alt || ''}
-                              className="w-full rounded-lg my-5"
+                              className="w-full rounded-lg my-4 md:my-5"
                             />
                           </div>
                         )
@@ -466,7 +466,7 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
                           loop
                           muted
                           playsInline
-                          className="w-full rounded-lg shadow-md my-5"
+                          className="w-full rounded-lg shadow-md my-4 md:my-5"
                           style={{
                             borderRadius: "8px",
                           }}
@@ -474,33 +474,33 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
                         />
                       ),
                       h2: ({ ...props }) => (
-                        <h2 className="text-2xl font-semibold mt-8 mb-4" {...props} />
+                        <h2 className="text-xl md:text-2xl font-semibold mt-6 md:mt-8 mb-3 md:mb-4" {...props} />
                       ),
                       h3: ({ ...props }) => (
-                        <h3 className="text-xl font-semibold mt-6 mb-3" {...props} />
+                        <h3 className="text-lg md:text-xl font-semibold mt-5 md:mt-6 mb-2 md:mb-3" {...props} />
                       ),
                       p: ({ ...props }) => (
-                        <p className="mb-4 leading-relaxed" {...props} />
+                        <p className="mb-3 md:mb-4 leading-relaxed" {...props} />
                       ),
                       ul: ({ ...props }) => (
-                        <ul className="list-disc pl-6 mb-4" {...props} />
+                        <ul className="list-disc pl-5 md:pl-6 mb-3 md:mb-4" {...props} />
                       ),
                       ol: ({ ...props }) => (
-                        <ol className="list-decimal pl-6 mb-4" {...props} />
+                        <ol className="list-decimal pl-5 md:pl-6 mb-3 md:mb-4" {...props} />
                       ),
                       li: ({ ...props }) => (
-                        <li className="mb-2" {...props} />
+                        <li className="mb-1 md:mb-2" {...props} />
                       ),
                       code: ({ className, children, ...props }) => {
                         const match = /language-(\w+)/.exec(className || '')
                         return match ? (
-                          <pre className="bg-muted p-4 rounded-lg overflow-x-auto">
+                          <pre className="bg-muted p-3 md:p-4 rounded-lg overflow-x-auto">
                             <code className={className} {...props}>
                               {children}
                             </code>
                           </pre>
                         ) : (
-                          <code className="bg-muted px-1 py-0.5 rounded" {...props}>
+                          <code className="bg-muted px-1 py-0.5 rounded text-sm md:text-base" {...props}>
                             {children}
                           </code>
                         )

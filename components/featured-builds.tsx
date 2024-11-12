@@ -6,9 +6,12 @@ import { Badge } from '@/components/ui/badge'
 import Image from 'next/image'
 import { fetchProjects } from '@/lib/github'
 import type { ContentItem } from '@/lib/github'
+import { Star } from 'lucide-react'
 
 export default function FeaturedBuilds() {
   const [featuredProjects, setFeaturedProjects] = React.useState<ContentItem[]>([])
+  const containerRef = React.useRef<HTMLDivElement>(null)
+  const [shouldShowProjects, setShouldShowProjects] = React.useState(true)
 
   React.useEffect(() => {
     async function loadFeaturedProjects() {
@@ -18,31 +21,71 @@ export default function FeaturedBuilds() {
     loadFeaturedProjects()
   }, [])
 
+  // Check if the cards can fit in a row of three without wrapping
+  React.useEffect(() => {
+    const updateVisibility = () => {
+      if (containerRef.current) {
+        const containerWidth = containerRef.current.offsetWidth
+        const cardWidth = 300 // Approximate width of each card including padding/margins
+        const numberOfCards = 3
+        const totalRequiredWidth = cardWidth * numberOfCards
+
+        if (containerWidth >= totalRequiredWidth) {
+          setShouldShowProjects(true)
+        } else {
+          setShouldShowProjects(false)
+        }
+      }
+    }
+
+    // Run check on initial load
+    updateVisibility()
+
+    // Run check whenever window is resized
+    window.addEventListener('resize', updateVisibility)
+    return () => {
+      window.removeEventListener('resize', updateVisibility)
+    }
+  }, [])
+
+  if (!shouldShowProjects) {
+    return null
+  }
+
   return (
-    <div className="mb-16 hidden sm:block">
+    <div ref={containerRef} className="mb-16 hidden sm:block">
       <div className="text-center mb-12">
-        <h1 className="text-4xl font-bold mb-2">build-in-public log</h1>
-        <p className="text-xl text-muted-foreground">
-          some of my tools and experiments.
+        <h1 className="text-5xl font-bold mb-4 text-gray-800 dark:text-white">build-in-public log</h1>
+        <p className="text-xl text-muted-foreground dark:text-gray-400">
+          Some of my tools and experiments.
         </p>
       </div>
-      <div className="flex justify-center ">
-        <div className="grid grid-cols-3 gap-2 max-w-5xl">
+      <div className="flex justify-center">
+        <div className="grid grid-cols-3 gap-6 max-w-6xl px-4 sm:px-0">
           {featuredProjects.map((project) => (
-            <Card key={project.slug} className="overflow-hidden bg-white dark:bg-background shadow-sm w-[280px]">
+            <Card key={project.slug} className="overflow-hidden bg-white dark:bg-background shadow-lg rounded-xl transition-transform transform hover:scale-105 duration-300 w-[300px]">
               <div className="relative aspect-[12/9]">
                 {project.image && (
                   <Image
                     src={project.image}
                     alt={project.title}
                     fill
-                    className="object-cover"
+                    className="object-cover rounded-t-xl"
                   />
                 )}
               </div>
-              <CardContent className="p-4">
+              <CardContent className="p-5">
                 <div className="min-h-[100px] flex flex-col">
-                  <h3 className="text-base font-semibold mb-2">{project.title}</h3>
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{project.title}</h3>
+                    {project.type === 'book' && project.rating && (
+                      <div className="flex items-center gap-0.5">
+                        {Array.from({ length: Math.floor(project.rating) }, (_, i) => (
+                          <Star key={i} className="w-4 h-4 text-amber-500 fill-amber-500" />
+                        ))}
+                      </div>
+                    )}
+                  </div>
                   <p className="text-sm text-muted-foreground mb-4 line-clamp-2 flex-grow">
                     {project.description}
                   </p>
