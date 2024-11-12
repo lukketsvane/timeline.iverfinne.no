@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Search, ChevronLeft, ChevronDown, ChevronUp, Share2, Book, Pen, Code, Star } from "lucide-react"
+import { Search, ChevronLeft, ChevronDown, ChevronUp, Share2, Book, Pen, Code, Star, ChevronRight, ExternalLink } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -11,18 +11,20 @@ import { Label } from "@/components/ui/label"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import ReactMarkdown from 'react-markdown'
 import Image from 'next/image'
-import { fetchProjects, fetchWritings, fetchBooks, ContentItem } from "@/lib/github"
+import { fetchProjects, fetchWritings, fetchBooks, fetchOutgoingLinks, ContentItem } from "@/lib/github"
 
 const categoryColors = {
   project: "bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200",
   writing: "bg-violet-50 hover:bg-violet-100 text-violet-700 border-violet-200",
-  book: "bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-200"
+  book: "bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-200",
+  outgoing_link: "bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200"
 }
 
 const selectedCategoryColors = {
   project: "bg-emerald-500 hover:bg-emerald-600 text-white",
   writing: "bg-violet-500 hover:bg-violet-600 text-white",
-  book: "bg-amber-500 hover:bg-amber-600 text-white"
+  book: "bg-amber-500 hover:bg-amber-600 text-white",
+  outgoing_link: "bg-blue-500 hover:bg-blue-600 text-white"
 }
 
 function extractImageUrl(htmlString: string) {
@@ -64,16 +66,17 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
   React.useEffect(() => {
     async function loadEntries() {
       try {
-        const [projects, writings, books] = await Promise.all([
+        const [projects, writings, books, outgoingLinks] = await Promise.all([
           fetchProjects(),
           fetchWritings(),
-          fetchBooks()
+          fetchBooks(),
+          fetchOutgoingLinks()
         ])
         
-        const allEntries: ContentItem[] = [...projects, ...writings, ...books]
+        const allEntries: ContentItem[] = [...projects, ...writings, ...books, ...outgoingLinks]
           .map(entry => ({
             ...entry,
-            date: new Date(entry.date).getTime() ? new Date(entry.date) : new Date(0)
+            date: new Date(entry.date)
           }))
           .sort((a, b) => b.date.getTime() - a.date.getTime())
 
@@ -143,12 +146,16 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
   }, [allTags, showAllTags])
 
   const handleEntryClick = (entry: ContentItem) => {
-    setExpandedEntry(entry)
-    window.history.pushState(null, '', `/${entry.type}/${entry.slug}`)
+    if (entry.type === 'outgoing_link') {
+      window.open(entry.url, '_blank')
+    } else {
+      setExpandedEntry(entry)
+      window.history.pushState(null, '', `/${entry.type}/${entry.slug}`)
+    }
   }
 
   const handleShareClick = (entry: ContentItem) => {
-    const url = `${window.location.origin}/${entry.type}/${entry.slug}`
+    const url = entry.type === 'outgoing_link' ? entry.url : `${window.location.origin}/${entry.type}/${entry.slug}`
     navigator.clipboard.writeText(url).then(() => {
       alert('Link copied to clipboard!')
     }).catch(err => {
@@ -172,6 +179,19 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
         return <Pen className="w-4 h-4" />
       case 'book':
         return <Book className="w-4 h-4" />
+      case 'outgoing_link':
+        return <ExternalLink className="w-4 h-4" />
+    }
+  }
+
+  const currentIndex = expandedEntry ? filteredEntries.findIndex(entry => entry.slug === expandedEntry.slug) : -1
+
+  const navigateTimeline = (direction: 'prev' | 'next') => {
+    if (currentIndex === -1) return
+    const newIndex = direction === 'prev' ? currentIndex - 1 : currentIndex + 1
+    if (newIndex >= 0 && newIndex < filteredEntries.length) {
+      setExpandedEntry(filteredEntries[newIndex])
+      window.history.pushState(null, '', `/${filteredEntries[newIndex].type}/${filteredEntries[newIndex].slug}`)
     }
   }
 
@@ -211,7 +231,7 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
               <div>
                 <Label className="text-base">Categories</Label>
                 <div className="flex flex-wrap gap-2 mt-2">
-                  {['project', 'writing', 'book'].map((category) => (
+                  {['project', 'writing', 'book', 'outgoing_link'].map((category) => (
                     <Badge
                       key={category}
                       className={`cursor-pointer transition-colors ${
@@ -223,7 +243,7 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
                     >
                       <span className="flex items-center gap-1.5">
                         {getEntryIcon(category)}
-                        {category.charAt(0).toUpperCase() + category.slice(1)}
+                        {category === 'outgoing_link' ? 'External' : category.charAt(0).toUpperCase() + category.slice(1)}
                       </span>
                     </Badge>
                   ))}
@@ -232,23 +252,21 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
 
               <div>
                 <Label className="text-base">Tags</Label>
-                <ScrollArea className="h-[200px] w-full rounded-md border p-4">
-                  <div className="flex flex-wrap gap-2">
-                    {displayedTags.map(tag => (
-                      <Badge
-                        key={tag}
-                        className={`cursor-pointer transition-colors ${
-                          activeFilters.includes(tag)
-                            ? "bg-gray-900 hover:bg-gray-800 text-white"
-                            : "bg-gray-50 hover:bg-gray-100 text-gray-700"
-                        }`}
-                        onClick={() => toggleFilter(tag)}
-                      >
-                        {tag}
-                      </Badge>
-                    ))}
-                  </div>
-                </ScrollArea>
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {displayedTags.map(tag => (
+                    <Badge
+                      key={tag}
+                      className={`cursor-pointer transition-colors ${
+                        activeFilters.includes(tag)
+                          ? "bg-gray-900 hover:bg-gray-800 text-white"
+                          : "bg-gray-50 hover:bg-gray-100 text-gray-700"
+                      }`}
+                      onClick={() => toggleFilter(tag)}
+                    >
+                      {tag}
+                    </Badge>
+                  ))}
+                </div>
                 {allTags.length > 10 && (
                   <Button
                     variant="ghost"
@@ -290,7 +308,7 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
                           <span className={`text-sm font-medium capitalize ${
                             categoryColors[entry.type].split(' ')[2]
                           }`}>
-                            {entry.type}
+                            {entry.type === 'outgoing_link' ? 'External' : entry.type}
                           </span>
                         </div>
                         <h2 className="text-xl font-semibold text-blue-500 hover:text-blue-600 transition-colors">
@@ -379,6 +397,24 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
                 <ChevronLeft className="mr-2 h-4 w-4" />
                 Back to Timeline
               </Button>
+              <div className="flex justify-between mb-4">
+                <Button
+                  variant="outline"
+                  onClick={() => navigateTimeline('prev')}
+                  disabled={currentIndex <= 0}
+                >
+                  <ChevronLeft className="mr-2 h-4 w-4" />
+                  Previous
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => navigateTimeline('next')}
+                  disabled={currentIndex >= filteredEntries.length - 1}
+                >
+                  Next
+                  <ChevronRight className="ml-2 h-4 w-4" />
+                </Button>
+              </div>
               <div className="space-y-8">
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
@@ -414,15 +450,17 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
                       img: ({ ...props }) => {
                         const src = props.src?.startsWith('/') 
                           ? props.src 
-                          : `/images/${props.src}`
+                          : props.src?.startsWith('http') 
+                            ? props.src 
+                            : `/images/${props.src}`
                         return (
-                          <Image
-                            src={src}
-                            alt={props.alt || ''}
-                            width={600}
-                            height={400}
-                            className="rounded-lg shadow-md"
-                          />
+                          <div className="flex justify-between items-start gap-8">
+                            <img
+                              src={src}
+                              alt={props.alt || ''}
+                              className="w-full rounded-lg my-5"
+                            />
+                          </div>
                         )
                       },
                       video: ({ src, ...props }) => (
