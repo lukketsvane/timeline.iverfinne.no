@@ -14,9 +14,9 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import ReactMarkdown from 'react-markdown'
 import Image from 'next/image'
 
@@ -44,42 +44,36 @@ export default function ProjectsTimeline() {
   React.useEffect(() => {
     async function fetchProjects() {
       try {
-        console.log('Fetching projects...');
+        console.log('Fetching projects...')
         const { data: projectsData } = await octokit.repos.getContent({
           owner: 'lukketsvane',
           repo: 'personal-web',
           path: 'projects'
-        });
-        console.log('Projects data:', projectsData);
+        })
+        console.log('Projects data:', projectsData)
 
-        console.log('Fetching writing...');
+        console.log('Fetching writing...')
         const { data: writingData } = await octokit.repos.getContent({
           owner: 'lukketsvane',
           repo: 'personal-web',
           path: 'writing'
-        });
-        console.log('Writing data:', writingData);
+        })
+        console.log('Writing data:', writingData)
 
-        const allFiles = [...projectsData, ...writingData].filter(file => file.type === 'file' && file.name.endsWith('.mdx'));
-        console.log('All files:', allFiles);
-
-        if (allFiles.length === 0) {
-          console.error('No MDX files found in projects or writing directories');
-          return;
-        }
+        const allFiles = [...projectsData, ...writingData].filter(file => file.type === 'file' && file.name.endsWith('.mdx'))
+        console.log('All files:', allFiles)
 
         const projectsContent = await Promise.all(
           allFiles.map(async (file) => {
-            console.log(`Processing file: ${file.path}`);
+            console.log(`Processing file: ${file.path}`)
             const { data } = await octokit.repos.getContent({
               owner: 'lukketsvane',
               repo: 'personal-web',
               path: file.path,
-            });
+            })
 
             if ('content' in data) {
-              const content = Buffer.from(data.content, 'base64').toString();
-              console.log(`File content: ${content.substring(0, 100)}...`);
+              const content = Buffer.from(data.content, 'base64').toString()
               const frontMatterRegex = /---\s*([\s\S]*?)\s*---/
               const frontMatterMatch = content.match(frontMatterRegex)
               const frontMatter = frontMatterMatch ? frontMatterMatch[1] : ''
@@ -108,22 +102,20 @@ export default function ProjectsTimeline() {
                 slug: file.name.replace('.mdx', ''),
                 images: projectImages
               } as Project
-            } else {
-              console.log(`No content found for file: ${file.path}`);
             }
             console.log(`Skipped ${file.path} (no content)`)
             return null
           })
-        );
+        )
 
-        const filteredProjects = projectsContent.filter(Boolean) as Project[];
-        console.log('Filtered projects:', filteredProjects);
+        const filteredProjects = projectsContent.filter(Boolean) as Project[]
+        console.log('Filtered projects:', filteredProjects)
 
-        setProjects(filteredProjects);
-        setIsLoading(false);
+        setProjects(filteredProjects)
+        setIsLoading(false)
       } catch (error) {
-        console.error('Error fetching projects:', error);
-        setIsLoading(false);
+        console.error('Error fetching projects:', error)
+        setIsLoading(false)
       }
     }
 
@@ -161,7 +153,7 @@ export default function ProjectsTimeline() {
     Array.from(new Set(projects.map(p => p.type))),
     [projects]
   )
-  
+
   const categories = React.useMemo(() => 
     Array.from(new Set(projects.map(p => p.category))),
     [projects]
@@ -272,22 +264,25 @@ export default function ProjectsTimeline() {
             />
           </div>
 
-          <div className="relative pl-8 border-l-2 border-muted space-y-12">
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {filteredProjects.map((project, index) => (
-              <div key={index} className="relative">
-                <div className="absolute -left-[41px] h-5 w-5 rounded-full border-4 border-background bg-muted" />
-                <time className="block text-sm text-muted-foreground mb-2">
-                  {project.date}
-                </time>
-                <div className="space-y-3">
-                  <h3 className="text-xl font-semibold">
-                    {project.title}
-                  </h3>
-                  <p className="text-muted-foreground">
+              <Card 
+                key={index} 
+                className="cursor-pointer hover:shadow-lg transition-shadow duration-200"
+                onClick={() => setExpandedProject(project)}
+              >
+                <CardHeader>
+                  <CardTitle>{project.title}</CardTitle>
+                  <time className="text-sm text-muted-foreground">
+                    {project.date}
+                  </time>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-muted-foreground mb-4">
                     {project.description}
                   </p>
                   {project.images.length > 0 && (
-                    <div className="relative w-full h-48 rounded-lg overflow-hidden">
+                    <div className="relative w-full h-48 rounded-lg overflow-hidden mb-4">
                       <Image
                         src={project.images[0]}
                         alt={project.title}
@@ -296,7 +291,7 @@ export default function ProjectsTimeline() {
                       />
                     </div>
                   )}
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
                     {project.tags.map(tag => (
                       <Badge
                         key={tag}
@@ -305,51 +300,50 @@ export default function ProjectsTimeline() {
                           "cursor-pointer",
                           activeFilters.includes(tag) && "bg-primary text-primary-foreground"
                         )}
-                        onClick={() => toggleFilter(tag)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleFilter(tag);
+                        }}
                       >
                         {tag}
                       </Badge>
                     ))}
                   </div>
-                  <Dialog>
-                    <DialogTrigger asChild>
-                      <Button variant="outline" onClick={() => setExpandedProject(project)}>
-                        Read more
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="max-w-4xl max-h-[80vh]">
-                      <DialogHeader>
-                        <DialogTitle>{expandedProject?.title}</DialogTitle>
-                        <DialogDescription>
-                          {expandedProject?.date} - {expandedProject?.category}
-                        </DialogDescription>
-                      </DialogHeader>
-                      <ScrollArea className="mt-4 h-full max-h-[calc(80vh-100px)]">
-                        <ReactMarkdown 
-                          className="prose dark:prose-invert"
-                          components={{
-                            img: ({node, ...props}) => (
-                              <Image
-                                src={props.src || ''}
-                                alt={props.alt || ''}
-                                width={600}
-                                height={400}
-                                className="rounded-lg"
-                              />
-                            ),
-                          }}
-                        >
-                          {expandedProject?.content || ''}
-                        </ReactMarkdown>
-                      </ScrollArea>
-                    </DialogContent>
-                  </Dialog>
-                </div>
-              </div>
+                </CardContent>
+              </Card>
             ))}
           </div>
         </main>
       </div>
+
+      <Dialog open={!!expandedProject} onOpenChange={() => setExpandedProject(null)}>
+        <DialogContent className="max-w-4xl max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle>{expandedProject?.title}</DialogTitle>
+            <DialogDescription>
+              {expandedProject?.date} - {expandedProject?.category}
+            </DialogDescription>
+          </DialogHeader>
+          <ScrollArea className="mt-4 h-full max-h-[calc(80vh-100px)]">
+            <ReactMarkdown 
+              className="prose dark:prose-invert"
+              components={{
+                img: ({node, ...props}) => (
+                  <Image
+                    src={props.src || ''}
+                    alt={props.alt || ''}
+                    width={600}
+                    height={400}
+                    className="rounded-lg"
+                  />
+                ),
+              }}
+            >
+              {expandedProject?.content || ''}
+            </ReactMarkdown>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
 
       <Button 
         className="fixed bottom-6 right-6 bg-black text-white hover:bg-black/90"
