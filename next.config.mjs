@@ -10,6 +10,7 @@ const nextConfig = {
         hostname: '**',
       },
     ],
+    domains: ['raw.githubusercontent.com'],
   },
 }
 
