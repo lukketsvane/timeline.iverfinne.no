@@ -212,7 +212,7 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
   return (
     <div className="bg-background">
       <div className="container mx-auto p-4 lg:p-8">
-        <div className="grid gap-8 lg:grid-cols-[240px,1fr]">
+        <div className="grid gap-8 lg:grid-cols-[320px,1fr]">
           <aside className="space-y-6">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -285,7 +285,7 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
 
           <main>
             <div className="relative">
-              <div className="absolute left-8 md:left-32 top-0 h-full w-px bg-border" />
+              <div className="absolute left-8 md:left-16 top-0 h-full w-px bg-border" />
               <div className="space-y-8 md:space-y-12">
                 {filteredEntries.map((entry, index) => (
                   <motion.div
@@ -293,14 +293,14 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: index * 0.1, duration: 0.3 }}
-                    className="relative pl-16 md:pl-44"
+                    className="relative pl-16 md:pl-24"
                   >
-                    <time className="absolute left-0 top-0 text-base md:text-xl font-bold text-muted-foreground">
+                    <time className="absolute left-0 top-0 text-sm md:text-base font-bold text-muted-foreground">
                       {formatDate(entry.date)}
                     </time>
-                    <div className="absolute left-[30px] md:left-[126px] top-[10px] h-3 w-3 rounded-full border-2 border-primary bg-background" />
+                    <div className="absolute left-[30px] md:left-[62px] top-[10px] h-3 w-3 rounded-full border-2 border-primary bg-background" />
                     <Card className="overflow-hidden">
-                      <CardContent className="p-3 md:p-4">
+                      <CardContent className="p-4 md:p-6">
                         <div className="flex items-center gap-2 mb-2">
                           <EntryIcon type={entry.type} />
                           <span className={`text-xs md:text-sm font-medium capitalize ${
@@ -328,10 +328,10 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
                               </button>
                             </h2>
                             {entry.type === 'book' && entry.rating !== undefined && (
-                              <div className="mt-2">
-                                <Rating rating={entry.rating} />
-                              </div>
-                            )}
+                                <div className="mt-2">
+                                  <Rating rating={entry.rating} />
+                                </div>
+                              )}
                             <p className="text-sm md:text-base text-muted-foreground mt-2">
                               {entry.description}
                             </p>
@@ -387,7 +387,7 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
         </Button>
       </div>
 
-      <AnimatePresence>
+      <AnimatePresence mode="wait">
         {expandedEntry && (
           <motion.div
             initial={{ opacity: 0 }}
