@@ -20,10 +20,9 @@ export default function FeaturedBuilds() {
 
   return (
     <div className="mb-8 hidden sm:block">
-      <h2 className="text-2xl font-bold text-center mb-4">Featured Builds</h2>
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-3 gap-6">
         {featuredProjects.map((project) => (
-          <Card key={project.slug} className="overflow-hidden w-64">
+          <Card key={project.slug} className="overflow-hidden w-72">
             <div className="relative aspect-[16/9]">
               {project.image && (
                 <Image
