@@ -9,7 +9,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Toast } from "@/components/ui/toast"
+import { Toast, ToastTitle, ToastDescription } from "@/components/ui/toast"
 import ReactMarkdown from 'react-markdown'
 import Image from 'next/image'
 import { fetchProjects, fetchWritings, fetchBooks, fetchOutgoingLinks, ContentItem } from "@/lib/github"
@@ -309,29 +309,34 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
                             {entry.type === 'outgoing_link' ? 'External' : entry.type}
                           </span>
                         </div>
-                        <h2 className="text-lg md:text-xl font-semibold text-blue-500 hover:text-blue-600 transition-colors">
-                          <button className="text-left" onClick={() => handleEntryClick(entry)}>
-                            {entry.title}
-                          </button>
-                        </h2>
-                        {entry.type === 'book' && entry.rating !== undefined && (
-                          <div className="mt-2">
-                            <Rating rating={entry.rating} />
+                        <div className="flex items-start gap-4">
+                          {entry.type === 'book' && entry.image && (
+                            <div className="flex-shrink-0">
+                              <Image
+                                src={entry.image}
+                                alt={entry.title}
+                                width={60}
+                                height={90}
+                                className="object-cover rounded-sm"
+                              />
+                            </div>
+                          )}
+                          <div className="flex-grow">
+                            <h2 className="text-lg md:text-xl font-semibold text-blue-500 hover:text-blue-600 transition-colors">
+                              <button className="text-left" onClick={() => handleEntryClick(entry)}>
+                                {entry.title}
+                              </button>
+                            </h2>
+                            {entry.type === 'book' && entry.rating !== undefined && (
+                              <div className="mt-2">
+                                <Rating rating={entry.rating} />
+                              </div>
+                            )}
+                            <p className="text-sm md:text-base text-muted-foreground mt-2">
+                              {entry.description}
+                            </p>
                           </div>
-                        )}
-                        {entry.image && (
-                          <div className="relative w-full h-32 md:h-48 my-3 md:my-4">
-                            <Image
-                              src={entry.image}
-                              alt={entry.title}
-                              fill
-                              className="object-cover rounded-lg"
-                />
-                          </div>
-                        )}
-                        <p className="text-sm md:text-base text-muted-foreground mt-2">
-                          {entry.description}
-                        </p>
+                        </div>
                         <ScrollArea className="w-full whitespace-nowrap mt-3 md:mt-4">
                           <div className="flex gap-2">
                             {entry.tags?.map((tag, tagIndex) => (
@@ -382,7 +387,7 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
         </Button>
       </div>
 
-      <AnimatePresence mode="wait">
+      <AnimatePresence>
         {expandedEntry && (
           <motion.div
             initial={{ opacity: 0 }}
@@ -515,11 +520,12 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
 
       <AnimatePresence>
         {showToast && (
-          <Toast
-            variant="default"
-            title="Link copied"
-            description="The link has been copied to your clipboard."
-          />
+          <Toast>
+            <ToastTitle>Link copied</ToastTitle>
+            <ToastDescription>
+              The link has been copied to your clipboard.
+            </ToastDescription>
+          </Toast>
         )}
       </AnimatePresence>
     </div>
