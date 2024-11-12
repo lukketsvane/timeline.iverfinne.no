@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Search, ChevronLeft, ChevronDown, ChevronUp, Share2, Book, Pen, Code, Star, ChevronRight, ExternalLink } from "lucide-react"
+import { Search, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Share2, Book, Pen, Code, Star, ExternalLink } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -46,9 +46,10 @@ const Rating: React.FC<RatingProps> = ({ rating }) => {
         <Star key={i} className="w-4 h-4 fill-amber-500 text-amber-500" />
       ))}
       {hasHalfStar && <Star className="w-4 h-4 fill-amber-500 text-amber-500" />}
-      {[...Array(5 - Math.ceil(rating))].map((_, i) => (
+      {[...Array(10 - Math.ceil(rating))].map((_, i) => (
         <Star key={`empty-${i}`} className="w-4 h-4 text-gray-300" />
       ))}
+      <span className="ml-2 text-sm text-gray-600">{rating.toFixed(1)}/10</span>
     </div>
   )
 }
@@ -287,7 +288,7 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
 
           <main>
             <div className="relative">
-              <div className="absolute left-16 top-0 h-full w-px bg-border" />
+              <div className="absolute left-24 top-0 h-full w-px bg-border" />
               <div className="space-y-12">
                 {filteredEntries.map((entry, index) => (
                   <motion.div
@@ -295,12 +296,12 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: index * 0.1, duration: 0.3 }}
-                    className="relative pl-32"
+                    className="relative pl-44"
                   >
-                    <time className="absolute left-0 top-0 text-sm font-medium text-muted-foreground">
+                    <time className="absolute left-0 top-0 text-xl font-semibold text-muted-foreground">
                       {formatDate(entry.date)}
                     </time>
-                    <div className="absolute left-[62px] top-[10px] h-3 w-3 rounded-full border-2 border-primary bg-background" />
+                    <div className="absolute left-[94px] top-[10px] h-3 w-3 rounded-full border-2 border-primary bg-background" />
                     <Card className="overflow-hidden">
                       <CardContent className="p-6">
                         <div className="flex items-center gap-2 mb-2">
@@ -331,7 +332,7 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
                             />
                           </div>
                         )}
-                        <p className="text-muted-foreground">
+                        <p className="text-muted-foreground mt-2">
                           {entry.description}
                         </p>
                         <ScrollArea className="w-full whitespace-nowrap mt-4">
@@ -365,11 +366,24 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
         </div>
       </div>
 
-      <Button 
-        className="fixed bottom-6 right-6 bg-black text-white hover:bg-black/90"
-      >
-        Chat with Mini Iver →
-      </Button>
+      <div className="fixed bottom-6 right-6 flex gap-4">
+        <Button 
+          variant="ghost"
+          className="p-2" 
+          onClick={() => navigateTimeline('prev')} 
+          disabled={currentIndex <= 0}
+        >
+          <ChevronLeft className="h-8 w-8" />
+        </Button>
+        <Button 
+          variant="ghost"
+          className="p-2"
+          onClick={() => navigateTimeline('next')} 
+          disabled={currentIndex >= filteredEntries.length - 1}
+        >
+          <ChevronRight className="h-8 w-8" />
+        </Button>
+      </div>
 
       <AnimatePresence mode="wait">
         {expandedEntry && (
@@ -397,24 +411,6 @@ export default function ProjectsTimeline({ initialSlug }: { initialSlug?: string
                 <ChevronLeft className="mr-2 h-4 w-4" />
                 Back to Timeline
               </Button>
-              <div className="flex justify-between mb-4">
-                <Button
-                  variant="outline"
-                  onClick={() => navigateTimeline('prev')}
-                  disabled={currentIndex <= 0}
-                >
-                  <ChevronLeft className="mr-2 h-4 w-4" />
-                  Previous
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => navigateTimeline('next')}
-                  disabled={currentIndex >= filteredEntries.length - 1}
-                >
-                  Next
-                  <ChevronRight className="ml-2 h-4 w-4" />
-                </Button>
-              </div>
               <div className="space-y-8">
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
