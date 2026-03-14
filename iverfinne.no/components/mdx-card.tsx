@@ -200,6 +200,12 @@ function getFirstImageFromContent(content: string): string | null {
   return null
 }
 
+function estimateReadTime(content: string): number {
+  if (!content) return 0
+  const words = content.replace(/[#*\[\]()!<>{}]/g, '').split(/\s+/).filter(Boolean).length
+  return Math.max(1, Math.round(words / 200))
+}
+
 type SocialLink = { type: 'github' | 'instagram' | 'linkedin' | 'twitter' | 'external'; url: string }
 
 function extractOutgoingLinks(content: string, postUrl?: string): SocialLink[] {
@@ -237,6 +243,7 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
   const bookCover = post.type === "Bok" ? (post.image || post.icon || getFirstImageFromContent(post.content)) : null
   const projectThumb = post.type === "Prosjekt" ? (post.image || getFirstImageFromContent(post.content)) : null
   const projectLinks = post.type === "Prosjekt" ? extractOutgoingLinks(post.content, post.url) : []
+  const readTime = post.type === "Skriving" ? estimateReadTime(post.content) : 0
   const linkHostname = post.type === "Lenkje" && post.url ? (() => { try { return new URL(post.url).hostname.replace('www.', '') } catch { return '' } })() : ''
 
   const renderTags = () => {
@@ -429,6 +436,14 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
                       className="object-cover"
                       sizes="80px"
                     />
+                  </div>
+                )}
+
+                {/* Read time for Skriving */}
+                {post.type === "Skriving" && readTime > 0 && (
+                  <div className="shrink-0 flex items-center text-xs text-muted-foreground whitespace-nowrap pt-1">
+                    <Clock className="w-3.5 h-3.5 mr-1" />
+                    {readTime} min lesetid
                   </div>
                 )}
               </div>
