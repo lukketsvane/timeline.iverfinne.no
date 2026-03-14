@@ -12,28 +12,73 @@ const n2m = new NotionToMarkdown({ notionClient: notion });
 
 // Custom block transformers for rich Notion formatting
 
+// Callout: render as <Callout> component with icon and color
+// Note: children with has_children are NOT processed by n2m when custom transformer is set,
+// so we fetch and convert children manually for callouts with nested content.
 n2m.setCustomTransformer("callout", async (block: any) => {
   const callout = block.callout;
   if (!callout) return "";
   const icon = callout.icon?.emoji || callout.icon?.external?.url || "";
   const color = callout.color || "default";
   const text = callout.rich_text?.map((t: any) => t.plain_text).join("") || "";
-  return `<Callout icon="${icon}" type="${color}">\n\n${text}\n\n</Callout>`;
+
+  let childContent = "";
+  if (block.has_children) {
+    try {
+      const children = await notion.blocks.children.list({ block_id: block.id });
+      const childMd = await n2m.blocksToMarkdown(children.results);
+      const childStr = n2m.toMarkdownString(childMd);
+      childContent = childStr.parent || "";
+    } catch { /* ignore child fetch errors */ }
+  }
+
+  const content = [text, childContent].filter(Boolean).join("\n\n");
+  return `<Callout icon="${icon}" type="${color}">\n\n${content}\n\n</Callout>`;
 });
 
-n2m.setCustomTransformer("toggle", async (block: any) => {
-  const toggle = block.toggle;
-  if (!toggle) return "";
-  const title = toggle.rich_text?.map((t: any) => t.plain_text).join("") || "";
-  // Children are handled by notion-to-md automatically
-  return `<details>\n<summary>${title}</summary>\n\n`;
-});
+// Toggle: let notion-to-md handle natively (<details><summary>) — do NOT override.
+// It already produces correct HTML with children included.
 
+// Toggle headings: heading_1/2/3 with is_toggleable=true
+// n2m renders these as plain headings, losing the toggle behavior.
+// We override heading types to check is_toggleable.
+for (const level of [1, 2, 3] as const) {
+  const blockType = `heading_${level}` as any;
+  n2m.setCustomTransformer(blockType, async (block: any) => {
+    const heading = block[`heading_${level}`];
+    if (!heading) return false; // fallback to default
+    const text = heading.rich_text?.map((t: any) => t.plain_text).join("") || "";
+
+    if (heading.is_toggleable) {
+      let childContent = "";
+      if (block.has_children) {
+        try {
+          const children = await notion.blocks.children.list({ block_id: block.id });
+          const childMd = await n2m.blocksToMarkdown(children.results);
+          const childStr = n2m.toMarkdownString(childMd);
+          childContent = childStr.parent || "";
+        } catch { /* ignore */ }
+      }
+      return `<details>\n<summary>${"#".repeat(level)} ${text}</summary>\n\n${childContent}\n\n</details>`;
+    }
+
+    return false; // not toggleable — use default heading behavior
+  });
+}
+
+// Bookmark: render with caption or URL as link text
 n2m.setCustomTransformer("bookmark", async (block: any) => {
   const bookmark = block.bookmark;
   if (!bookmark?.url) return "";
   const caption = bookmark.caption?.map((t: any) => t.plain_text).join("") || bookmark.url;
   return `[${caption}](${bookmark.url})`;
+});
+
+// Equation: render as displayable math block
+n2m.setCustomTransformer("equation", async (block: any) => {
+  const equation = block.equation;
+  if (!equation?.expression) return "";
+  return `<MathBlock expression="${equation.expression.replace(/"/g, '&quot;')}" />`;
 });
 
 export const VALID_TYPES = ["skriving", "bok", "prosjekt", "lenkje", "interaktiv", "bilete", "presentasjon"];
