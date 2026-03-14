@@ -1,4 +1,4 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import './globals.css'
 import { GeistSans } from 'geist/font/sans'
 import { GeistMono } from 'geist/font/mono'
@@ -15,6 +15,13 @@ const APP_NAME = 'iverfinne.no'
 const APP_DEFAULT_TITLE = 'iverfinne.no'
 const APP_TITLE_TEMPLATE = '%s - iverfinne.no'
 const APP_DESCRIPTION = 'Personleg nettside og blogg'
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  viewportFit: 'cover',
+}
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://iverfinne.no'),

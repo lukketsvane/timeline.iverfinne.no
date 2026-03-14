@@ -134,7 +134,7 @@ export default function DynamicPage({ params: paramsPromise }: { params: Promise
   if (pageMode === 'type-filter') {
     const displayType = segments[0].charAt(0).toUpperCase() + segments[0].slice(1)
     return (
-      <div className="container w-screen px-4 py-8">
+      <div className="w-full max-w-full px-4 py-8 overflow-x-hidden">
         <MDXBlog initialPosts={allPosts} initialType={displayType} />
       </div>
     )
@@ -172,11 +172,11 @@ export default function DynamicPage({ params: paramsPromise }: { params: Promise
   return (
     <motion.article
       layoutId={`post-${post.uid}`}
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -20 }}
-      transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-      className="container max-w-4xl mx-auto px-4 py-12 min-h-screen"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.25, ease: [0.25, 0.1, 0.25, 1] }}
+      className="max-w-4xl mx-auto px-4 py-12 min-h-screen"
     >
       <Link
         href="/"
@@ -187,33 +187,16 @@ export default function DynamicPage({ params: paramsPromise }: { params: Promise
       </Link>
 
       <header className="mb-12">
-        <div className="flex flex-col sm:flex-row justify-between items-start gap-8 mb-8">
+        <div className="mb-8">
           {post.type !== "Bilete" && (
             <motion.h1
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.1 }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.05, duration: 0.3 }}
               className="text-4xl sm:text-5xl font-bold tracking-tight"
             >
               {post.title}
             </motion.h1>
-          )}
-
-          {post.type === "Bok" && (post.image || post.icon) && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="relative w-32 sm:w-40 aspect-[2/3] shrink-0 shadow-xl rounded-md overflow-hidden border border-gray-100 dark:border-gray-800"
-            >
-              <NextImage
-                src={post.image || post.icon || ""}
-                alt={`Omslag for ${post.title}`}
-                fill
-                unoptimized
-                className="object-cover"
-                priority
-              />
-            </motion.div>
           )}
         </div>
 

@@ -313,7 +313,7 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
   }
 
   return (
-    <div className="relative grid grid-cols-1 sm:grid-cols-[auto,1fr] gap-4 max-w-full pl-4 sm:pl-0">
+    <div className="relative grid grid-cols-1 sm:grid-cols-[auto,1fr] gap-2 sm:gap-4 max-w-full pl-5 sm:pl-0">
       <div className="hidden sm:block text-right pt-5 pr-6 w-24 shrink-0">
         <time className="text-lg font-semibold text-muted-foreground whitespace-nowrap lowercase">
           <span className="font-extrabold">{day}.</span> {month}
@@ -542,7 +542,10 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: "auto" }}
                   exit={{ opacity: 0, height: 0 }}
-                  transition={{ height: { duration: 0.35, ease: [0.25, 0.1, 0.25, 1] }, opacity: { duration: 0.2 } }}
+                  transition={{
+                    height: { type: 'spring', stiffness: 400, damping: 40, mass: 0.8 },
+                    opacity: { duration: 0.2, ease: [0.25, 0.1, 0.25, 1] }
+                  }}
                   className="overflow-hidden mt-4 border-t border-gray-100 dark:border-gray-800 pt-6"
                 >
                   <div 
@@ -563,19 +566,6 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
                       <ImageGallery images={post.thumbnails || []} />
                     ) : (
                       <>
-                        {post.type === "Bok" && bookCover && (
-                          <div className="mb-8 flex justify-start">
-                            <div className="relative w-40 sm:w-48 aspect-[2/3] shadow-xl rounded-sm overflow-hidden border border-gray-100 dark:border-gray-800">
-                              <NextImage
-                                src={bookCover}
-                                alt={`Omslag for ${post.title}`}
-                                fill
-                                unoptimized
-                                className="object-cover"
-                              />
-                            </div>
-                          </div>
-                        )}
                         {serializedContent ? (
                           <MDXRemote
                             {...serializedContent}
