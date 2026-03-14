@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getPostContent, getSafeScope } from '@/lib/notion'
 import { serialize } from 'next-mdx-remote/serialize'
 import remarkGfm from 'remark-gfm'
+import rehypePrismPlus from 'rehype-prism-plus'
 
 export const revalidate = 60;
 
@@ -17,6 +18,7 @@ export async function GET(
     const serialized = await serialize(rawContent, {
       mdxOptions: {
         remarkPlugins: [remarkGfm],
+        rehypePlugins: [[rehypePrismPlus, { ignoreMissing: true }]],
         format: 'mdx',
       },
       scope: getSafeScope(rawContent),

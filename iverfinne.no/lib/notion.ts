@@ -10,6 +10,32 @@ const notion = new Client({
 
 const n2m = new NotionToMarkdown({ notionClient: notion });
 
+// Custom block transformers for rich Notion formatting
+
+n2m.setCustomTransformer("callout", async (block: any) => {
+  const callout = block.callout;
+  if (!callout) return "";
+  const icon = callout.icon?.emoji || callout.icon?.external?.url || "";
+  const color = callout.color || "default";
+  const text = callout.rich_text?.map((t: any) => t.plain_text).join("") || "";
+  return `<Callout icon="${icon}" type="${color}">\n\n${text}\n\n</Callout>`;
+});
+
+n2m.setCustomTransformer("toggle", async (block: any) => {
+  const toggle = block.toggle;
+  if (!toggle) return "";
+  const title = toggle.rich_text?.map((t: any) => t.plain_text).join("") || "";
+  // Children are handled by notion-to-md automatically
+  return `<details>\n<summary>${title}</summary>\n\n`;
+});
+
+n2m.setCustomTransformer("bookmark", async (block: any) => {
+  const bookmark = block.bookmark;
+  if (!bookmark?.url) return "";
+  const caption = bookmark.caption?.map((t: any) => t.plain_text).join("") || bookmark.url;
+  return `[${caption}](${bookmark.url})`;
+});
+
 export const VALID_TYPES = ["skriving", "bok", "prosjekt", "lenkje", "interaktiv", "bilete", "presentasjon"];
 
 const TYPE_MAPPING: Record<string, "Skriving" | "Bok" | "Prosjekt" | "Lenkje" | "Interaktiv" | "Bilete" | "Presentasjon"> = {

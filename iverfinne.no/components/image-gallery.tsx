@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { Card } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
 import { ChevronLeft, ChevronRight, X } from 'lucide-react'
-import { motion, AnimatePresence, useMotionValue, useTransform, animate, PanInfo } from 'framer-motion'
+import { motion, AnimatePresence, useMotionValue, useTransform, animate } from 'framer-motion'
 
 interface ImageGalleryProps {
   images: {
@@ -20,7 +20,8 @@ interface ImageGalleryProps {
 
 export function ImageGallery({ images = [], className, initialIndex = null, onIndexChange, syncHash = false, viewerOnly = false }: ImageGalleryProps) {
   const [internalIndex, setInternalIndex] = useState<number | null>(null)
-  const [direction, setDirection] = useState(0)
+  const [imgOpacity, setImgOpacity] = useState(1)
+  const transitioning = useRef(false)
 
   const selectedImage = initialIndex !== null ? initialIndex : internalIndex
   const setSelectedImage = useCallback((index: number | null) => {
@@ -39,6 +40,7 @@ export function ImageGallery({ images = [], className, initialIndex = null, onIn
     }
   }, [onIndexChange, syncHash])
 
+  // Hash sync on mount
   useEffect(() => {
     if (!syncHash) return
     const hash = window.location.hash
@@ -50,6 +52,7 @@ export function ImageGallery({ images = [], className, initialIndex = null, onIn
     }
   }, [syncHash, images.length])
 
+  // Hash sync on back/forward
   useEffect(() => {
     if (!syncHash) return
     const onHashChange = () => {
@@ -69,20 +72,34 @@ export function ImageGallery({ images = [], className, initialIndex = null, onIn
     return () => window.removeEventListener('hashchange', onHashChange)
   }, [syncHash, images.length, onIndexChange])
 
-  const handlePrevious = useCallback((e?: React.MouseEvent | any) => {
-    if (!images || images.length === 0) return
-    e?.stopPropagation()
-    setDirection(-1)
-    setSelectedImage(selectedImage !== null ? (selectedImage - 1 + images.length) % images.length : null)
-  }, [images?.length, selectedImage, setSelectedImage])
+  // Navigate with crossfade — no remounting
+  const navigateTo = useCallback((newIndex: number) => {
+    if (transitioning.current || !images || images.length === 0) return
+    transitioning.current = true
+    setImgOpacity(0)
+    setTimeout(() => {
+      setSelectedImage(newIndex)
+      // Let the new src load, then fade in
+      requestAnimationFrame(() => {
+        setImgOpacity(1)
+        transitioning.current = false
+      })
+    }, 80)
+  }, [images, setSelectedImage])
 
-  const handleNext = useCallback((e?: React.MouseEvent | any) => {
-    if (!images || images.length === 0) return
+  const handlePrevious = useCallback((e?: any) => {
     e?.stopPropagation()
-    setDirection(1)
-    setSelectedImage(selectedImage !== null ? (selectedImage + 1) % images.length : null)
-  }, [images?.length, selectedImage, setSelectedImage])
+    if (selectedImage === null || !images?.length) return
+    navigateTo((selectedImage - 1 + images.length) % images.length)
+  }, [images?.length, selectedImage, navigateTo])
 
+  const handleNext = useCallback((e?: any) => {
+    e?.stopPropagation()
+    if (selectedImage === null || !images?.length) return
+    navigateTo((selectedImage + 1) % images.length)
+  }, [images?.length, selectedImage, navigateTo])
+
+  // Keyboard nav
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (selectedImage === null) return
@@ -94,6 +111,7 @@ export function ImageGallery({ images = [], className, initialIndex = null, onIn
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [selectedImage, handlePrevious, handleNext, setSelectedImage])
 
+  // Lock body scroll
   useEffect(() => {
     if (selectedImage !== null) {
       document.body.style.overflow = 'hidden'
@@ -103,47 +121,60 @@ export function ImageGallery({ images = [], className, initialIndex = null, onIn
     return () => { document.body.style.overflow = '' }
   }, [selectedImage])
 
-  // Swipe / drag-to-dismiss
-  const dragX = useMotionValue(0)
-  const dragY = useMotionValue(0)
-  const bgOpacity = useTransform(dragY, [-300, 0, 300], [0.3, 1, 0.3])
-  const scale = useTransform(dragY, [-300, 0, 300], [0.85, 1, 0.85])
+  // Preload adjacent images
+  useEffect(() => {
+    if (selectedImage === null || !images?.length) return
+    const preload = (i: number) => {
+      const idx = (i + images.length) % images.length
+      const img = new Image()
+      img.src = images[idx].src
+    }
+    preload(selectedImage - 1)
+    preload(selectedImage + 1)
+  }, [selectedImage, images])
 
-  const handleDragEnd = useCallback((_: any, info: PanInfo) => {
+  // Pan gesture tracking
+  const panX = useMotionValue(0)
+  const panY = useMotionValue(0)
+  const bgOpacity = useTransform(panY, [-250, 0, 250], [0.2, 1, 0.2])
+  const imgScale = useTransform(panY, [-250, 0, 250], [0.88, 1, 0.88])
+
+  // Reset pan values when image changes or viewer closes
+  useEffect(() => {
+    panX.set(0)
+    panY.set(0)
+  }, [selectedImage, panX, panY])
+
+  const handlePanEnd = useCallback((_: any, info: { offset: { x: number; y: number }; velocity: { x: number; y: number } }) => {
+    if (transitioning.current) return
     const { offset, velocity } = info
-    const swipeThreshold = 50
-    const velocityThreshold = 300
 
-    // Vertical drag to dismiss
-    if (Math.abs(offset.y) > 120 || Math.abs(velocity.y) > velocityThreshold) {
-      setSelectedImage(null)
+    // Vertical dismiss
+    if (Math.abs(offset.y) > 100 || Math.abs(velocity.y) > 400) {
+      // Animate out then dismiss
+      animate(panY, offset.y > 0 ? 500 : -500, { duration: 0.2 })
+      animate(panX, 0, { duration: 0.15 })
+      setTimeout(() => setSelectedImage(null), 150)
       return
     }
 
-    // Horizontal swipe to navigate
-    if (Math.abs(offset.x) > swipeThreshold || Math.abs(velocity.x) > velocityThreshold) {
-      if (offset.x > 0 || velocity.x > velocityThreshold) {
+    // Horizontal swipe
+    if (Math.abs(offset.x) > 40 || Math.abs(velocity.x) > 300) {
+      // Snap back pan position then navigate
+      animate(panX, 0, { duration: 0.1 })
+      animate(panY, 0, { duration: 0.1 })
+      if (offset.x > 0) {
         handlePrevious()
       } else {
         handleNext()
       }
+      return
     }
-  }, [handlePrevious, handleNext, setSelectedImage])
 
-  const slideVariants = {
-    enter: (dir: number) => ({
-      x: dir > 0 ? '40%' : '-40%',
-      opacity: 0,
-    }),
-    center: {
-      x: 0,
-      opacity: 1,
-    },
-    exit: (dir: number) => ({
-      x: dir > 0 ? '-40%' : '40%',
-      opacity: 0,
-    }),
-  }
+    // Not enough — snap back
+    animate(panX, 0, { type: 'spring', stiffness: 500, damping: 30 })
+    animate(panY, 0, { type: 'spring', stiffness: 500, damping: 30 })
+  }, [handlePrevious, handleNext, setSelectedImage, panX, panY])
 
   if (!images || images.length === 0) return null
 
@@ -151,7 +182,7 @@ export function ImageGallery({ images = [], className, initialIndex = null, onIn
     <>
       {!viewerOnly && (
         <Card className={cn("w-full max-w-[100vw] overflow-hidden border-none bg-transparent shadow-none", className)}>
-          <div className="relative w-full overflow-x-auto scrollbar-hide -webkit-overflow-scrolling-touch">
+          <div className="relative w-full overflow-x-auto scrollbar-hide" style={{ WebkitOverflowScrolling: 'touch' }}>
             <div className="flex gap-4 w-max py-2 px-1">
               {images.map((image, index) => (
                 <img
@@ -160,11 +191,10 @@ export function ImageGallery({ images = [], className, initialIndex = null, onIn
                   alt={image.alt}
                   onClick={(e) => {
                     e.stopPropagation()
-                    setDirection(0)
                     setSelectedImage(index)
                   }}
-                  className="h-[250px] sm:h-[350px] w-auto rounded-lg object-cover cursor-pointer transition-all active:scale-[0.97] hover:brightness-90"
-                  style={{ maxWidth: 'min(800px, 85vw)' }}
+                  className="h-[250px] sm:h-[350px] w-auto rounded-lg object-cover cursor-pointer active:scale-[0.97] hover:brightness-90"
+                  style={{ maxWidth: 'min(800px, 85vw)', transition: 'transform 0.15s ease' }}
                   draggable={false}
                 />
               ))}
@@ -179,71 +209,65 @@ export function ImageGallery({ images = [], className, initialIndex = null, onIn
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.25, ease: [0.25, 0.1, 0.25, 1] }}
+            transition={{ duration: 0.2, ease: 'easeOut' }}
             className="fixed inset-0 z-[100] flex items-center justify-center"
             onClick={() => setSelectedImage(null)}
             style={{ touchAction: 'none' }}
           >
-            {/* Background with drag-responsive opacity */}
-            <motion.div
-              className="absolute inset-0 bg-black"
-              style={{ opacity: bgOpacity }}
-            />
+            {/* Background — responds to vertical drag */}
+            <motion.div className="absolute inset-0 bg-black" style={{ opacity: bgOpacity }} />
 
+            {/* Close button */}
             <button
               onClick={(e) => { e.stopPropagation(); setSelectedImage(null) }}
-              className="absolute top-[env(safe-area-inset-top,12px)] right-4 z-[110] p-3 text-white/50 hover:text-white active:text-white transition-colors"
-              style={{ marginTop: 'max(12px, env(safe-area-inset-top))' }}
+              className="absolute top-4 right-4 z-[110] p-3 text-white/50 hover:text-white active:text-white/80"
+              style={{ marginTop: 'max(8px, env(safe-area-inset-top))' }}
               aria-label="Lukk"
             >
               <X className="h-6 w-6" />
             </button>
 
+            {/* Desktop nav arrows */}
             <button
               onClick={handlePrevious}
-              className="absolute left-4 top-1/2 -translate-y-1/2 z-[110] p-4 text-white/20 hover:text-white/80 transition-colors hidden sm:block"
+              className="absolute left-4 top-1/2 -translate-y-1/2 z-[110] p-4 text-white/20 hover:text-white/80 hidden sm:block"
               aria-label="Førre"
             >
               <ChevronLeft className="h-8 w-8" />
             </button>
-
             <button
               onClick={handleNext}
-              className="absolute right-4 top-1/2 -translate-y-1/2 z-[110] p-4 text-white/20 hover:text-white/80 transition-colors hidden sm:block"
+              className="absolute right-4 top-1/2 -translate-y-1/2 z-[110] p-4 text-white/20 hover:text-white/80 hidden sm:block"
               aria-label="Neste"
             >
               <ChevronRight className="h-8 w-8" />
             </button>
 
-            <AnimatePresence mode="popLayout" custom={direction} initial={false}>
-              <motion.img
-                key={selectedImage}
-                src={images[selectedImage].src}
-                alt={images[selectedImage].alt}
-                custom={direction}
-                variants={slideVariants}
-                initial="enter"
-                animate="center"
-                exit="exit"
-                transition={{
-                  x: { type: 'spring', stiffness: 350, damping: 35, mass: 0.8 },
-                  opacity: { duration: 0.2 },
-                }}
-                drag
-                dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
-                dragElastic={{ left: 0.7, right: 0.7, top: 0.5, bottom: 0.5 }}
-                onDragEnd={handleDragEnd}
-                style={{ x: dragX, y: dragY, scale, touchAction: 'none' }}
-                onClick={(e) => e.stopPropagation()}
-                className="max-w-[95vw] max-h-[85vh] object-contain select-none relative z-[105] rounded-sm"
-                draggable={false}
-              />
-            </AnimatePresence>
+            {/* Single image — no AnimatePresence, no remounting */}
+            <motion.img
+              src={images[selectedImage].src}
+              alt={images[selectedImage].alt}
+              drag
+              dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
+              dragElastic={0.6}
+              onDragEnd={handlePanEnd}
+              style={{
+                x: panX,
+                y: panY,
+                scale: imgScale,
+                opacity: imgOpacity,
+                touchAction: 'none',
+                transition: `opacity 0.08s ease`,
+              }}
+              onClick={(e) => e.stopPropagation()}
+              className="max-w-[95vw] max-h-[85vh] object-contain select-none relative z-[105] rounded-sm"
+              draggable={false}
+            />
 
-            {/* Bottom counter + dots */}
+            {/* Dots + counter */}
             <div
               className="absolute z-[110] flex flex-col items-center gap-2"
-              style={{ bottom: 'max(24px, env(safe-area-inset-bottom))' }}
+              style={{ bottom: 'max(20px, env(safe-area-inset-bottom))' }}
             >
               {images.length <= 20 && (
                 <div className="flex gap-1.5">
@@ -252,8 +276,7 @@ export function ImageGallery({ images = [], className, initialIndex = null, onIn
                       key={i}
                       onClick={(e) => {
                         e.stopPropagation()
-                        setDirection(i > selectedImage ? 1 : -1)
-                        setSelectedImage(i)
+                        navigateTo(i)
                       }}
                       className={cn(
                         "rounded-full transition-all duration-200",

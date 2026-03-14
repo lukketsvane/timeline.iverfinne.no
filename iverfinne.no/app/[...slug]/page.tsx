@@ -8,9 +8,6 @@ import { Badge } from "@/components/ui/badge"
 import { ArrowLeft, Calendar } from 'lucide-react'
 import Link from 'next/link'
 import { ImageGallery } from "@/components/image-gallery"
-import { ResponsiveIframe } from "@/components/responsive-iframe"
-import { ModelViewer } from "@/components/model-viewer"
-import WebDesignKeys from '@/components/WebDesignKeys'
 import { getTagColor } from "@/lib/tag-utils"
 import { cn } from "@/lib/utils"
 import { HtmlIframe } from "@/components/html-iframe"
@@ -19,18 +16,12 @@ import { motion } from 'framer-motion'
 import { useEffect, useState, use } from 'react'
 import MDXBlog from '@/components/mdx-blog'
 import { usePosts } from '@/lib/posts-context'
+import { fullPageMdxComponents } from '@/lib/mdx-components'
+import WebDesignKeys from '@/components/WebDesignKeys'
 
 const components = {
-  h1: (props: any) => <h1 {...props} className="text-3xl font-bold mt-8 mb-4 break-words" />,
-  h2: (props: any) => <h2 {...props} className="text-2xl font-semibold mt-6 mb-3 break-words" />,
-  h3: (props: any) => <h3 {...props} className="text-xl font-medium mt-4 mb-2 break-words" />,
-  p: (props: any) => <p {...props} className="mb-4 leading-relaxed break-words font-serif text-lg" />,
-  img: (props: any) => <img {...props} className="max-w-full h-auto rounded-lg my-6" />,
-  ImageGallery,
-  ResponsiveIframe,
-  ModelViewer,
+  ...fullPageMdxComponents,
   WebDesignKeys,
-  material: (props: any) => <div {...props} />,
 }
 
 export default function DynamicPage({ params: paramsPromise }: { params: Promise<{ slug: string[] }> }) {
@@ -134,7 +125,7 @@ export default function DynamicPage({ params: paramsPromise }: { params: Promise
   if (pageMode === 'type-filter') {
     const displayType = segments[0].charAt(0).toUpperCase() + segments[0].slice(1)
     return (
-      <div className="w-full max-w-full px-4 py-8 overflow-x-hidden">
+      <div className="w-full max-w-6xl mx-auto px-4 py-8 overflow-x-hidden">
         <MDXBlog initialPosts={allPosts} initialType={displayType} />
       </div>
     )
@@ -241,7 +232,15 @@ export default function DynamicPage({ params: paramsPromise }: { params: Promise
         {post.serialized && (
           <MDXRemote
             {...post.serialized}
-            components={components}
+            components={{
+              ...components,
+              ...(post.type === "Bok" && (post.image || post.icon) ? {
+                img: (props: any) => {
+                  if (props.src === post.image || props.src === post.icon) return null
+                  return <img {...props} className="max-w-full h-auto rounded-lg my-6" />
+                }
+              } : {})
+            }}
           />
         )}
       </div>

@@ -49,10 +49,10 @@ import Link from 'next/link'
 import { getTagColor } from "@/lib/tag-utils"
 import { ImageGallery } from "@/components/image-gallery"
 import { HtmlIframe } from "@/components/html-iframe"
-import { ResponsiveIframe } from "@/components/responsive-iframe"
 import { ModelViewer } from "@/components/model-viewer"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import { baseMdxComponents } from "@/lib/mdx-components"
 
 const WebDesignKeys = dynamic(() => import('@/components/WebDesignKeys'), {
   ssr: false,
@@ -60,74 +60,15 @@ const WebDesignKeys = dynamic(() => import('@/components/WebDesignKeys'), {
 })
 
 const mdxComponents = {
-  h1: (props: any) => <h1 {...props} className="text-2xl font-bold mt-4 mb-2 break-words" />,
-  h2: (props: any) => <h2 {...props} className="text-xl font-semibold mt-3 mb-2 break-words" />,
-  h3: (props: any) => <h3 {...props} className="text-lg font-medium mt-2 mb-1 break-words" />,
-  h4: (props: any) => <h4 {...props} className="text-base font-medium mt-2 mb-1 break-words" />,
-  h5: (props: any) => <h5 {...props} className="text-sm font-medium mt-2 mb-1 break-words" />,
-  h6: (props: any) => <h6 {...props} className="text-xs font-medium mt-2 mb-1 break-words" />,
-  p: (props: any) => <p {...props} className="break-words font-serif text-base" />,
-  pre: (props: any) => <pre {...props} className="bg-gray-900 text-gray-100 rounded-lg p-4 overflow-x-auto whitespace-pre-wrap break-words" />,
-  code: (props: any) => <code {...props} className="bg-gray-800 text-gray-100 rounded px-1.5 py-0.5 whitespace-pre-wrap break-words" />,
-  ImageGallery: ImageGallery,
-  ModelViewer: ModelViewer,
-  Button: Button,
-  Textarea: Textarea,
-  Input: Input,
-  Badge: Badge,
-  Card: Card,
-  CardHeader: CardHeader,
-  CardTitle: CardTitle,
-  CardDescription: CardDescription,
-  CardContent: CardContent,
-  CardFooter: CardFooter,
-  // Icons
-  Minus: Minus,
-  Plus: Plus,
-  Trash2: Trash2,
-  X: X,
-  Check: Check,
-  ChevronRight: ChevronRight,
-  ChevronLeft: ChevronLeft,
-  ExternalLink: ExternalLink,
-  Github: Github,
-  Twitter: Twitter,
-  Mail: Mail,
-  Globe: Globe,
-  Calendar: Calendar,
-  Clock: Clock,
-  User: User,
-  Tag: Tag,
-  Search: Search,
-  Menu: Menu,
-  ArrowRight: ArrowRight,
-  ArrowLeft: ArrowLeft,
-  Settings: Settings,
-  Info: Info,
-  AlertCircle: AlertCircle,
-  AlertTriangle: AlertTriangle,
-  Eye: Eye,
-  EyeOff: EyeOff,
-  Copy: Copy,
-  Download: Download,
-  Share2: Share2,
-  Heart: Heart,
-  Star: Star,
-  Home: Home,
-  Image: (props: any) => {
-    if (!props.width && !props.height && !props.fill) {
-      return <img {...props} className="max-w-full h-auto rounded-lg mb-4" />
-    }
-    return <NextImage {...props} />
-  },
-  img: (props: any) => <img {...props} className="max-w-full h-auto rounded-lg mb-4" />,
-  iframe: (props: any) => (
-    <div className="relative w-full aspect-[3/4] rounded-lg overflow-hidden mb-4">
-      <iframe {...props} className="absolute inset-0 w-full h-full border-0" />
-    </div>
-  ),
-  material: (props: any) => <div {...props} />,
-  ResponsiveIframe: ResponsiveIframe,
+  ...baseMdxComponents,
+  // UI Components for interactive MDX posts
+  Button, Textarea, Input, Badge,
+  Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter,
+  // Icons available in MDX content
+  Minus, Plus, Trash2, X, Check, ChevronRight, ChevronLeft, ExternalLink,
+  Github, Twitter, Mail, Globe, Calendar, Clock, User, Tag, Search, Menu,
+  ArrowRight, ArrowLeft, Settings, Info, AlertCircle, AlertTriangle,
+  Eye, EyeOff, Copy, Download, Share2, Heart, Star, Home,
 }
 
 interface Post {
@@ -571,7 +512,13 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
                             {...serializedContent}
                             components={{
                               ...mdxComponents,
-                              WebDesignKeys
+                              WebDesignKeys,
+                              ...(post.type === "Bok" && bookCover ? {
+                                img: (props: any) => {
+                                  if (props.src === bookCover) return null
+                                  return <img {...props} className="max-w-full h-auto rounded-lg mb-4" />
+                                }
+                              } : {})
                             }}
                           />
                         ) : (
