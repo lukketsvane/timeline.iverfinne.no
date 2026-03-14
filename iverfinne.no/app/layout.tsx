@@ -3,6 +3,7 @@ import './globals.css'
 import { GeistSans } from 'geist/font/sans'
 import { GeistMono } from 'geist/font/mono'
 import { Newsreader } from 'next/font/google'
+import { PostsProvider } from '@/lib/posts-context'
 
 const newsreader = Newsreader({
   subsets: ['latin'],
@@ -60,7 +61,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="nn" suppressHydrationWarning className={`${GeistSans.variable} ${GeistMono.variable} ${newsreader.variable}`}>
-      <body>{children}</body>
+      <body><PostsProvider>{children}</PostsProvider></body>
     </html>
   )
 }

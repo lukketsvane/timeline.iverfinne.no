@@ -265,6 +265,12 @@ export const getPostContent = unstable_cache(
   { revalidate: 60, tags: ['posts'] }
 );
 
+export async function getPostContentDirect(pageId: string): Promise<string> {
+  const mdblocks = await n2m.pageToMarkdown(pageId);
+  const mdObject = n2m.toMarkdownString(mdblocks);
+  return mdObject.parent || "";
+}
+
 export async function getPostIdBySlug(slug: string): Promise<string | null> {
     const databaseId = getDatabaseId();
     const response = await notion.databases.query({

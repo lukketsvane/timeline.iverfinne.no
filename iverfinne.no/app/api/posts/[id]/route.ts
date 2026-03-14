@@ -13,7 +13,7 @@ export async function GET(
     const resolvedParams = await params;
     const id = resolvedParams.id
     const rawContent = await getPostContent(id)
-    
+
     const serialized = await serialize(rawContent, {
       mdxOptions: {
         remarkPlugins: [remarkGfm],

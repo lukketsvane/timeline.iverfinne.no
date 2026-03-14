@@ -1,27 +1,46 @@
 import { NextResponse } from 'next/server'
-import { getPublishedPosts } from '@/lib/notion'
+import { getPublishedPosts, getPostContent, getSafeScope } from '@/lib/notion'
+import { serialize } from 'next-mdx-remote/serialize'
+import remarkGfm from 'remark-gfm'
 
-// Revalidate every hour (3600 seconds) or less if you want faster updates
-// For "streaming" feel, we can set this to 60 or 0 (dynamic)
-export const revalidate = 60; 
+export const revalidate = 60;
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    console.log('Fetching posts from Notion...');
+    const { searchParams } = new URL(request.url)
+    const withContent = searchParams.get('content') === '1'
+
     const posts = await getPublishedPosts()
-    console.log(`Successfully fetched ${posts.length} posts`);
-    
+
     if (posts.length === 0) {
-       console.log('No posts found with status "Done"');
        return NextResponse.json([])
     }
-    return NextResponse.json(posts)
+
+    if (!withContent) {
+      return NextResponse.json(posts)
+    }
+
+    // Return posts with pre-serialized content
+    const postsWithContent = await Promise.all(posts.map(async (post) => {
+      if (!post.id) return post
+      try {
+        const content = await getPostContent(post.id)
+        const serialized = await serialize(content, {
+          mdxOptions: { remarkPlugins: [remarkGfm], format: 'mdx' },
+          scope: getSafeScope(content)
+        })
+        return { ...post, content, serialized }
+      } catch {
+        return post
+      }
+    }))
+
+    return NextResponse.json(postsWithContent)
   } catch (error: any) {
     console.error('Error fetching posts from Notion:', error)
-    return NextResponse.json({ 
+    return NextResponse.json({
       error: 'Failed to fetch posts',
-      details: error.message 
+      details: error.message
     }, { status: 500 })
   }
 }
-

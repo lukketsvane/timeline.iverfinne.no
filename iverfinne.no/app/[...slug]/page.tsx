@@ -1,9 +1,9 @@
 'use client'
 
-import { getPostBySlug, getSafeScope, VALID_TYPES, getPublishedPosts, getPostContent } from '@/lib/notion'
+import { VALID_TYPES } from '@/lib/notion'
 import { notFound } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { MDXRemote } from 'next-mdx-remote'
-import remarkGfm from 'remark-gfm'
 import { Badge } from "@/components/ui/badge"
 import { ArrowLeft, Calendar } from 'lucide-react'
 import Link from 'next/link'
@@ -18,7 +18,7 @@ import NextImage from "next/image"
 import { motion } from 'framer-motion'
 import { useEffect, useState, use } from 'react'
 import MDXBlog from '@/components/mdx-blog'
-import { serialize } from 'next-mdx-remote/serialize'
+import { usePosts } from '@/lib/posts-context'
 
 const components = {
   h1: (props: any) => <h1 {...props} className="text-3xl font-bold mt-8 mb-4 break-words" />,
@@ -33,46 +33,106 @@ const components = {
   material: (props: any) => <div {...props} />,
 }
 
-export default function DynamicPage({ params: paramsPromise }: { params: Promise<{ slug: string }> }) {
+export default function DynamicPage({ params: paramsPromise }: { params: Promise<{ slug: string[] }> }) {
   const params = use(paramsPromise)
+  const router = useRouter()
+  const segments = params.slug
+  const { posts: contextPosts, getPostByTypeAndSlug, getPostBySlug } = usePosts()
   const [post, setPost] = useState<any>(null)
   const [allPosts, setAllPosts] = useState<any[]>([])
-  const [isTypePage, setIsTypePage] = useState(false)
-  const [isLoading, setIsLoading] = useState(true)
+  const [pageMode, setPageMode] = useState<'loading' | 'type-filter' | 'post' | 'not-found'>('loading')
 
   useEffect(() => {
-    async function fetchData() {
-      try {
-        const slugLower = params.slug.toLowerCase()
-        
-        if (VALID_TYPES.includes(slugLower)) {
-          setIsTypePage(true)
-          const res = await fetch('/api/posts')
-          const data = await res.json()
-          setAllPosts(data)
-          setIsLoading(false)
+    // Try context first (instant when navigating from homepage)
+    if (segments.length === 1) {
+      const slugLower = segments[0].toLowerCase()
+
+      if (VALID_TYPES.includes(slugLower)) {
+        if (contextPosts.length > 0) {
+          setAllPosts(contextPosts)
+          setPageMode('type-filter')
           return
         }
-
-        const data = await fetch(`/api/posts`).then(res => res.json())
-        const found = data.find((p: any) => p.slug === params.slug)
-        if (found) {
-          const contentRes = await fetch(`/api/posts/${found.id}`).then(res => res.json())
-          setPost({ ...found, serialized: contentRes.source })
-        }
-      } catch (e) {
-        console.error("Failed to fetch data", e)
-      } finally {
-        setIsLoading(false)
+        // Fallback: fetch from API
+        fetch('/api/posts?content=1').then(r => r.json()).then(data => {
+          setAllPosts(data)
+          setPageMode('type-filter')
+        }).catch(() => setPageMode('not-found'))
+        return
       }
+
+      // Old slug-only URL — redirect
+      const found = contextPosts.length > 0
+        ? getPostBySlug(segments[0])
+        : null
+
+      if (found) {
+        router.replace(`/${found.type.toLowerCase()}/${found.slug}`)
+        return
+      }
+
+      if (contextPosts.length === 0) {
+        fetch('/api/posts').then(r => r.json()).then(data => {
+          const f = data.find((p: any) => p.slug === segments[0])
+          if (f) {
+            router.replace(`/${f.type.toLowerCase()}/${f.slug}`)
+          } else {
+            setPageMode('not-found')
+          }
+        }).catch(() => setPageMode('not-found'))
+        return
+      }
+
+      setPageMode('not-found')
+      return
     }
-    fetchData()
-  }, [params.slug])
 
-  if (isLoading) return <div className="min-h-screen flex items-center justify-center">.</div>
+    if (segments.length === 2) {
+      const [typeSeg, slugSeg] = segments
 
-  if (isTypePage) {
-    const displayType = params.slug.charAt(0).toUpperCase() + params.slug.slice(1)
+      if (!VALID_TYPES.includes(typeSeg.toLowerCase())) {
+        setPageMode('not-found')
+        return
+      }
+
+      // Try context first (instant)
+      if (contextPosts.length > 0) {
+        const found = getPostByTypeAndSlug(typeSeg, slugSeg)
+        if (found) {
+          setPost(found)
+          setPageMode('post')
+          return
+        }
+        setPageMode('not-found')
+        return
+      }
+
+      // Fallback: fetch from API (direct URL access)
+      fetch('/api/posts?content=1').then(r => r.json()).then(data => {
+        const found = data.find((p: any) => p.slug === slugSeg && p.type.toLowerCase() === typeSeg.toLowerCase())
+        if (found) {
+          setPost(found)
+          setPageMode('post')
+        } else {
+          setPageMode('not-found')
+        }
+      }).catch(() => setPageMode('not-found'))
+      return
+    }
+
+    setPageMode('not-found')
+  }, [segments, contextPosts, getPostByTypeAndSlug, getPostBySlug, router])
+
+  if (pageMode === 'loading') {
+    return <div className="min-h-screen flex items-center justify-center">.</div>
+  }
+
+  if (pageMode === 'not-found') {
+    notFound()
+  }
+
+  if (pageMode === 'type-filter') {
+    const displayType = segments[0].charAt(0).toUpperCase() + segments[0].slice(1)
     return (
       <div className="container w-screen px-4 py-8">
         <MDXBlog initialPosts={allPosts} initialType={displayType} />
@@ -84,7 +144,7 @@ export default function DynamicPage({ params: paramsPromise }: { params: Promise
 
   if (post.type === "Interaktiv") {
     return (
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
@@ -98,11 +158,11 @@ export default function DynamicPage({ params: paramsPromise }: { params: Promise
   const dateObj = new Date(post.date)
   const day = dateObj.getDate()
   const monthsFull = [
-    "januar", "februar", "mars", "april", "mai", "juni", 
+    "januar", "februar", "mars", "april", "mai", "juni",
     "juli", "august", "september", "oktober", "november", "desember"
   ]
   const monthsShort = [
-    "jan.", "feb.", "mars", "apr.", "mai", "juni", 
+    "jan.", "feb.", "mars", "apr.", "mai", "juni",
     "juli", "aug.", "sep.", "okt.", "nov.", "des."
   ]
   const monthName = monthsFull[dateObj.getMonth()]
@@ -110,7 +170,7 @@ export default function DynamicPage({ params: paramsPromise }: { params: Promise
   const year = dateObj.getFullYear()
 
   return (
-    <motion.article 
+    <motion.article
       layoutId={`post-${post.uid}`}
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
@@ -118,8 +178,8 @@ export default function DynamicPage({ params: paramsPromise }: { params: Promise
       transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
       className="container max-w-4xl mx-auto px-4 py-12 min-h-screen"
     >
-      <Link 
-        href="/" 
+      <Link
+        href="/"
         className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground transition-colors mb-8"
       >
         <ArrowLeft className="w-4 h-4 mr-2" />
@@ -129,7 +189,7 @@ export default function DynamicPage({ params: paramsPromise }: { params: Promise
       <header className="mb-12">
         <div className="flex flex-col sm:flex-row justify-between items-start gap-8 mb-8">
           {post.type !== "Bilete" && (
-            <motion.h1 
+            <motion.h1
               initial={{ opacity: 0, x: -10 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.1 }}
@@ -138,9 +198,9 @@ export default function DynamicPage({ params: paramsPromise }: { params: Promise
               {post.title}
             </motion.h1>
           )}
-          
+
           {post.type === "Bok" && (post.image || post.icon) && (
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               className="relative w-32 sm:w-40 aspect-[2/3] shrink-0 shadow-xl rounded-md overflow-hidden border border-gray-100 dark:border-gray-800"
@@ -156,7 +216,7 @@ export default function DynamicPage({ params: paramsPromise }: { params: Promise
             </motion.div>
           )}
         </div>
-        
+
         <div className="flex flex-wrap items-center gap-6 text-muted-foreground">
           <div className="flex items-center gap-2 text-muted-foreground lowercase">
             <Calendar className="w-4 h-4" />
@@ -164,9 +224,9 @@ export default function DynamicPage({ params: paramsPromise }: { params: Promise
               <span className="font-extrabold">{day}.</span> {month} {year}
             </time>
           </div>
-          
+
           <div className="flex items-center gap-2">
-            <Badge 
+            <Badge
               className={cn("capitalize rounded-full border", getTagColor(post.type))}
             >
               {post.type}
@@ -175,9 +235,9 @@ export default function DynamicPage({ params: paramsPromise }: { params: Promise
 
           {Array.isArray(post.tags) && post.tags.length > 0 && (
             <div className="flex items-center gap-2 flex-wrap">
-              {post.tags.map(tag => (
-                <Badge 
-                  key={tag} 
+              {post.tags.map((tag: string) => (
+                <Badge
+                  key={tag}
                   className={cn("text-xs rounded-sm border", getTagColor(tag))}
                 >
                   {tag}
@@ -196,8 +256,8 @@ export default function DynamicPage({ params: paramsPromise }: { params: Promise
 
       <div className="prose prose-lg dark:prose-invert max-w-none">
         {post.serialized && (
-          <MDXRemote 
-            {...post.serialized} 
+          <MDXRemote
+            {...post.serialized}
             components={components}
           />
         )}

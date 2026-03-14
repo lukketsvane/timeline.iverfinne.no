@@ -302,7 +302,7 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
                         </h2>
                       </a>
                     ) : (
-                      <Link href={`/${post.slug}`} onClick={(e) => e.stopPropagation()}>
+                      <Link href={`/${post.type.toLowerCase()}/${post.slug}`} onClick={(e) => e.stopPropagation()}>
                         <h2 className="text-2xl font-semibold tracking-tight mb-2 group-hover/title:text-blue-600 transition-colors">
                           {post.title}
                         </h2>
@@ -325,19 +325,7 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
                   {renderTags()}
                 </div>
 
-                {/* Non-book icons - Right Aligned */}
-                {post.type !== "Bok" && post.type !== "Bilete" && post.icon && (
-                  <div className="relative w-16 h-16 shrink-0 ml-4">
-                    <NextImage
-                      src={post.icon}
-                      alt=""
-                      fill
-                      unoptimized
-                      className="object-cover rounded-sm"
-                      sizes="64px"
-                    />
-                  </div>
-                )}
+                {/* Non-book icons removed — Notion S3 URLs expire */}
               </div>
             )}
 
