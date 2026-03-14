@@ -236,7 +236,6 @@ function extractOutgoingLinks(content: string, postUrl?: string): SocialLink[] {
   }
   return links
 }
-}
 
 export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCardProps) {
   const [selectedGalleryImage, setSelectedGalleryImage] = useState<number | null>(null)
