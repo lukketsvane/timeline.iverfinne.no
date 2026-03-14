@@ -289,6 +289,7 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
 
   const handleCardClick = () => {
     if (post.type === "Bilete") {
+      window.history.replaceState(null, '', `/bilete/${post.slug}/#1`)
       setSelectedGalleryImage(0)
     } else if (post.type === "Lenkje" && post.url) {
       window.open(post.url, '_blank')
@@ -464,6 +465,8 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
                       onClick={(e) => {
                         if (post.type === "Bilete") {
                           e.stopPropagation()
+                          // Update URL to /bilete/slug/#N and open viewer
+                          window.history.replaceState(null, '', `/bilete/${post.slug}/#${i + 1}`)
                           setSelectedGalleryImage(i)
                         }
                       }}
@@ -507,16 +510,15 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
               </>
             )}
 
-            {/* Hidden Gallery Trigger for "Bilete" */}
+            {/* Gallery Viewer for "Bilete" */}
             {post.type === "Bilete" && (
-              <div className="hidden">
-                <ImageGallery
-                  images={post.thumbnails || []}
-                  initialIndex={selectedGalleryImage}
-                  onIndexChange={setSelectedGalleryImage}
-                  syncHash
-                />
-              </div>
+              <ImageGallery
+                images={post.thumbnails || []}
+                initialIndex={selectedGalleryImage}
+                onIndexChange={setSelectedGalleryImage}
+                syncHash
+                viewerOnly
+              />
             )}
 
             {/* Expanded Content */}

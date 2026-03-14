@@ -45,22 +45,31 @@ interface FilterButtonProps {
   variant?: "type" | "tag" | "default"
 }
 
+const typeColorMap: Record<string, { active: string; inactive: string }> = {
+  Skriving: { active: "bg-blue-500 text-white border-blue-500", inactive: "bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-950 dark:text-blue-400 dark:border-blue-800" },
+  Bok: { active: "bg-green-500 text-white border-green-500", inactive: "bg-green-50 text-green-600 border-green-200 dark:bg-green-950 dark:text-green-400 dark:border-green-800" },
+  Prosjekt: { active: "bg-purple-500 text-white border-purple-500", inactive: "bg-purple-50 text-purple-600 border-purple-200 dark:bg-purple-950 dark:text-purple-400 dark:border-purple-800" },
+  Lenkje: { active: "bg-orange-500 text-white border-orange-500", inactive: "bg-orange-50 text-orange-600 border-orange-200 dark:bg-orange-950 dark:text-orange-400 dark:border-orange-800" },
+  Interaktiv: { active: "bg-pink-500 text-white border-pink-500", inactive: "bg-pink-50 text-pink-600 border-pink-200 dark:bg-pink-950 dark:text-pink-400 dark:border-pink-800" },
+  Bilete: { active: "bg-teal-500 text-white border-teal-500", inactive: "bg-teal-50 text-teal-600 border-teal-200 dark:bg-teal-950 dark:text-teal-400 dark:border-teal-800" },
+}
+
 const FilterButton = ({ label, isActive, onClick, variant = "default" }: FilterButtonProps) => {
   const color = getTagColor(label)
-  const [bg, text, border] = color.split(' ')
-  
+
   const baseStyles = "text-xs px-3 py-1 h-auto font-normal transition-all"
+  const typeColor = typeColorMap[label]
   const variantStyles = {
     type: cn(
       "rounded-full border",
-      isActive 
-        ? color 
-        : "bg-white dark:bg-gray-900 text-gray-400 border-gray-200 dark:border-gray-800 hover:border-gray-300"
+      typeColor
+        ? (isActive ? typeColor.active : typeColor.inactive)
+        : (isActive ? color : "bg-white dark:bg-gray-900 text-gray-400 border-gray-200 dark:border-gray-800 hover:border-gray-300")
     ),
     tag: cn(
       "rounded-sm border",
-      isActive 
-        ? color 
+      isActive
+        ? color
         : "bg-white dark:bg-gray-900 text-gray-400 border-gray-200 dark:border-gray-800 hover:border-gray-300"
     ),
     default: "bg-gray-100/50 hover:bg-gray-200/50 text-gray-600 rounded-full"
@@ -124,16 +133,101 @@ export default function MDXBlog({ initialPosts = [], initialType }: MDXBlogProps
   }, [initialType])
 
   const filteredPosts = useMemo(() => {
+    // Fuzzy match: checks if all characters of query appear in order in target
+    const fuzzyMatch = (target: string, query: string): number => {
+      if (!target || !query) return 0
+      const t = target.toLowerCase()
+      const q = query.toLowerCase()
+      if (t.includes(q)) return 1.0 // exact substring = perfect
+      // Check character-by-character fuzzy match
+      let ti = 0, qi = 0, matched = 0
+      while (ti < t.length && qi < q.length) {
+        if (t[ti] === q[qi]) { matched++; qi++ }
+        ti++
+      }
+      if (qi < q.length) return 0 // didn't match all query chars
+      return matched / Math.max(t.length, q.length) * 0.7 // partial score
+    }
+
+    // Synonyms for type names (Norwegian ↔ English)
+    const typeSynonyms: Record<string, string[]> = {
+      skriving: ['writing', 'artikkel', 'article', 'essay', 'tekst', 'text'],
+      bok: ['book', 'books', 'reading', 'lesing', 'review', 'bokmelding'],
+      prosjekt: ['project', 'projects', 'work', 'arbeid'],
+      lenkje: ['link', 'links', 'lenke', 'url', 'nettside', 'website'],
+      interaktiv: ['interactive', 'app', 'demo', 'visualisering', 'visualization'],
+      bilete: ['image', 'images', 'photo', 'photos', 'bilder', 'bilde', 'gallery', 'galleri'],
+    }
+
+    const scorePost = (post: Post, query: string): number => {
+      if (!query) return 1
+      const q = query.toLowerCase().trim()
+      const terms = q.split(/\s+/)
+      let totalScore = 0
+
+      for (const term of terms) {
+        let best = 0
+
+        // Title (highest weight)
+        best = Math.max(best, fuzzyMatch(post.title, term) * 10)
+
+        // Tags
+        if (Array.isArray(post.tags)) {
+          for (const tag of post.tags) {
+            best = Math.max(best, fuzzyMatch(tag, term) * 7)
+          }
+        }
+
+        // Type name + synonyms
+        best = Math.max(best, fuzzyMatch(post.type, term) * 6)
+        const syns = typeSynonyms[post.type.toLowerCase()] || []
+        for (const syn of syns) {
+          best = Math.max(best, fuzzyMatch(syn, term) * 5)
+        }
+
+        // Description
+        best = Math.max(best, fuzzyMatch(post.description, term) * 4)
+
+        // Slug
+        best = Math.max(best, fuzzyMatch(post.slug, term) * 3)
+
+        // Content (lower weight, just check inclusion for perf)
+        if (post.content?.toLowerCase().includes(term)) {
+          best = Math.max(best, 2)
+        }
+
+        // Date (year/month)
+        if (post.date?.includes(term)) {
+          best = Math.max(best, 3)
+        }
+
+        totalScore += best
+      }
+
+      return totalScore / terms.length
+    }
+
     try {
-      return posts.filter((post) => {
-        const matchesSearch = (post.title?.toLowerCase() || '').includes(search.toLowerCase()) ||
-                            (post.description?.toLowerCase() || '').includes(search.toLowerCase())
-        const matchesTypes = selectedTypes.length === 0 || selectedTypes.includes(post.type)
-        const matchesTags = selectedTags.length === 0 || 
-                          (Array.isArray(post.tags) && post.tags.some(tag => 
-                            selectedTags.includes(tag.toLowerCase())
-                          ))
-        return matchesSearch && matchesTypes && matchesTags
+      const scored = posts
+        .map(post => {
+          const matchesTypes = selectedTypes.length === 0 || selectedTypes.includes(post.type)
+          const matchesTags = selectedTags.length === 0 ||
+            (Array.isArray(post.tags) && post.tags.some(tag =>
+              selectedTags.includes(tag.toLowerCase())
+            ))
+          if (!matchesTypes || !matchesTags) return null
+          const score = scorePost(post, search)
+          if (search && score < 1) return null
+          return { post, score }
+        })
+        .filter((x): x is { post: Post; score: number } => x !== null)
+
+      // If searching, sort by relevance; otherwise keep date order
+      if (search) {
+        scored.sort((a, b) => b.score - a.score)
+      }
+
+      return scored.map(x => x.post)
       })
     } catch (err) {
       console.error('Error filtering posts:', err)

@@ -15,9 +15,10 @@ interface ImageGalleryProps {
   initialIndex?: number | null
   onIndexChange?: (index: number | null) => void
   syncHash?: boolean
+  viewerOnly?: boolean
 }
 
-export function ImageGallery({ images = [], className, initialIndex = null, onIndexChange, syncHash = false }: ImageGalleryProps) {
+export function ImageGallery({ images = [], className, initialIndex = null, onIndexChange, syncHash = false, viewerOnly = false }: ImageGalleryProps) {
   const [internalIndex, setInternalIndex] = useState<number | null>(null)
 
   const selectedImage = initialIndex !== null ? initialIndex : internalIndex
@@ -30,9 +31,9 @@ export function ImageGallery({ images = [], className, initialIndex = null, onIn
 
     if (syncHash) {
       if (index !== null) {
-        window.history.replaceState(null, '', `#${index + 1}`)
+        window.history.replaceState(null, '', `${window.location.pathname}#${index + 1}`)
       } else {
-        window.history.replaceState(null, '', window.location.pathname)
+        window.history.replaceState(null, '', window.location.pathname.replace(/\/$/, ''))
       }
     }
   }, [onIndexChange, syncHash])
@@ -105,25 +106,27 @@ export function ImageGallery({ images = [], className, initialIndex = null, onIn
 
   return (
     <>
-      <Card className={cn("w-full max-w-[100vw] overflow-hidden border-none bg-transparent shadow-none", className)}>
-        <div className="relative w-full overflow-x-auto scrollbar-hide">
-          <div className="flex gap-4 w-max py-2 px-1">
-            {images.map((image, index) => (
-              <img
-                key={index}
-                src={image.src}
-                alt={image.alt}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setSelectedImage(index)
-                }}
-                className="h-[250px] sm:h-[350px] w-auto rounded-lg object-cover cursor-pointer transition-all hover:brightness-90"
-                style={{ maxWidth: 'min(800px, 85vw)' }}
-              />
-            ))}
+      {!viewerOnly && (
+        <Card className={cn("w-full max-w-[100vw] overflow-hidden border-none bg-transparent shadow-none", className)}>
+          <div className="relative w-full overflow-x-auto scrollbar-hide">
+            <div className="flex gap-4 w-max py-2 px-1">
+              {images.map((image, index) => (
+                <img
+                  key={index}
+                  src={image.src}
+                  alt={image.alt}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setSelectedImage(index)
+                  }}
+                  className="h-[250px] sm:h-[350px] w-auto rounded-lg object-cover cursor-pointer transition-all hover:brightness-90"
+                  style={{ maxWidth: 'min(800px, 85vw)' }}
+                />
+              ))}
+            </div>
           </div>
-        </div>
-      </Card>
+        </Card>
+      )}
 
       <AnimatePresence>
         {selectedImage !== null && (
@@ -164,18 +167,12 @@ export function ImageGallery({ images = [], className, initialIndex = null, onIn
                 key={selectedImage}
                 src={images[selectedImage].src}
                 alt={images[selectedImage].alt}
-                initial={{ opacity: 0, scale: 0.96 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.96 }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
                 transition={{ duration: 0.15, ease: 'easeOut' }}
-                drag="x"
-                dragConstraints={{ left: 0, right: 0 }}
-                onDragEnd={(e, { offset }) => {
-                  if (offset.x < -50) handleNext()
-                  else if (offset.x > 50) handlePrevious()
-                }}
                 onClick={(e) => e.stopPropagation()}
-                className="max-w-[95vw] max-h-[90vh] object-contain select-none touch-none"
+                className="max-w-[95vw] max-h-[90vh] object-contain select-none"
               />
             </AnimatePresence>
 
