@@ -461,7 +461,7 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
                   return (
                     <div 
                       key={`${post.uid}-thumb-${i}`}
-                      className="aspect-square relative bg-gray-100 dark:bg-gray-800 rounded-sm overflow-hidden group/thumb cursor-pointer"
+                      className="aspect-square relative rounded-sm overflow-hidden group/thumb cursor-pointer"
                       onClick={(e) => {
                         if (post.type === "Bilete") {
                           e.stopPropagation()
