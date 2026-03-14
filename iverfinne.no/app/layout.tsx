@@ -17,6 +17,7 @@ const APP_TITLE_TEMPLATE = '%s - iverfinne.no'
 const APP_DESCRIPTION = 'Personleg nettside og blogg'
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://iverfinne.no'),
   applicationName: APP_NAME,
   title: {
     default: APP_DEFAULT_TITLE,
@@ -35,6 +36,9 @@ export const metadata: Metadata = {
   formatDetection: {
     telephone: false,
   },
+  alternates: {
+    canonical: '/',
+  },
   openGraph: {
     type: 'website',
     siteName: APP_NAME,
@@ -43,6 +47,7 @@ export const metadata: Metadata = {
       template: APP_TITLE_TEMPLATE,
     },
     description: APP_DESCRIPTION,
+    locale: 'nn_NO',
   },
   twitter: {
     card: 'summary',

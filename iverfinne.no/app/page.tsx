@@ -2,6 +2,7 @@ import HomePage from '@/components/home-page'
 import { getPublishedPosts, getPostContent, getSafeScope } from '@/lib/notion'
 import { serialize } from 'next-mdx-remote/serialize'
 import remarkGfm from 'remark-gfm'
+import { generateWebsiteJsonLd, generatePersonJsonLd } from '@/lib/structured-data'
 
 export default async function Home() {
   const posts = await getPublishedPosts()
@@ -26,9 +27,18 @@ export default async function Home() {
     }
   }))
 
+  const websiteJsonLd = generateWebsiteJsonLd()
+  const personJsonLd = generatePersonJsonLd()
+
   return (
-    <div className="container w-screen px-4 py-8">
-      <HomePage initialPosts={JSON.parse(JSON.stringify(postsWithContent))} />
-    </div>
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify([websiteJsonLd, personJsonLd]) }}
+      />
+      <div className="container w-screen px-4 py-8">
+        <HomePage initialPosts={JSON.parse(JSON.stringify(postsWithContent))} />
+      </div>
+    </>
   )
 }
