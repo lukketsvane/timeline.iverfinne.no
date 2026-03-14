@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { Card } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
 import { ChevronLeft, ChevronRight, X } from 'lucide-react'
-import { motion, AnimatePresence } from 'framer-motion'
 
 interface ImageGalleryProps {
   images: { src: string; alt: string }[]
@@ -17,63 +16,16 @@ interface ImageGalleryProps {
 
 export function ImageGallery({ images = [], className, initialIndex = null, onIndexChange, syncHash = false, viewerOnly = false }: ImageGalleryProps) {
   const [internalIndex, setInternalIndex] = useState<number | null>(null)
-  const [isOpen, setIsOpen] = useState(false)
-
   const selectedImage = initialIndex !== null ? initialIndex : internalIndex
+  const isOpen = selectedImage !== null
 
-  const setSelectedImage = useCallback((index: number | null) => {
-    if (index !== null) {
-      setIsOpen(true)
-    } else {
-      setIsOpen(false)
-    }
-    if (onIndexChange) {
-      onIndexChange(index)
-    } else {
-      setInternalIndex(index)
-    }
+  const close = useCallback(() => {
+    if (onIndexChange) onIndexChange(null)
+    else setInternalIndex(null)
     if (syncHash) {
-      if (index !== null) {
-        window.history.replaceState(null, '', `${window.location.pathname}#${index + 1}`)
-      } else {
-        window.history.replaceState(null, '', window.location.pathname.replace(/\/$/, ''))
-      }
+      window.history.replaceState(null, '', window.location.pathname.replace(/\/$/, ''))
     }
   }, [onIndexChange, syncHash])
-
-  // Hash sync on mount
-  useEffect(() => {
-    if (!syncHash) return
-    const hash = window.location.hash
-    if (hash) {
-      const num = parseInt(hash.slice(1), 10)
-      if (!isNaN(num) && num >= 1 && num <= images.length) {
-        setSelectedImage(num - 1)
-      }
-    }
-  }, [syncHash, images.length])
-
-  // Hash back/forward
-  useEffect(() => {
-    if (!syncHash) return
-    const onHashChange = () => {
-      const hash = window.location.hash
-      if (hash) {
-        const num = parseInt(hash.slice(1), 10)
-        if (!isNaN(num) && num >= 1 && num <= images.length) {
-          if (onIndexChange) onIndexChange(num - 1)
-          else setInternalIndex(num - 1)
-          setIsOpen(true)
-        }
-      } else {
-        if (onIndexChange) onIndexChange(null)
-        else setInternalIndex(null)
-        setIsOpen(false)
-      }
-    }
-    window.addEventListener('hashchange', onHashChange)
-    return () => window.removeEventListener('hashchange', onHashChange)
-  }, [syncHash, images.length, onIndexChange])
 
   const goTo = useCallback((i: number) => {
     if (onIndexChange) onIndexChange(i)
@@ -83,13 +35,43 @@ export function ImageGallery({ images = [], className, initialIndex = null, onIn
     }
   }, [onIndexChange, syncHash])
 
-  const handlePrevious = useCallback((e?: any) => {
+  // Hash sync on mount
+  useEffect(() => {
+    if (!syncHash) return
+    const hash = window.location.hash
+    if (hash) {
+      const num = parseInt(hash.slice(1), 10)
+      if (!isNaN(num) && num >= 1 && num <= images.length) goTo(num - 1)
+    }
+  }, [syncHash, images.length])
+
+  // Hash back/forward
+  useEffect(() => {
+    if (!syncHash) return
+    const handler = () => {
+      const hash = window.location.hash
+      if (hash) {
+        const num = parseInt(hash.slice(1), 10)
+        if (!isNaN(num) && num >= 1 && num <= images.length) {
+          if (onIndexChange) onIndexChange(num - 1)
+          else setInternalIndex(num - 1)
+        }
+      } else {
+        if (onIndexChange) onIndexChange(null)
+        else setInternalIndex(null)
+      }
+    }
+    window.addEventListener('hashchange', handler)
+    return () => window.removeEventListener('hashchange', handler)
+  }, [syncHash, images.length, onIndexChange])
+
+  const goPrev = useCallback((e?: any) => {
     e?.stopPropagation()
     if (selectedImage === null || !images?.length) return
     goTo((selectedImage - 1 + images.length) % images.length)
   }, [images?.length, selectedImage, goTo])
 
-  const handleNext = useCallback((e?: any) => {
+  const goNext = useCallback((e?: any) => {
     e?.stopPropagation()
     if (selectedImage === null || !images?.length) return
     goTo((selectedImage + 1) % images.length)
@@ -99,15 +81,15 @@ export function ImageGallery({ images = [], className, initialIndex = null, onIn
   useEffect(() => {
     if (!isOpen) return
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'ArrowLeft') handlePrevious()
-      else if (e.key === 'ArrowRight') handleNext()
-      else if (e.key === 'Escape') setSelectedImage(null)
+      if (e.key === 'ArrowLeft') goPrev()
+      else if (e.key === 'ArrowRight') goNext()
+      else if (e.key === 'Escape') close()
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [isOpen, handlePrevious, handleNext, setSelectedImage])
+  }, [isOpen, goPrev, goNext, close])
 
-  // Lock scroll
+  // Lock scroll when open
   useEffect(() => {
     document.body.style.overflow = isOpen ? 'hidden' : ''
     return () => { document.body.style.overflow = '' }
@@ -122,70 +104,57 @@ export function ImageGallery({ images = [], className, initialIndex = null, onIn
     }
   }, [selectedImage, images])
 
-  // Touch swipe tracking (no framer-motion drag — just pointer events)
-  const touchStart = useRef<{ x: number; y: number; t: number } | null>(null)
-  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
-  const isDragging = useRef(false)
-  const dragDir = useRef<'none' | 'x' | 'y'>('none')
+  // Pointer-based swipe tracking
+  const startRef = useRef<{ x: number; y: number; t: number } | null>(null)
+  const [offset, setOffset] = useState({ x: 0, y: 0 })
+  const dragging = useRef(false)
+  const dir = useRef<'none' | 'x' | 'y'>('none')
 
-  const onPointerDown = useCallback((e: React.PointerEvent) => {
-    touchStart.current = { x: e.clientX, y: e.clientY, t: Date.now() }
-    isDragging.current = false
-    dragDir.current = 'none'
-    setDragOffset({ x: 0, y: 0 })
+  const onDown = useCallback((e: React.PointerEvent) => {
+    startRef.current = { x: e.clientX, y: e.clientY, t: Date.now() }
+    dragging.current = false
+    dir.current = 'none'
+    setOffset({ x: 0, y: 0 })
     ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
   }, [])
 
-  const onPointerMove = useCallback((e: React.PointerEvent) => {
-    if (!touchStart.current) return
-    const dx = e.clientX - touchStart.current.x
-    const dy = e.clientY - touchStart.current.y
-
-    // Lock direction after 8px movement
-    if (dragDir.current === 'none' && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) {
-      dragDir.current = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y'
-      isDragging.current = true
+  const onMove = useCallback((e: React.PointerEvent) => {
+    if (!startRef.current) return
+    const dx = e.clientX - startRef.current.x
+    const dy = e.clientY - startRef.current.y
+    if (dir.current === 'none' && (Math.abs(dx) > 6 || Math.abs(dy) > 6)) {
+      dir.current = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y'
+      dragging.current = true
     }
-
-    if (dragDir.current === 'x') {
-      setDragOffset({ x: dx, y: 0 })
-    } else if (dragDir.current === 'y') {
-      setDragOffset({ x: 0, y: dy })
-    }
+    if (dir.current === 'x') setOffset({ x: dx, y: 0 })
+    else if (dir.current === 'y') setOffset({ x: 0, y: dy })
   }, [])
 
-  const onPointerUp = useCallback((e: React.PointerEvent) => {
-    if (!touchStart.current) return
-    const dx = e.clientX - touchStart.current.x
-    const dy = e.clientY - touchStart.current.y
-    const dt = Date.now() - touchStart.current.t
-    const vx = Math.abs(dx) / Math.max(dt, 1) * 1000
-    const vy = Math.abs(dy) / Math.max(dt, 1) * 1000
+  const onUp = useCallback(() => {
+    if (!startRef.current) return
+    const { x: sx, y: sy, t } = startRef.current
+    const dt = Math.max(Date.now() - t, 1)
 
-    // Vertical dismiss
-    if (dragDir.current === 'y' && (Math.abs(dy) > 80 || vy > 600)) {
-      setSelectedImage(null)
-    }
-    // Horizontal swipe
-    else if (dragDir.current === 'x' && (Math.abs(dx) > 50 || vx > 400)) {
-      if (dx > 0) handlePrevious()
-      else handleNext()
+    if (dir.current === 'y' && (Math.abs(offset.y) > 80 || Math.abs(offset.y) / dt * 1000 > 500)) {
+      close()
+    } else if (dir.current === 'x' && (Math.abs(offset.x) > 50 || Math.abs(offset.x) / dt * 1000 > 400)) {
+      if (offset.x > 0) goPrev(); else goNext()
     }
 
-    touchStart.current = null
-    isDragging.current = false
-    dragDir.current = 'none'
-    setDragOffset({ x: 0, y: 0 })
-  }, [handlePrevious, handleNext, setSelectedImage])
+    startRef.current = null
+    dragging.current = false
+    dir.current = 'none'
+    setOffset({ x: 0, y: 0 })
+  }, [offset, goPrev, goNext, close])
 
-  // Derived styles from drag
-  const dragScale = 1 - Math.min(Math.abs(dragOffset.y) / 500, 0.15)
-  const backdropOpacity = Math.max(0.15, 0.85 - Math.abs(dragOffset.y) / 350)
+  const scale = 1 - Math.min(Math.abs(offset.y) / 500, 0.15)
+  const bgAlpha = Math.max(0.4, 1 - Math.abs(offset.y) / 300)
 
   if (!images || images.length === 0) return null
 
   return (
     <>
+      {/* Thumbnail strip */}
       {!viewerOnly && (
         <Card className={cn("w-full max-w-[100vw] overflow-hidden border-none bg-transparent shadow-none", className)}>
           <div className="relative w-full overflow-x-auto scrollbar-hide" style={{ WebkitOverflowScrolling: 'touch' as any }}>
@@ -195,7 +164,7 @@ export function ImageGallery({ images = [], className, initialIndex = null, onIn
                   key={index}
                   src={image.src}
                   alt={image.alt}
-                  onClick={(e) => { e.stopPropagation(); setSelectedImage(index) }}
+                  onClick={(e) => { e.stopPropagation(); goTo(index) }}
                   className="h-[250px] sm:h-[350px] w-auto rounded-lg object-cover cursor-pointer hover:brightness-90 active:brightness-75 transition-[filter] duration-150"
                   style={{ maxWidth: 'min(800px, 85vw)' }}
                   draggable={false}
@@ -206,85 +175,81 @@ export function ImageGallery({ images = [], className, initialIndex = null, onIn
         </Card>
       )}
 
-      <AnimatePresence>
-        {isOpen && selectedImage !== null && (
-          <motion.div
-            key="viewer"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.15 }}
-            className="fixed inset-0 z-[100] flex items-center justify-center"
-            style={{ touchAction: 'none' }}
-            onClick={() => setSelectedImage(null)}
+      {/* Fullscreen viewer — no AnimatePresence, no framer-motion on image */}
+      {isOpen && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center"
+          style={{ touchAction: 'none' }}
+          onClick={close}
+        >
+          {/* Black background */}
+          <div
+            className="absolute inset-0 bg-black"
+            style={{
+              opacity: bgAlpha,
+              transition: dragging.current ? 'none' : 'opacity 0.2s ease',
+            }}
+          />
+
+          {/* Close */}
+          <button
+            onClick={(e) => { e.stopPropagation(); close() }}
+            className="absolute top-4 right-4 z-[110] p-3 text-white/50 hover:text-white"
+            style={{ marginTop: 'max(8px, env(safe-area-inset-top))' }}
+            aria-label="Lukk"
           >
-            {/* Backdrop */}
-            <div
-              className="absolute inset-0 bg-black/80 backdrop-blur-sm"
-              style={{ opacity: backdropOpacity, transition: isDragging.current ? 'none' : 'opacity 0.2s' }}
-            />
+            <X className="h-6 w-6" />
+          </button>
 
-            {/* Close */}
-            <button
-              onClick={(e) => { e.stopPropagation(); setSelectedImage(null) }}
-              className="absolute top-4 right-4 z-[110] p-3 text-white/50 hover:text-white"
-              style={{ marginTop: 'max(8px, env(safe-area-inset-top))' }}
-              aria-label="Lukk"
-            >
-              <X className="h-6 w-6" />
-            </button>
+          {/* Desktop arrows */}
+          <button onClick={goPrev} className="absolute left-4 top-1/2 -translate-y-1/2 z-[110] p-4 text-white/20 hover:text-white/80 hidden sm:block" aria-label="Førre">
+            <ChevronLeft className="h-8 w-8" />
+          </button>
+          <button onClick={goNext} className="absolute right-4 top-1/2 -translate-y-1/2 z-[110] p-4 text-white/20 hover:text-white/80 hidden sm:block" aria-label="Neste">
+            <ChevronRight className="h-8 w-8" />
+          </button>
 
-            {/* Desktop arrows */}
-            <button onClick={handlePrevious} className="absolute left-4 top-1/2 -translate-y-1/2 z-[110] p-4 text-white/20 hover:text-white/80 hidden sm:block" aria-label="Førre">
-              <ChevronLeft className="h-8 w-8" />
-            </button>
-            <button onClick={handleNext} className="absolute right-4 top-1/2 -translate-y-1/2 z-[110] p-4 text-white/20 hover:text-white/80 hidden sm:block" aria-label="Neste">
-              <ChevronRight className="h-8 w-8" />
-            </button>
+          {/* Image */}
+          <img
+            src={images[selectedImage].src}
+            alt={images[selectedImage].alt}
+            onPointerDown={onDown}
+            onPointerMove={onMove}
+            onPointerUp={onUp}
+            onPointerCancel={onUp}
+            onClick={(e) => e.stopPropagation()}
+            className="max-w-[95vw] max-h-[85vh] object-contain select-none relative z-[105]"
+            style={{
+              transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})`,
+              transition: dragging.current ? 'none' : 'transform 0.25s cubic-bezier(0.25, 0.1, 0.25, 1)',
+              touchAction: 'none',
+              userSelect: 'none',
+            }}
+            draggable={false}
+          />
 
-            {/* Image — plain element, gesture via pointer events */}
-            <img
-              src={images[selectedImage].src}
-              alt={images[selectedImage].alt}
-              onPointerDown={onPointerDown}
-              onPointerMove={onPointerMove}
-              onPointerUp={onPointerUp}
-              onPointerCancel={onPointerUp}
-              onClick={(e) => { e.stopPropagation(); if (!isDragging.current) return }}
-              className="max-w-[95vw] max-h-[85vh] object-contain select-none relative z-[105] rounded-sm"
-              style={{
-                transform: `translate(${dragOffset.x}px, ${dragOffset.y}px) scale(${dragScale})`,
-                transition: isDragging.current ? 'none' : 'transform 0.25s cubic-bezier(0.25, 0.1, 0.25, 1)',
-                touchAction: 'none',
-                userSelect: 'none',
-                WebkitUserSelect: 'none',
-              }}
-              draggable={false}
-            />
-
-            {/* Dots + counter */}
-            <div className="absolute z-[110] flex flex-col items-center gap-2" style={{ bottom: 'max(20px, env(safe-area-inset-bottom))' }}>
-              {images.length <= 20 && (
-                <div className="flex gap-1.5">
-                  {images.map((_, i) => (
-                    <button
-                      key={i}
-                      onClick={(e) => { e.stopPropagation(); goTo(i) }}
-                      className={cn(
-                        "rounded-full transition-all duration-200",
-                        i === selectedImage ? "w-2 h-2 bg-white" : "w-1.5 h-1.5 bg-white/30"
-                      )}
-                    />
-                  ))}
-                </div>
-              )}
-              <span className="text-white/40 text-xs font-medium tracking-widest tabular-nums">
-                {selectedImage + 1} / {images.length}
-              </span>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          {/* Dots + counter */}
+          <div className="absolute z-[110] flex flex-col items-center gap-2" style={{ bottom: 'max(20px, env(safe-area-inset-bottom))' }}>
+            {images.length <= 20 && (
+              <div className="flex gap-1.5">
+                {images.map((_, i) => (
+                  <button
+                    key={i}
+                    onClick={(e) => { e.stopPropagation(); goTo(i) }}
+                    className={cn(
+                      "rounded-full transition-all duration-200",
+                      i === selectedImage ? "w-2 h-2 bg-white" : "w-1.5 h-1.5 bg-white/30"
+                    )}
+                  />
+                ))}
+              </div>
+            )}
+            <span className="text-white/40 text-xs font-medium tracking-widest tabular-nums">
+              {selectedImage + 1} / {images.length}
+            </span>
+          </div>
+        </div>
+      )}
     </>
   )
 }

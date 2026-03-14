@@ -503,8 +503,6 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
                       </div>
                     ) : post.type === "Interaktiv" ? (
                       <HtmlIframe content={post.content} />
-                    ) : post.type === "Bilete" ? (
-                      <ImageGallery images={post.thumbnails || []} />
                     ) : (
                       <>
                         {serializedContent ? (
