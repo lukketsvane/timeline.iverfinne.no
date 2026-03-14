@@ -191,12 +191,22 @@ function extractOutgoingLinks(content: string, postUrl?: string): SocialLink[] {
 }
 
 export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCardProps) {
+  const [enlargedImage, setEnlargedImage] = useState<string | null>(null)
   const bookCover = post.type === "Bok" ? (post.image || post.icon || getFirstImageFromContent(post.content)) : null
   const projectThumb = post.type === "Prosjekt" ? (post.image || getFirstImageFromContent(post.content)) : null
   const projectLinks = post.type === "Prosjekt" ? extractOutgoingLinks(post.content, post.url) : []
   const readTime = post.type === "Skriving" ? estimateReadTime(post.content) : 0
   const figmaUrl = post.type === "Presentasjon" ? getFigmaEmbedUrl(post.content, post.url) : null
   const linkHostname = post.type === "Lenkje" && post.url ? (() => { try { return new URL(post.url).hostname.replace('www.', '') } catch { return '' } })() : ''
+
+  // Scroll lock + escape key for enlarged image
+  useEffect(() => {
+    if (!enlargedImage) return
+    document.body.style.overflow = 'hidden'
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setEnlargedImage(null) }
+    window.addEventListener('keydown', onKey)
+    return () => { document.body.style.overflow = ''; window.removeEventListener('keydown', onKey) }
+  }, [enlargedImage])
 
   const renderTags = () => {
     return (
@@ -411,7 +421,16 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
                   return (
                     <div 
                       key={`${post.uid}-thumb-${i}`}
-                      className="aspect-square relative rounded-sm overflow-hidden group/thumb"
+                      className={cn(
+                        "aspect-square relative rounded-sm overflow-hidden group/thumb",
+                        post.type === "Bilete" && !img.src.endsWith('.glb') && "cursor-pointer"
+                      )}
+                      onClick={(e) => {
+                        if (post.type === "Bilete" && !img.src.endsWith('.glb')) {
+                          e.stopPropagation()
+                          setEnlargedImage(img.src)
+                        }
+                      }}
                     >
                       {img.src.endsWith('.glb') ? (
                         <ModelViewer 
@@ -507,6 +526,33 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
               )}
             </AnimatePresence>
           </motion.article>
+
+          {/* Tap-to-enlarge lightbox */}
+          <AnimatePresence>
+            {enlargedImage && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2, ease: [0.25, 0.1, 0.25, 1] }}
+                className="fixed inset-0 z-[200] flex items-center justify-center cursor-pointer"
+                style={{ backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)' }}
+                onClick={() => setEnlargedImage(null)}
+              >
+                <div className="absolute inset-0 bg-white/80 dark:bg-black/80" />
+                <motion.img
+                  src={enlargedImage}
+                  alt=""
+                  initial={{ scale: 0.9, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.95, opacity: 0 }}
+                  transition={{ duration: 0.2, ease: [0.25, 0.1, 0.25, 1] }}
+                  className="relative z-10 max-w-[92vw] max-h-[90vh] object-contain rounded-lg select-none"
+                  draggable={false}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
     </div>

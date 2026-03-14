@@ -11,7 +11,7 @@ import { getTagColor } from "@/lib/tag-utils"
 import { cn } from "@/lib/utils"
 import { HtmlIframe } from "@/components/html-iframe"
 import NextImage from "next/image"
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import { useEffect, useState, use } from 'react'
 import MDXBlog from '@/components/mdx-blog'
 import { usePosts } from '@/lib/posts-context'
@@ -31,6 +31,15 @@ export default function DynamicPage({ params: paramsPromise }: { params: Promise
   const [post, setPost] = useState<any>(null)
   const [allPosts, setAllPosts] = useState<any[]>([])
   const [pageMode, setPageMode] = useState<'loading' | 'type-filter' | 'post' | 'not-found'>('loading')
+  const [enlargedImage, setEnlargedImage] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!enlargedImage) return
+    document.body.style.overflow = 'hidden'
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setEnlargedImage(null) }
+    window.addEventListener('keydown', onKey)
+    return () => { document.body.style.overflow = ''; window.removeEventListener('keydown', onKey) }
+  }, [enlargedImage])
 
   useEffect(() => {
     // Try context first (instant when navigating from homepage)
@@ -160,6 +169,7 @@ export default function DynamicPage({ params: paramsPromise }: { params: Promise
   const year = dateObj.getFullYear()
 
   return (
+    <>
     <motion.article
       layoutId={`post-${post.uid}`}
       initial={{ opacity: 0 }}
@@ -228,7 +238,8 @@ export default function DynamicPage({ params: paramsPromise }: { params: Promise
               key={i}
               src={img.src}
               alt={img.alt}
-              className="max-w-full h-auto rounded-lg"
+              className="max-w-full h-auto rounded-lg cursor-pointer hover:brightness-95 transition-[filter] duration-150"
+              onClick={() => setEnlargedImage(img.src)}
             />
           ))}
         </div>
@@ -251,5 +262,32 @@ export default function DynamicPage({ params: paramsPromise }: { params: Promise
         )}
       </div>
     </motion.article>
+
+    <AnimatePresence>
+      {enlargedImage && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2, ease: [0.25, 0.1, 0.25, 1] }}
+          className="fixed inset-0 z-[200] flex items-center justify-center cursor-pointer"
+          style={{ backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)' }}
+          onClick={() => setEnlargedImage(null)}
+        >
+          <div className="absolute inset-0 bg-white/80 dark:bg-black/80" />
+          <motion.img
+            src={enlargedImage}
+            alt=""
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.95, opacity: 0 }}
+            transition={{ duration: 0.2, ease: [0.25, 0.1, 0.25, 1] }}
+            className="relative z-10 max-w-[92vw] max-h-[90vh] object-contain rounded-lg select-none"
+            draggable={false}
+          />
+        </motion.div>
+      )}
+    </AnimatePresence>
+  </>
   )
 }
