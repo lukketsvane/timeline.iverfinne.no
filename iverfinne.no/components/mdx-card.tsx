@@ -200,9 +200,43 @@ function getFirstImageFromContent(content: string): string | null {
   return null
 }
 
+type SocialLink = { type: 'github' | 'instagram' | 'linkedin' | 'twitter' | 'external'; url: string }
+
+function extractOutgoingLinks(content: string, postUrl?: string): SocialLink[] {
+  if (!content && !postUrl) return []
+  const allText = (content || '') + ' ' + (postUrl || '')
+  const urls = new Set<string>()
+  const linkRegex = /https?:\/\/[^\s)"\]<>]+/g
+  let m
+  while ((m = linkRegex.exec(allText)) !== null) urls.add(m[0])
+
+  const links: SocialLink[] = []
+  const seen = new Set<string>()
+  for (const url of urls) {
+    let type: SocialLink['type'] = 'external'
+    if (url.includes('github.com')) type = 'github'
+    else if (url.includes('instagram.com')) type = 'instagram'
+    else if (url.includes('linkedin.com')) type = 'linkedin'
+    else if (url.includes('twitter.com') || url.includes('x.com')) type = 'twitter'
+    else continue // only show recognized social links
+    if (!seen.has(type)) {
+      seen.add(type)
+      links.push({ type, url })
+    }
+  }
+  // Also add generic external link if post has a URL
+  if (postUrl && !seen.has('external')) {
+    links.unshift({ type: 'external', url: postUrl })
+  }
+  return links
+}
+}
+
 export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCardProps) {
   const [selectedGalleryImage, setSelectedGalleryImage] = useState<number | null>(null)
   const bookCover = post.type === "Bok" ? (post.image || post.icon || getFirstImageFromContent(post.content)) : null
+  const projectThumb = post.type === "Prosjekt" ? (post.image || getFirstImageFromContent(post.content)) : null
+  const projectLinks = post.type === "Prosjekt" ? extractOutgoingLinks(post.content, post.url) : []
   const linkHostname = post.type === "Lenkje" && post.url ? (() => { try { return new URL(post.url).hostname.replace('www.', '') } catch { return '' } })() : ''
 
   const renderTags = () => {
@@ -343,13 +377,39 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
                   </div>
                 )}
 
-                <div className="flex-1 group/title">
-                  <div className="flex items-center gap-2">
+                <div className="flex-1 group/title min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <Link href={`/${post.type.toLowerCase()}/${post.slug}`} onClick={(e) => e.stopPropagation()}>
                       <h2 className="text-2xl font-semibold tracking-tight mb-2 group-hover/title:text-blue-600 transition-colors">
                         {post.title}
                       </h2>
                     </Link>
+                    {/* Social/outgoing link icons for Prosjekt */}
+                    {post.type === "Prosjekt" && projectLinks.length > 0 && (
+                      <div className="flex items-center gap-1.5 mb-2">
+                        {projectLinks.map((link) => (
+                          <a
+                            key={link.type}
+                            href={link.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            className="text-muted-foreground hover:text-foreground transition-colors"
+                            aria-label={link.type}
+                          >
+                            {link.type === 'github' && <Github className="w-4 h-4" />}
+                            {link.type === 'instagram' && (
+                              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="20" x="2" y="2" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" x2="17.51" y1="6.5" y2="6.5"/></svg>
+                            )}
+                            {link.type === 'linkedin' && (
+                              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect width="4" height="12" x="2" y="9"/><circle cx="4" cy="4" r="2"/></svg>
+                            )}
+                            {link.type === 'twitter' && <Twitter className="w-4 h-4" />}
+                            {link.type === 'external' && <ExternalLink className="w-4 h-4" />}
+                          </a>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <time className="block sm:hidden text-sm text-muted-foreground mb-2 lowercase">
                     <span className="font-extrabold">{day}.</span> {month}
@@ -358,7 +418,19 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
                   {renderTags()}
                 </div>
 
-                {/* Non-book icons removed — Notion S3 URLs expire */}
+                {/* Project thumbnail - Right Aligned */}
+                {post.type === "Prosjekt" && projectThumb && (
+                  <div className="relative w-16 h-16 sm:w-20 sm:h-20 shrink-0 rounded-lg overflow-hidden border border-gray-100 dark:border-gray-800">
+                    <NextImage
+                      src={projectThumb}
+                      alt=""
+                      fill
+                      unoptimized
+                      className="object-cover"
+                      sizes="80px"
+                    />
+                  </div>
+                )}
               </div>
             )}
 
