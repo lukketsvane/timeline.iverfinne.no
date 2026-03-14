@@ -137,7 +137,7 @@ interface Post {
   date: string
   tags: string[] | string | undefined
   slug: string
-  type: "Skriving" | "Bok" | "Prosjekt" | "Lenkje" | "Interaktiv" | "Bilete"
+  type: "Skriving" | "Bok" | "Prosjekt" | "Lenkje" | "Interaktiv" | "Bilete" | "Presentasjon"
   image?: string
   coverimage?: string
   content: string
@@ -167,7 +167,8 @@ const TimelineNode = ({ type, onToggle, url }: { type: string, onToggle: () => v
     Prosjekt: "bg-purple-500",
     Lenkje: "bg-orange-500",
     Interaktiv: "bg-pink-500",
-    Bilete: "bg-teal-500"
+    Bilete: "bg-teal-500",
+    Presentasjon: "bg-indigo-500"
   }
   
   const handleClick = (e: React.MouseEvent) => {
@@ -189,6 +190,18 @@ const TimelineNode = ({ type, onToggle, url }: { type: string, onToggle: () => v
       aria-label={type === "Lenkje" ? "Opna lenkje" : "Utvid eller skjul innhald"}
     />
   )
+}
+
+function getFigmaEmbedUrl(content: string, url?: string): string | null {
+  if (!content && !url) return null
+  const all = (content || '') + ' ' + (url || '')
+  // Match embed.figma.com URLs
+  const embedMatch = all.match(/https:\/\/embed\.figma\.com\/[^\s"'<>]+/)
+  if (embedMatch) return embedMatch[0]
+  // Match figma.com/slides or figma.com/proto URLs and convert to embed
+  const figmaMatch = all.match(/https:\/\/(?:www\.)?figma\.com\/(slides|proto|design)\/([^\s"'<>]+)/)
+  if (figmaMatch) return `https://embed.figma.com/${figmaMatch[1]}/${figmaMatch[2]}${figmaMatch[0].includes('?') ? '&' : '?'}embed-host=share`
+  return null
 }
 
 function getFirstImageFromContent(content: string): string | null {
@@ -243,6 +256,7 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
   const projectThumb = post.type === "Prosjekt" ? (post.image || getFirstImageFromContent(post.content)) : null
   const projectLinks = post.type === "Prosjekt" ? extractOutgoingLinks(post.content, post.url) : []
   const readTime = post.type === "Skriving" ? estimateReadTime(post.content) : 0
+  const figmaUrl = post.type === "Presentasjon" ? getFigmaEmbedUrl(post.content, post.url) : null
   const linkHostname = post.type === "Lenkje" && post.url ? (() => { try { return new URL(post.url).hostname.replace('www.', '') } catch { return '' } })() : ''
 
   const renderTags = () => {
@@ -535,7 +549,15 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
                     className="prose dark:prose-invert max-w-none text-base leading-relaxed overflow-hidden break-words"
                     onClick={(e) => e.stopPropagation()}
                   >
-                    {post.type === "Interaktiv" ? (
+                    {post.type === "Presentasjon" && figmaUrl ? (
+                      <div className="aspect-video w-full rounded-lg overflow-hidden">
+                        <iframe
+                          src={figmaUrl}
+                          className="w-full h-full border-0"
+                          allowFullScreen
+                        />
+                      </div>
+                    ) : post.type === "Interaktiv" ? (
                       <HtmlIframe content={post.content} />
                     ) : post.type === "Bilete" ? (
                       <ImageGallery images={post.thumbnails || []} />

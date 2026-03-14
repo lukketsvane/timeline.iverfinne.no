@@ -19,7 +19,7 @@ interface Post {
   date: string
   tags: string[] | string | undefined
   slug: string
-  type: "Skriving" | "Bok" | "Prosjekt" | "Lenkje" | "Interaktiv" | "Bilete"
+  type: "Skriving" | "Bok" | "Prosjekt" | "Lenkje" | "Interaktiv" | "Bilete" | "Presentasjon"
   image?: string
   coverimage?: string
   content: string
@@ -36,6 +36,7 @@ const contentTypes = [
   { label: "Lenkje", value: "Lenkje" },
   { label: "Interaktiv", value: "Interaktiv" },
   { label: "Bilete", value: "Bilete" },
+  { label: "Presentasjon", value: "Presentasjon" },
 ]
 
 interface FilterButtonProps {
@@ -52,6 +53,7 @@ const typeColorMap: Record<string, { active: string; inactive: string }> = {
   Lenkje: { active: "bg-orange-500 text-white border-orange-500", inactive: "bg-orange-50 text-orange-600 border-orange-200 dark:bg-orange-950 dark:text-orange-400 dark:border-orange-800" },
   Interaktiv: { active: "bg-pink-500 text-white border-pink-500", inactive: "bg-pink-50 text-pink-600 border-pink-200 dark:bg-pink-950 dark:text-pink-400 dark:border-pink-800" },
   Bilete: { active: "bg-teal-500 text-white border-teal-500", inactive: "bg-teal-50 text-teal-600 border-teal-200 dark:bg-teal-950 dark:text-teal-400 dark:border-teal-800" },
+  Presentasjon: { active: "bg-indigo-500 text-white border-indigo-500", inactive: "bg-indigo-50 text-indigo-600 border-indigo-200 dark:bg-indigo-950 dark:text-indigo-400 dark:border-indigo-800" },
 }
 
 const FilterButton = ({ label, isActive, onClick, variant = "default" }: FilterButtonProps) => {
@@ -157,6 +159,7 @@ export default function MDXBlog({ initialPosts = [], initialType }: MDXBlogProps
       lenkje: ['link', 'links', 'lenke', 'url', 'nettside', 'website'],
       interaktiv: ['interactive', 'app', 'demo', 'visualisering', 'visualization'],
       bilete: ['image', 'images', 'photo', 'photos', 'bilder', 'bilde', 'gallery', 'galleri'],
+      presentasjon: ['slides', 'slide', 'presentation', 'deck', 'figma', 'lysbilete'],
     }
 
     const scorePost = (post: Post, query: string): number => {

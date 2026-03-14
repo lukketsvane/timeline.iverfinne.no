@@ -10,22 +10,26 @@ const notion = new Client({
 
 const n2m = new NotionToMarkdown({ notionClient: notion });
 
-export const VALID_TYPES = ["skriving", "bok", "prosjekt", "lenkje", "interaktiv", "bilete"];
+export const VALID_TYPES = ["skriving", "bok", "prosjekt", "lenkje", "interaktiv", "bilete", "presentasjon"];
 
-const TYPE_MAPPING: Record<string, "Skriving" | "Bok" | "Prosjekt" | "Lenkje" | "Interaktiv" | "Bilete"> = {
+const TYPE_MAPPING: Record<string, "Skriving" | "Bok" | "Prosjekt" | "Lenkje" | "Interaktiv" | "Bilete" | "Presentasjon"> = {
   "Skriving": "Skriving",
   "Bok": "Bok",
   "Prosjekt": "Prosjekt",
   "Lenkje": "Lenkje",
   "Interaktiv": "Interaktiv",
   "Bilete": "Bilete",
+  "Presentasjon": "Presentasjon",
   "Writing": "Skriving",
   "Book": "Bok",
   "Project": "Prosjekt",
   "Link": "Lenkje",
   "Interactive": "Interaktiv",
   "Images": "Bilete",
-  "Bilder": "Bilete"
+  "Bilder": "Bilete",
+  "Slides": "Presentasjon",
+  "Presentation": "Presentasjon",
+  "Slide": "Presentasjon"
 };
 
 export function formatNorwegianDate(dateStr: string): { day: number, month: string, year: number } {
