@@ -136,7 +136,7 @@ export function ImageGallery({ images = [], className, initialIndex = null, onIn
   // Pan gesture tracking
   const panX = useMotionValue(0)
   const panY = useMotionValue(0)
-  const bgOpacity = useTransform(panY, [-250, 0, 250], [0.2, 1, 0.2])
+  const bgOpacity = useTransform(panY, [-250, 0, 250], [0.15, 0.85, 0.15])
   const imgScale = useTransform(panY, [-250, 0, 250], [0.88, 1, 0.88])
 
   // Reset pan values when image changes or viewer closes
@@ -215,7 +215,7 @@ export function ImageGallery({ images = [], className, initialIndex = null, onIn
             style={{ touchAction: 'none' }}
           >
             {/* Background — responds to vertical drag */}
-            <motion.div className="absolute inset-0 bg-black" style={{ opacity: bgOpacity }} />
+            <motion.div className="absolute inset-0 bg-black/80 backdrop-blur-sm" style={{ opacity: bgOpacity }} />
 
             {/* Close button */}
             <button

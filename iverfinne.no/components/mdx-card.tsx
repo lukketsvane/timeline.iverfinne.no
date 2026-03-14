@@ -398,7 +398,7 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
                 {post.type === "Skriving" && readTime > 0 && (
                   <div className="shrink-0 flex items-center text-xs text-muted-foreground whitespace-nowrap pt-1">
                     <Clock className="w-3.5 h-3.5 mr-1" />
-                    {readTime} min lesetid
+                    {readTime} min
                   </div>
                 )}
               </div>
