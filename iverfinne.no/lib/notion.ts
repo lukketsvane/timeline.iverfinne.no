@@ -143,7 +143,12 @@ function getPageProperties(page: any) {
   const type = TYPE_MAPPING[typeRaw] || "Skriving";
 
   const tags = getMultiSelect(["Merkelappar", "Tags"]);
-  const url = getUrl(["URL", "Link", "Lenkje"]);
+  let url = getUrl(["URL", "Link", "Lenkje"]);
+
+  // For Lenkje: if no URL but title looks like a domain, derive URL from title
+  if (!url && type === "Lenkje" && title && /^[a-zA-Z0-9][a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/.test(title)) {
+    url = title.startsWith('http') ? title : `https://${title}`;
+  }
   
   // Prøv å finne eit bilete (omslag) på fleire måtar
   let image = getUrl(["Omslag", "Cover", "Bilete", "Thumbnail"]) || getAnyImageUrl() || undefined;
@@ -199,6 +204,27 @@ export function getSafeScope(content: string): Record<string, string> {
   return scope;
 }
 
+async function fetchOgMetadata(url: string): Promise<{ ogTitle?: string; ogDescription?: string; ogImage?: string }> {
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(5000), headers: { 'User-Agent': 'bot' } });
+    if (!res.ok) return {};
+    const html = await res.text();
+    const get = (property: string) => {
+      const match = html.match(new RegExp(`<meta[^>]*property=["']og:${property}["'][^>]*content=["']([^"']+)["']`, 'i'))
+        || html.match(new RegExp(`<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:${property}["']`, 'i'));
+      return match?.[1] || '';
+    };
+    const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+    return {
+      ogTitle: get('title') || titleMatch?.[1]?.trim() || '',
+      ogDescription: get('description') || (html.match(/<meta[^>]*name=["']description["'][^>]*content=["']([^"']+)["']/i)?.[1]) || '',
+      ogImage: get('image') || '',
+    };
+  } catch {
+    return {};
+  }
+}
+
 export const getPublishedPosts = unstable_cache(
   async (): Promise<Post[]> => {
     const databaseId = getDatabaseId();
@@ -234,10 +260,17 @@ export const getPublishedPosts = unstable_cache(
                 }));
               if (images.length > 0) thumbnails = images;
             }
+            // Fetch OG metadata for Lenkje posts
+            let ogData: { ogTitle?: string; ogDescription?: string; ogImage?: string } = {};
+            if (props.type === "Lenkje" && props.url) {
+              ogData = await fetchOgMetadata(props.url);
+            }
+
             return {
               ...props,
-              content: "", 
+              content: "",
               thumbnails,
+              ...ogData,
             };
           } catch (e) {
             console.error(`Error processing Notion page ${page.id}:`, e);

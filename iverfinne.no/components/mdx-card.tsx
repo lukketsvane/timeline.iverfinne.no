@@ -144,6 +144,9 @@ interface Post {
   url?: string
   icon?: string
   thumbnails?: { src: string; alt: string }[]
+  ogTitle?: string
+  ogDescription?: string
+  ogImage?: string
 }
 
 interface MDXCardProps {
@@ -200,6 +203,7 @@ function getFirstImageFromContent(content: string): string | null {
 export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCardProps) {
   const [selectedGalleryImage, setSelectedGalleryImage] = useState<number | null>(null)
   const bookCover = post.type === "Bok" ? (post.image || post.icon || getFirstImageFromContent(post.content)) : null
+  const linkHostname = post.type === "Lenkje" && post.url ? (() => { try { return new URL(post.url).hostname.replace('www.', '') } catch { return '' } })() : ''
 
   const renderTags = () => {
     return (
@@ -277,8 +281,53 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
             onClick={handleCardClick}
             initial={false}
           >
+            {/* Lenkje Bookmark Preview */}
+            {post.type === "Lenkje" && (() => {
+              const title = post.ogTitle || post.title
+              const description = post.ogDescription || post.description
+              const image = post.ogImage || post.image
+              return (
+              <div className="flex border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden hover:border-gray-300 dark:hover:border-gray-600 transition-colors">
+                <div className="flex-1 p-3 sm:p-4 min-w-0 flex flex-col justify-center">
+                  <h2 className="text-base sm:text-lg font-semibold tracking-tight line-clamp-1 mb-1">
+                    {title}
+                  </h2>
+                  {description && (
+                    <p className="text-muted-foreground text-xs sm:text-sm line-clamp-2 mb-2">{description}</p>
+                  )}
+                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    {linkHostname && (
+                      <>
+                        <img
+                          src={`https://www.google.com/s2/favicons?domain=${linkHostname}&sz=16`}
+                          alt=""
+                          width={14}
+                          height={14}
+                          className="rounded-sm"
+                        />
+                        <span className="truncate">{linkHostname}</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+                {image && (
+                  <div className="relative w-32 sm:w-44 shrink-0 bg-gray-100 dark:bg-gray-800">
+                    <NextImage
+                      src={image}
+                      alt=""
+                      fill
+                      unoptimized
+                      className="object-cover"
+                      sizes="176px"
+                    />
+                  </div>
+                )}
+              </div>
+              )
+            })()}
+
             {/* Main Content Section */}
-            {post.type !== "Bilete" && (
+            {post.type !== "Bilete" && post.type !== "Lenkje" && (
               <div className="flex items-start gap-4 mb-4">
                 {/* Book Cover - Left Aligned */}
                 {post.type === "Bok" && bookCover && (
@@ -293,36 +342,14 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
                     />
                   </div>
                 )}
-                
+
                 <div className="flex-1 group/title">
                   <div className="flex items-center gap-2">
-                    {post.type === "Lenkje" && post.url ? (
-                      <a 
-                        href={post.url} 
-                        target="_blank" 
-                        rel="noopener noreferrer" 
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <h2 className="text-2xl font-semibold tracking-tight mb-2 group-hover/title:text-blue-600 transition-colors">
-                          {post.title}
-                        </h2>
-                      </a>
-                    ) : (
-                      <Link href={`/${post.type.toLowerCase()}/${post.slug}`} onClick={(e) => e.stopPropagation()}>
-                        <h2 className="text-2xl font-semibold tracking-tight mb-2 group-hover/title:text-blue-600 transition-colors">
-                          {post.title}
-                        </h2>
-                      </Link>
-                    )}
-                    {post.url && (
-                      <button 
-                        onClick={(e) => { e.stopPropagation(); window.open(post.url, '_blank') }}
-                        className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full transition-colors"
-                        aria-label="Opna lenkje i ny fane"
-                      >
-                        <Link2 className="w-5 h-5" />
-                      </button>
-                    )}
+                    <Link href={`/${post.type.toLowerCase()}/${post.slug}`} onClick={(e) => e.stopPropagation()}>
+                      <h2 className="text-2xl font-semibold tracking-tight mb-2 group-hover/title:text-blue-600 transition-colors">
+                        {post.title}
+                      </h2>
+                    </Link>
                   </div>
                   <time className="block sm:hidden text-sm text-muted-foreground mb-2 lowercase">
                     <span className="font-extrabold">{day}.</span> {month}
@@ -338,16 +365,16 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
             {/* Image Grid for "Bilete" or Thumbnails for others */}
             {post.type !== "Skriving" && post.type !== "Bok" && post.thumbnails && post.thumbnails.length > 0 && (
               <div className={cn(
-                "grid gap-2 mb-4",
-                post.type === "Bilete" ? "grid-cols-3" : "grid-cols-3"
+                "grid gap-1 mb-4 max-w-[620px]",
+                post.type === "Bilete" ? "grid-cols-4" : "grid-cols-3"
               )}>
-                {(post.type === "Bilete" ? post.thumbnails.slice(0, 9) : post.thumbnails.slice(0, 3)).map((img, i) => {
-                  const isLastVisible = post.type === "Bilete" && i === 8 && post.thumbnails!.length > 9;
+                {(post.type === "Bilete" ? post.thumbnails.slice(0, 8) : post.thumbnails.slice(0, 3)).map((img, i) => {
+                  const isLastVisible = post.type === "Bilete" && i === 7 && post.thumbnails!.length > 8;
 
                   return (
                     <div 
                       key={`${post.uid}-thumb-${i}`}
-                      className="aspect-square relative bg-gray-100 rounded-md overflow-hidden group/thumb"
+                      className="aspect-square relative bg-gray-100 dark:bg-gray-800 rounded-sm overflow-hidden group/thumb cursor-pointer"
                       onClick={(e) => {
                         if (post.type === "Bilete") {
                           e.stopPropagation()
@@ -368,7 +395,7 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
                           src={img.src}
                           alt={img.alt}
                           fill
-                          className="object-cover"
+                          className="object-contain"
                         />
                       )}
                       
@@ -397,17 +424,18 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
             {/* Hidden Gallery Trigger for "Bilete" */}
             {post.type === "Bilete" && (
               <div className="hidden">
-                <ImageGallery 
-                  images={post.thumbnails || []} 
+                <ImageGallery
+                  images={post.thumbnails || []}
                   initialIndex={selectedGalleryImage}
                   onIndexChange={setSelectedGalleryImage}
+                  syncHash
                 />
               </div>
             )}
 
             {/* Expanded Content */}
             <AnimatePresence initial={false}>
-              {isExpanded && post.type !== "Bilete" && (
+              {isExpanded && post.type !== "Bilete" && post.type !== "Lenkje" && (
                 <motion.div
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: "auto" }}

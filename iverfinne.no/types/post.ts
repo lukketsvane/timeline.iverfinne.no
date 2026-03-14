@@ -12,5 +12,8 @@ export interface Post {
   url?: string
   icon?: string
   thumbnails?: { src: string; alt: string }[]
+  ogTitle?: string
+  ogDescription?: string
+  ogImage?: string
 }
 

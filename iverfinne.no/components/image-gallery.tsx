@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { Card } from "@/components/ui/card"
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
 import { ChevronLeft, ChevronRight, X } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -15,48 +14,92 @@ interface ImageGalleryProps {
   className?: string
   initialIndex?: number | null
   onIndexChange?: (index: number | null) => void
+  syncHash?: boolean
 }
 
-export function ImageGallery({ images = [], className, initialIndex = null, onIndexChange }: ImageGalleryProps) {
+export function ImageGallery({ images = [], className, initialIndex = null, onIndexChange, syncHash = false }: ImageGalleryProps) {
   const [internalIndex, setInternalIndex] = useState<number | null>(null)
-  
+
   const selectedImage = initialIndex !== null ? initialIndex : internalIndex
-  const setSelectedImage = (index: number | null) => {
+  const setSelectedImage = useCallback((index: number | null) => {
     if (onIndexChange) {
       onIndexChange(index)
     } else {
       setInternalIndex(index)
     }
-  }
+
+    if (syncHash) {
+      if (index !== null) {
+        window.history.replaceState(null, '', `#${index + 1}`)
+      } else {
+        window.history.replaceState(null, '', window.location.pathname)
+      }
+    }
+  }, [onIndexChange, syncHash])
+
+  // Read hash on mount to auto-open
+  useEffect(() => {
+    if (!syncHash) return
+    const hash = window.location.hash
+    if (hash) {
+      const num = parseInt(hash.slice(1), 10)
+      if (!isNaN(num) && num >= 1 && num <= images.length) {
+        setSelectedImage(num - 1)
+      }
+    }
+  }, [syncHash, images.length])
+
+  // Listen for hash changes (back/forward)
+  useEffect(() => {
+    if (!syncHash) return
+    const onHashChange = () => {
+      const hash = window.location.hash
+      if (hash) {
+        const num = parseInt(hash.slice(1), 10)
+        if (!isNaN(num) && num >= 1 && num <= images.length) {
+          if (onIndexChange) onIndexChange(num - 1)
+          else setInternalIndex(num - 1)
+        }
+      } else {
+        if (onIndexChange) onIndexChange(null)
+        else setInternalIndex(null)
+      }
+    }
+    window.addEventListener('hashchange', onHashChange)
+    return () => window.removeEventListener('hashchange', onHashChange)
+  }, [syncHash, images.length, onIndexChange])
 
   const handlePrevious = useCallback((e?: React.MouseEvent | any) => {
     if (!images || images.length === 0) return
     e?.stopPropagation()
     setSelectedImage(selectedImage !== null ? (selectedImage - 1 + images.length) % images.length : null)
-  }, [images?.length, selectedImage])
+  }, [images?.length, selectedImage, setSelectedImage])
 
   const handleNext = useCallback((e?: React.MouseEvent | any) => {
     if (!images || images.length === 0) return
     e?.stopPropagation()
     setSelectedImage(selectedImage !== null ? (selectedImage + 1) % images.length : null)
-  }, [images?.length, selectedImage])
+  }, [images?.length, selectedImage, setSelectedImage])
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (selectedImage === null) return
-      
-      if (e.key === 'ArrowLeft') {
-        handlePrevious()
-      } else if (e.key === 'ArrowRight') {
-        handleNext()
-      } else if (e.key === 'Escape') {
-        setSelectedImage(null)
-      }
+      if (e.key === 'ArrowLeft') handlePrevious()
+      else if (e.key === 'ArrowRight') handleNext()
+      else if (e.key === 'Escape') setSelectedImage(null)
     }
-
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [selectedImage, handlePrevious, handleNext])
+  }, [selectedImage, handlePrevious, handleNext, setSelectedImage])
+
+  useEffect(() => {
+    if (selectedImage !== null) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = ''
+    }
+    return () => { document.body.style.overflow = '' }
+  }, [selectedImage])
 
   if (!images || images.length === 0) return null
 
@@ -82,83 +125,66 @@ export function ImageGallery({ images = [], className, initialIndex = null, onIn
         </div>
       </Card>
 
-      <Dialog 
-        open={selectedImage !== null} 
-        onOpenChange={(open) => {
-          if (!open) setSelectedImage(null)
-        }}
-      >
-        <DialogContent 
-          className="max-w-[100vw] max-h-[100vh] p-0 bg-black/95 border-0 rounded-none w-full h-full flex items-center justify-center z-[100]"
-          onClick={(e) => {
-            e.stopPropagation()
-            setSelectedImage(null)
-          }}
-        >
-          {selectedImage !== null && (
-            <div className="relative w-full h-full flex items-center justify-center overflow-hidden">
-              <DialogTitle className="sr-only">
-                {images[selectedImage].alt || `Bilete ${selectedImage + 1} av ${images.length}`}
-              </DialogTitle>
-              
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setSelectedImage(null)
-                }}
-                className="absolute top-6 right-6 z-[110] p-3 text-white/50 hover:text-white transition-colors"
-                aria-label="Lukk"
-              >
-                <X className="h-6 w-6" />
-              </button>
-              
-              <button
-                onClick={handlePrevious}
-                className="absolute left-6 top-1/2 -translate-y-1/2 z-[110] p-4 text-white/20 hover:text-white/80 transition-colors hidden sm:block"
-                aria-label="Førre"
-              >
-                <ChevronLeft className="h-8 w-8" />
-              </button>
-              
-              <button
-                onClick={handleNext}
-                className="absolute right-6 top-1/2 -translate-y-1/2 z-[110] p-4 text-white/20 hover:text-white/80 transition-colors hidden sm:block"
-                aria-label="Neste"
-              >
-                <ChevronRight className="h-8 w-8" />
-              </button>
+      <AnimatePresence>
+        {selectedImage !== null && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2, ease: 'easeOut' }}
+            className="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center"
+            onClick={() => setSelectedImage(null)}
+          >
+            <button
+              onClick={(e) => { e.stopPropagation(); setSelectedImage(null) }}
+              className="absolute top-6 right-6 z-[110] p-3 text-white/40 hover:text-white transition-colors"
+              aria-label="Lukk"
+            >
+              <X className="h-6 w-6" />
+            </button>
 
-              <AnimatePresence mode='wait'>
-                <motion.img
-                  key={selectedImage}
-                  src={images[selectedImage].src}
-                  alt={images[selectedImage].alt}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.2, ease: "easeInOut" }}
-                  drag="x"
-                  dragConstraints={{ left: 0, right: 0 }}
-                  onDragEnd={(e, { offset, velocity }) => {
-                    const swipe = offset.x
-                    if (swipe < -50) {
-                      handleNext()
-                    } else if (swipe > 50) {
-                      handlePrevious()
-                    }
-                  }}
-                  onClick={(e) => e.stopPropagation()}
-                  className="max-w-[95vw] max-h-[90vh] object-contain select-none touch-none"
-                />
-              </AnimatePresence>
-              
-              <div className="absolute bottom-8 left-1/2 -translate-x-1/2 text-white/40 text-xs font-medium tracking-widest uppercase">
-                {selectedImage + 1} / {images.length}
-              </div>
+            <button
+              onClick={handlePrevious}
+              className="absolute left-6 top-1/2 -translate-y-1/2 z-[110] p-4 text-white/20 hover:text-white/80 transition-colors hidden sm:block"
+              aria-label="Førre"
+            >
+              <ChevronLeft className="h-8 w-8" />
+            </button>
+
+            <button
+              onClick={handleNext}
+              className="absolute right-6 top-1/2 -translate-y-1/2 z-[110] p-4 text-white/20 hover:text-white/80 transition-colors hidden sm:block"
+              aria-label="Neste"
+            >
+              <ChevronRight className="h-8 w-8" />
+            </button>
+
+            <AnimatePresence mode="wait">
+              <motion.img
+                key={selectedImage}
+                src={images[selectedImage].src}
+                alt={images[selectedImage].alt}
+                initial={{ opacity: 0, scale: 0.96 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.96 }}
+                transition={{ duration: 0.15, ease: 'easeOut' }}
+                drag="x"
+                dragConstraints={{ left: 0, right: 0 }}
+                onDragEnd={(e, { offset }) => {
+                  if (offset.x < -50) handleNext()
+                  else if (offset.x > 50) handlePrevious()
+                }}
+                onClick={(e) => e.stopPropagation()}
+                className="max-w-[95vw] max-h-[90vh] object-contain select-none touch-none"
+              />
+            </AnimatePresence>
+
+            <div className="absolute bottom-8 left-1/2 -translate-x-1/2 text-white/30 text-xs font-medium tracking-widest">
+              {selectedImage + 1} / {images.length}
             </div>
-          )}
-        </DialogContent>
-      </Dialog>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </>
   )
 }
