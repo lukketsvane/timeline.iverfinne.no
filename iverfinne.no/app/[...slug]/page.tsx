@@ -7,7 +7,6 @@ import { MDXRemote } from 'next-mdx-remote'
 import { Badge } from "@/components/ui/badge"
 import { ArrowLeft, Calendar } from 'lucide-react'
 import Link from 'next/link'
-import { ImageGallery } from "@/components/image-gallery"
 import { getTagColor } from "@/lib/tag-utils"
 import { cn } from "@/lib/utils"
 import { HtmlIframe } from "@/components/html-iframe"
@@ -223,8 +222,15 @@ export default function DynamicPage({ params: paramsPromise }: { params: Promise
       </header>
 
       {post.type === "Bilete" && post.thumbnails && (
-        <div className="mb-12">
-          <ImageGallery images={post.thumbnails} />
+        <div className="mb-12 flex flex-col gap-4">
+          {post.thumbnails.map((img: { src: string; alt: string }, i: number) => (
+            <img
+              key={i}
+              src={img.src}
+              alt={img.alt}
+              className="max-w-full h-auto rounded-lg"
+            />
+          ))}
         </div>
       )}
 

@@ -47,7 +47,6 @@ import {
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { getTagColor } from "@/lib/tag-utils"
-import { ImageGallery } from "@/components/image-gallery"
 import { HtmlIframe } from "@/components/html-iframe"
 import { ModelViewer } from "@/components/model-viewer"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card"
@@ -192,7 +191,6 @@ function extractOutgoingLinks(content: string, postUrl?: string): SocialLink[] {
 }
 
 export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCardProps) {
-  const [selectedGalleryImage, setSelectedGalleryImage] = useState<number | null>(null)
   const bookCover = post.type === "Bok" ? (post.image || post.icon || getFirstImageFromContent(post.content)) : null
   const projectThumb = post.type === "Prosjekt" ? (post.image || getFirstImageFromContent(post.content)) : null
   const projectLinks = post.type === "Prosjekt" ? extractOutgoingLinks(post.content, post.url) : []
@@ -243,10 +241,7 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
   const month = monthName.length > 4 ? monthsShort[monthIdx] : monthName
 
   const handleCardClick = () => {
-    if (post.type === "Bilete") {
-      window.history.replaceState(null, '', `/bilete/${post.slug}/#1`)
-      setSelectedGalleryImage(0)
-    } else if (post.type === "Lenkje" && post.url) {
+    if (post.type === "Lenkje" && post.url) {
       window.open(post.url, '_blank')
     } else {
       onToggle()
@@ -416,15 +411,7 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
                   return (
                     <div 
                       key={`${post.uid}-thumb-${i}`}
-                      className="aspect-square relative rounded-sm overflow-hidden group/thumb cursor-pointer"
-                      onClick={(e) => {
-                        if (post.type === "Bilete") {
-                          e.stopPropagation()
-                          // Update URL to /bilete/slug/#N and open viewer
-                          window.history.replaceState(null, '', `/bilete/${post.slug}/#${i + 1}`)
-                          setSelectedGalleryImage(i)
-                        }
-                      }}
+                      className="aspect-square relative rounded-sm overflow-hidden group/thumb"
                     >
                       {img.src.endsWith('.glb') ? (
                         <ModelViewer 
@@ -463,17 +450,6 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
                 </time>
                 {renderTags()}
               </>
-            )}
-
-            {/* Gallery Viewer for "Bilete" */}
-            {post.type === "Bilete" && (
-              <ImageGallery
-                images={post.thumbnails || []}
-                initialIndex={selectedGalleryImage}
-                onIndexChange={setSelectedGalleryImage}
-                syncHash
-                viewerOnly
-              />
             )}
 
             {/* Expanded Content */}
