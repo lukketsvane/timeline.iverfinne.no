@@ -4,13 +4,10 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { Card } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
 import { ChevronLeft, ChevronRight, X } from 'lucide-react'
-import { motion, AnimatePresence, useMotionValue, useTransform, animate } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 
 interface ImageGalleryProps {
-  images: {
-    src: string
-    alt: string
-  }[]
+  images: { src: string; alt: string }[]
   className?: string
   initialIndex?: number | null
   onIndexChange?: (index: number | null) => void
@@ -20,17 +17,21 @@ interface ImageGalleryProps {
 
 export function ImageGallery({ images = [], className, initialIndex = null, onIndexChange, syncHash = false, viewerOnly = false }: ImageGalleryProps) {
   const [internalIndex, setInternalIndex] = useState<number | null>(null)
-  const [imgOpacity, setImgOpacity] = useState(1)
-  const transitioning = useRef(false)
+  const [isOpen, setIsOpen] = useState(false)
 
   const selectedImage = initialIndex !== null ? initialIndex : internalIndex
+
   const setSelectedImage = useCallback((index: number | null) => {
+    if (index !== null) {
+      setIsOpen(true)
+    } else {
+      setIsOpen(false)
+    }
     if (onIndexChange) {
       onIndexChange(index)
     } else {
       setInternalIndex(index)
     }
-
     if (syncHash) {
       if (index !== null) {
         window.history.replaceState(null, '', `${window.location.pathname}#${index + 1}`)
@@ -52,7 +53,7 @@ export function ImageGallery({ images = [], className, initialIndex = null, onIn
     }
   }, [syncHash, images.length])
 
-  // Hash sync on back/forward
+  // Hash back/forward
   useEffect(() => {
     if (!syncHash) return
     const onHashChange = () => {
@@ -62,119 +63,124 @@ export function ImageGallery({ images = [], className, initialIndex = null, onIn
         if (!isNaN(num) && num >= 1 && num <= images.length) {
           if (onIndexChange) onIndexChange(num - 1)
           else setInternalIndex(num - 1)
+          setIsOpen(true)
         }
       } else {
         if (onIndexChange) onIndexChange(null)
         else setInternalIndex(null)
+        setIsOpen(false)
       }
     }
     window.addEventListener('hashchange', onHashChange)
     return () => window.removeEventListener('hashchange', onHashChange)
   }, [syncHash, images.length, onIndexChange])
 
-  // Navigate with crossfade — no remounting
-  const navigateTo = useCallback((newIndex: number) => {
-    if (transitioning.current || !images || images.length === 0) return
-    transitioning.current = true
-    setImgOpacity(0)
-    setTimeout(() => {
-      setSelectedImage(newIndex)
-      // Let the new src load, then fade in
-      requestAnimationFrame(() => {
-        setImgOpacity(1)
-        transitioning.current = false
-      })
-    }, 80)
-  }, [images, setSelectedImage])
+  const goTo = useCallback((i: number) => {
+    if (onIndexChange) onIndexChange(i)
+    else setInternalIndex(i)
+    if (syncHash) {
+      window.history.replaceState(null, '', `${window.location.pathname}#${i + 1}`)
+    }
+  }, [onIndexChange, syncHash])
 
   const handlePrevious = useCallback((e?: any) => {
     e?.stopPropagation()
     if (selectedImage === null || !images?.length) return
-    navigateTo((selectedImage - 1 + images.length) % images.length)
-  }, [images?.length, selectedImage, navigateTo])
+    goTo((selectedImage - 1 + images.length) % images.length)
+  }, [images?.length, selectedImage, goTo])
 
   const handleNext = useCallback((e?: any) => {
     e?.stopPropagation()
     if (selectedImage === null || !images?.length) return
-    navigateTo((selectedImage + 1) % images.length)
-  }, [images?.length, selectedImage, navigateTo])
+    goTo((selectedImage + 1) % images.length)
+  }, [images?.length, selectedImage, goTo])
 
-  // Keyboard nav
+  // Keyboard
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (selectedImage === null) return
+    if (!isOpen) return
+    const handler = (e: KeyboardEvent) => {
       if (e.key === 'ArrowLeft') handlePrevious()
       else if (e.key === 'ArrowRight') handleNext()
       else if (e.key === 'Escape') setSelectedImage(null)
     }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [selectedImage, handlePrevious, handleNext, setSelectedImage])
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [isOpen, handlePrevious, handleNext, setSelectedImage])
 
-  // Lock body scroll
+  // Lock scroll
   useEffect(() => {
-    if (selectedImage !== null) {
-      document.body.style.overflow = 'hidden'
-    } else {
-      document.body.style.overflow = ''
-    }
+    document.body.style.overflow = isOpen ? 'hidden' : ''
     return () => { document.body.style.overflow = '' }
-  }, [selectedImage])
+  }, [isOpen])
 
-  // Preload adjacent images
+  // Preload neighbors
   useEffect(() => {
     if (selectedImage === null || !images?.length) return
-    const preload = (i: number) => {
-      const idx = (i + images.length) % images.length
+    for (const d of [-1, 1]) {
       const img = new Image()
-      img.src = images[idx].src
+      img.src = images[(selectedImage + d + images.length) % images.length].src
     }
-    preload(selectedImage - 1)
-    preload(selectedImage + 1)
   }, [selectedImage, images])
 
-  // Pan gesture tracking
-  const panX = useMotionValue(0)
-  const panY = useMotionValue(0)
-  const bgOpacity = useTransform(panY, [-250, 0, 250], [0.15, 0.85, 0.15])
-  const imgScale = useTransform(panY, [-250, 0, 250], [0.88, 1, 0.88])
+  // Touch swipe tracking (no framer-motion drag — just pointer events)
+  const touchStart = useRef<{ x: number; y: number; t: number } | null>(null)
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
+  const isDragging = useRef(false)
+  const dragDir = useRef<'none' | 'x' | 'y'>('none')
 
-  // Reset pan values when image changes or viewer closes
-  useEffect(() => {
-    panX.set(0)
-    panY.set(0)
-  }, [selectedImage, panX, panY])
+  const onPointerDown = useCallback((e: React.PointerEvent) => {
+    touchStart.current = { x: e.clientX, y: e.clientY, t: Date.now() }
+    isDragging.current = false
+    dragDir.current = 'none'
+    setDragOffset({ x: 0, y: 0 })
+    ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
+  }, [])
 
-  const handlePanEnd = useCallback((_: any, info: { offset: { x: number; y: number }; velocity: { x: number; y: number } }) => {
-    if (transitioning.current) return
-    const { offset, velocity } = info
+  const onPointerMove = useCallback((e: React.PointerEvent) => {
+    if (!touchStart.current) return
+    const dx = e.clientX - touchStart.current.x
+    const dy = e.clientY - touchStart.current.y
+
+    // Lock direction after 8px movement
+    if (dragDir.current === 'none' && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) {
+      dragDir.current = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y'
+      isDragging.current = true
+    }
+
+    if (dragDir.current === 'x') {
+      setDragOffset({ x: dx, y: 0 })
+    } else if (dragDir.current === 'y') {
+      setDragOffset({ x: 0, y: dy })
+    }
+  }, [])
+
+  const onPointerUp = useCallback((e: React.PointerEvent) => {
+    if (!touchStart.current) return
+    const dx = e.clientX - touchStart.current.x
+    const dy = e.clientY - touchStart.current.y
+    const dt = Date.now() - touchStart.current.t
+    const vx = Math.abs(dx) / Math.max(dt, 1) * 1000
+    const vy = Math.abs(dy) / Math.max(dt, 1) * 1000
 
     // Vertical dismiss
-    if (Math.abs(offset.y) > 100 || Math.abs(velocity.y) > 400) {
-      // Animate out then dismiss
-      animate(panY, offset.y > 0 ? 500 : -500, { duration: 0.2 })
-      animate(panX, 0, { duration: 0.15 })
-      setTimeout(() => setSelectedImage(null), 150)
-      return
+    if (dragDir.current === 'y' && (Math.abs(dy) > 80 || vy > 600)) {
+      setSelectedImage(null)
     }
-
     // Horizontal swipe
-    if (Math.abs(offset.x) > 40 || Math.abs(velocity.x) > 300) {
-      // Snap back pan position then navigate
-      animate(panX, 0, { duration: 0.1 })
-      animate(panY, 0, { duration: 0.1 })
-      if (offset.x > 0) {
-        handlePrevious()
-      } else {
-        handleNext()
-      }
-      return
+    else if (dragDir.current === 'x' && (Math.abs(dx) > 50 || vx > 400)) {
+      if (dx > 0) handlePrevious()
+      else handleNext()
     }
 
-    // Not enough — snap back
-    animate(panX, 0, { type: 'spring', stiffness: 500, damping: 30 })
-    animate(panY, 0, { type: 'spring', stiffness: 500, damping: 30 })
-  }, [handlePrevious, handleNext, setSelectedImage, panX, panY])
+    touchStart.current = null
+    isDragging.current = false
+    dragDir.current = 'none'
+    setDragOffset({ x: 0, y: 0 })
+  }, [handlePrevious, handleNext, setSelectedImage])
+
+  // Derived styles from drag
+  const dragScale = 1 - Math.min(Math.abs(dragOffset.y) / 500, 0.15)
+  const backdropOpacity = Math.max(0.15, 0.85 - Math.abs(dragOffset.y) / 350)
 
   if (!images || images.length === 0) return null
 
@@ -182,19 +188,16 @@ export function ImageGallery({ images = [], className, initialIndex = null, onIn
     <>
       {!viewerOnly && (
         <Card className={cn("w-full max-w-[100vw] overflow-hidden border-none bg-transparent shadow-none", className)}>
-          <div className="relative w-full overflow-x-auto scrollbar-hide" style={{ WebkitOverflowScrolling: 'touch' }}>
+          <div className="relative w-full overflow-x-auto scrollbar-hide" style={{ WebkitOverflowScrolling: 'touch' as any }}>
             <div className="flex gap-4 w-max py-2 px-1">
               {images.map((image, index) => (
                 <img
                   key={index}
                   src={image.src}
                   alt={image.alt}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setSelectedImage(index)
-                  }}
-                  className="h-[250px] sm:h-[350px] w-auto rounded-lg object-cover cursor-pointer active:scale-[0.97] hover:brightness-90"
-                  style={{ maxWidth: 'min(800px, 85vw)', transition: 'transform 0.15s ease' }}
+                  onClick={(e) => { e.stopPropagation(); setSelectedImage(index) }}
+                  className="h-[250px] sm:h-[350px] w-auto rounded-lg object-cover cursor-pointer hover:brightness-90 active:brightness-75 transition-[filter] duration-150"
+                  style={{ maxWidth: 'min(800px, 85vw)' }}
                   draggable={false}
                 />
               ))}
@@ -204,85 +207,72 @@ export function ImageGallery({ images = [], className, initialIndex = null, onIn
       )}
 
       <AnimatePresence>
-        {selectedImage !== null && (
+        {isOpen && selectedImage !== null && (
           <motion.div
+            key="viewer"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.2, ease: 'easeOut' }}
+            transition={{ duration: 0.15 }}
             className="fixed inset-0 z-[100] flex items-center justify-center"
-            onClick={() => setSelectedImage(null)}
             style={{ touchAction: 'none' }}
+            onClick={() => setSelectedImage(null)}
           >
-            {/* Background — responds to vertical drag */}
-            <motion.div className="absolute inset-0 bg-black/80 backdrop-blur-sm" style={{ opacity: bgOpacity }} />
+            {/* Backdrop */}
+            <div
+              className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+              style={{ opacity: backdropOpacity, transition: isDragging.current ? 'none' : 'opacity 0.2s' }}
+            />
 
-            {/* Close button */}
+            {/* Close */}
             <button
               onClick={(e) => { e.stopPropagation(); setSelectedImage(null) }}
-              className="absolute top-4 right-4 z-[110] p-3 text-white/50 hover:text-white active:text-white/80"
+              className="absolute top-4 right-4 z-[110] p-3 text-white/50 hover:text-white"
               style={{ marginTop: 'max(8px, env(safe-area-inset-top))' }}
               aria-label="Lukk"
             >
               <X className="h-6 w-6" />
             </button>
 
-            {/* Desktop nav arrows */}
-            <button
-              onClick={handlePrevious}
-              className="absolute left-4 top-1/2 -translate-y-1/2 z-[110] p-4 text-white/20 hover:text-white/80 hidden sm:block"
-              aria-label="Førre"
-            >
+            {/* Desktop arrows */}
+            <button onClick={handlePrevious} className="absolute left-4 top-1/2 -translate-y-1/2 z-[110] p-4 text-white/20 hover:text-white/80 hidden sm:block" aria-label="Førre">
               <ChevronLeft className="h-8 w-8" />
             </button>
-            <button
-              onClick={handleNext}
-              className="absolute right-4 top-1/2 -translate-y-1/2 z-[110] p-4 text-white/20 hover:text-white/80 hidden sm:block"
-              aria-label="Neste"
-            >
+            <button onClick={handleNext} className="absolute right-4 top-1/2 -translate-y-1/2 z-[110] p-4 text-white/20 hover:text-white/80 hidden sm:block" aria-label="Neste">
               <ChevronRight className="h-8 w-8" />
             </button>
 
-            {/* Single image — no AnimatePresence, no remounting */}
-            <motion.img
+            {/* Image — plain element, gesture via pointer events */}
+            <img
               src={images[selectedImage].src}
               alt={images[selectedImage].alt}
-              drag
-              dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
-              dragElastic={0.6}
-              onDragEnd={handlePanEnd}
-              style={{
-                x: panX,
-                y: panY,
-                scale: imgScale,
-                opacity: imgOpacity,
-                touchAction: 'none',
-                transition: `opacity 0.08s ease`,
-              }}
-              onClick={(e) => e.stopPropagation()}
+              onPointerDown={onPointerDown}
+              onPointerMove={onPointerMove}
+              onPointerUp={onPointerUp}
+              onPointerCancel={onPointerUp}
+              onClick={(e) => { e.stopPropagation(); if (!isDragging.current) return }}
               className="max-w-[95vw] max-h-[85vh] object-contain select-none relative z-[105] rounded-sm"
+              style={{
+                transform: `translate(${dragOffset.x}px, ${dragOffset.y}px) scale(${dragScale})`,
+                transition: isDragging.current ? 'none' : 'transform 0.25s cubic-bezier(0.25, 0.1, 0.25, 1)',
+                touchAction: 'none',
+                userSelect: 'none',
+                WebkitUserSelect: 'none',
+              }}
               draggable={false}
             />
 
             {/* Dots + counter */}
-            <div
-              className="absolute z-[110] flex flex-col items-center gap-2"
-              style={{ bottom: 'max(20px, env(safe-area-inset-bottom))' }}
-            >
+            <div className="absolute z-[110] flex flex-col items-center gap-2" style={{ bottom: 'max(20px, env(safe-area-inset-bottom))' }}>
               {images.length <= 20 && (
                 <div className="flex gap-1.5">
                   {images.map((_, i) => (
                     <button
                       key={i}
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        navigateTo(i)
-                      }}
+                      onClick={(e) => { e.stopPropagation(); goTo(i) }}
                       className={cn(
                         "rounded-full transition-all duration-200",
-                        i === selectedImage
-                          ? "w-2 h-2 bg-white"
-                          : "w-1.5 h-1.5 bg-white/30"
+                        i === selectedImage ? "w-2 h-2 bg-white" : "w-1.5 h-1.5 bg-white/30"
                       )}
                     />
                   ))}
