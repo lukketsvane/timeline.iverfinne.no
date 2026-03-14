@@ -228,7 +228,6 @@ export default function MDXBlog({ initialPosts = [], initialType }: MDXBlogProps
       }
 
       return scored.map(x => x.post)
-      })
     } catch (err) {
       console.error('Error filtering posts:', err)
       return []
