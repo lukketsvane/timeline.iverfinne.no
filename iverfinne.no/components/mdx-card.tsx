@@ -188,8 +188,18 @@ const TimelineNode = ({ type, onToggle, url }: { type: string, onToggle: () => v
   )
 }
 
+function getFirstImageFromContent(content: string): string | null {
+  if (!content) return null
+  const match = content.match(/!\[.*?\]\((https?:\/\/[^\s)]+)\)/)
+  if (match) return match[1]
+  const imgMatch = content.match(/<img[^>]+src=["'](https?:\/\/[^\s"']+)["']/)
+  if (imgMatch) return imgMatch[1]
+  return null
+}
+
 export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCardProps) {
   const [selectedGalleryImage, setSelectedGalleryImage] = useState<number | null>(null)
+  const bookCover = post.type === "Bok" ? (post.image || post.icon || getFirstImageFromContent(post.content)) : null
 
   const renderTags = () => {
     return (
@@ -256,29 +266,25 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
           <TimelineConnector />
         </div>
         <div className="pb-8 pt-0">
-          <motion.article 
-            layoutId={`post-${post.uid}`}
+          <motion.article
             className={cn(
-              "relative rounded-lg p-4 transition-all",
-              post.type === "Lenkje" 
-                ? "hover:bg-blue-50/30 dark:hover:bg-blue-900/10 cursor-alias" 
+              "relative rounded-lg p-4 transition-colors",
+              post.type === "Lenkje"
+                ? "hover:bg-blue-50/30 dark:hover:bg-blue-900/10 cursor-alias"
                 : (isExpanded ? "dark:bg-gray-800" : "hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer"),
               "ml-0"
             )}
             onClick={handleCardClick}
             initial={false}
-            animate={{ backgroundColor: isExpanded ? "rgba(0,0,0,0.02)" : "transparent" }}
-            whileTap={{ scale: 0.995 }}
-            transition={{ duration: 0.2, ease: "easeInOut" }}
           >
             {/* Main Content Section */}
             {post.type !== "Bilete" && (
               <div className="flex items-start gap-4 mb-4">
                 {/* Book Cover - Left Aligned */}
-                {post.type === "Bok" && (post.image || post.icon) && (
+                {post.type === "Bok" && bookCover && (
                   <div className="relative w-20 sm:w-24 aspect-[2/3] shrink-0 shadow-md rounded-sm overflow-hidden border border-gray-100 dark:border-gray-800">
                     <NextImage
-                      src={post.image || post.icon || ""}
+                      src={bookCover}
                       alt={`Omslag for ${post.title}`}
                       fill
                       unoptimized
@@ -400,13 +406,13 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
             )}
 
             {/* Expanded Content */}
-            <AnimatePresence mode="wait">
+            <AnimatePresence initial={false}>
               {isExpanded && post.type !== "Bilete" && (
                 <motion.div
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: "auto" }}
                   exit={{ opacity: 0, height: 0 }}
-                  transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+                  transition={{ height: { duration: 0.35, ease: [0.25, 0.1, 0.25, 1] }, opacity: { duration: 0.2 } }}
                   className="overflow-hidden mt-4 border-t border-gray-100 dark:border-gray-800 pt-6"
                 >
                   <div 
@@ -419,11 +425,11 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
                       <ImageGallery images={post.thumbnails || []} />
                     ) : (
                       <>
-                        {post.type === "Bok" && (post.image || post.icon) && (
+                        {post.type === "Bok" && bookCover && (
                           <div className="mb-8 flex justify-start">
                             <div className="relative w-40 sm:w-48 aspect-[2/3] shadow-xl rounded-sm overflow-hidden border border-gray-100 dark:border-gray-800">
                               <NextImage
-                                src={post.image || post.icon || ""}
+                                src={bookCover}
                                 alt={`Omslag for ${post.title}`}
                                 fill
                                 unoptimized
