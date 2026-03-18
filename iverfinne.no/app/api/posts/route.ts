@@ -4,7 +4,8 @@ import { serialize } from 'next-mdx-remote/serialize'
 import remarkGfm from 'remark-gfm'
 
 export const dynamic = 'force-dynamic';
-export const revalidate = 60;
+
+const noCacheHeaders = { 'Cache-Control': 'no-store, max-age=0' };
 
 export async function GET(request: NextRequest) {
   try {
@@ -13,11 +14,11 @@ export async function GET(request: NextRequest) {
     const posts = await getPublishedPosts()
 
     if (posts.length === 0) {
-       return NextResponse.json([])
+       return NextResponse.json([], { headers: noCacheHeaders })
     }
 
     if (!withContent) {
-      return NextResponse.json(posts)
+      return NextResponse.json(posts, { headers: noCacheHeaders })
     }
 
     // Return posts with pre-serialized content
@@ -35,7 +36,7 @@ export async function GET(request: NextRequest) {
       }
     }))
 
-    return NextResponse.json(postsWithContent)
+    return NextResponse.json(postsWithContent, { headers: noCacheHeaders })
   } catch (error: any) {
     console.error('Error fetching posts from Notion:', error)
     return NextResponse.json({

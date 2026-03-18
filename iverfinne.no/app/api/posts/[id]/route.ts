@@ -4,7 +4,7 @@ import { serialize } from 'next-mdx-remote/serialize'
 import remarkGfm from 'remark-gfm'
 import rehypePrismPlus from 'rehype-prism-plus'
 
-export const revalidate = 60;
+export const dynamic = 'force-dynamic';
 
 export async function GET(
   request: Request,
@@ -25,7 +25,7 @@ export async function GET(
       parseFrontmatter: true,
     })
 
-    return NextResponse.json({ source: serialized })
+    return NextResponse.json({ source: serialized }, { headers: { 'Cache-Control': 'no-store, max-age=0' } })
   } catch (error) {
     console.error('Error fetching/serializing post content:', error)
     return NextResponse.json({ error: 'Failed to process content' }, { status: 500 })
