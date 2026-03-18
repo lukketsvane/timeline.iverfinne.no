@@ -2,7 +2,6 @@
 import { Client } from "@notionhq/client";
 import { NotionToMarkdown } from "notion-to-md";
 import { Post } from "@/types/post";
-import { unstable_cache } from 'next/cache';
 
 const notion = new Client({
   auth: process.env.NOTION_API_KEY,
@@ -300,8 +299,7 @@ async function fetchOgMetadata(url: string): Promise<{ ogTitle?: string; ogDescr
   }
 }
 
-export const getPublishedPosts = unstable_cache(
-  async (): Promise<Post[]> => {
+export async function getPublishedPosts(): Promise<Post[]> {
     const databaseId = getDatabaseId();
     try {
       const response = await notion.databases.query({
@@ -358,20 +356,13 @@ export const getPublishedPosts = unstable_cache(
       console.error("Notion API error:", error);
       throw error;
     }
-  },
-  ['published-posts'],
-  { revalidate: 60, tags: ['posts'] }
-);
+}
 
-export const getPostContent = unstable_cache(
-  async (pageId: string): Promise<string> => {
+export async function getPostContent(pageId: string): Promise<string> {
     const mdblocks = await n2m.pageToMarkdown(pageId);
     const mdObject = n2m.toMarkdownString(mdblocks);
     return mdObject.parent || "";
-  },
-  ['post-content'],
-  { revalidate: 60, tags: ['posts'] }
-);
+}
 
 export async function getPostContentDirect(pageId: string): Promise<string> {
   const mdblocks = await n2m.pageToMarkdown(pageId);
