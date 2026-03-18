@@ -360,7 +360,7 @@ export const getPublishedPosts = unstable_cache(
     }
   },
   ['published-posts'],
-  { revalidate: 3600, tags: ['posts'] }
+  { revalidate: 60, tags: ['posts'] }
 );
 
 export const getPostContent = unstable_cache(
@@ -370,7 +370,7 @@ export const getPostContent = unstable_cache(
     return mdObject.parent || "";
   },
   ['post-content'],
-  { revalidate: 3600, tags: ['posts'] }
+  { revalidate: 60, tags: ['posts'] }
 );
 
 export async function getPostContentDirect(pageId: string): Promise<string> {

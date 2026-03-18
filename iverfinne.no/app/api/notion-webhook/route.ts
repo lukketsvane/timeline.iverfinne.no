@@ -5,6 +5,12 @@ import { revalidatePath } from 'next/cache'
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
+
+    // Handle Notion webhook verification challenge
+    if (body.challenge) {
+      return NextResponse.json({ challenge: body.challenge })
+    }
+
     const eventType = body.type || 'unknown'
     console.log('[webhook] received:', eventType, JSON.stringify(body).slice(0, 300))
 
