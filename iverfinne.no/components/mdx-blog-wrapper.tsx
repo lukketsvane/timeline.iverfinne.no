@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import MDXBlog from '@/components/mdx-blog'
 
 import type { MDXRemoteSerializeResult } from 'next-mdx-remote'
@@ -25,27 +25,31 @@ export default function MDXBlogWrapper() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    async function fetchPosts() {
-      try {
-        const response = await fetch('/api/posts')
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.details || errorData.error || `HTTP error! status: ${response.status}`)
-        }
-        const data = await response.json()
-        console.log('Fetched posts:', data)
-        setPosts(data)
-      } catch (error: any) {
+  const fetchPosts = useCallback(async (isBackground = false) => {
+    try {
+      const response = await fetch('/api/posts', { cache: 'no-store' })
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.details || errorData.error || `HTTP error! status: ${response.status}`)
+      }
+      const data = await response.json()
+      if (!isBackground) console.log('Fetched posts:', data)
+      setPosts(data)
+    } catch (error: any) {
+      if (!isBackground) {
         console.error('Error fetching posts:', error)
         setError(error.message || 'Feil ved henting av innlegg. Prøv igjen seinare.')
-      } finally {
-        setIsLoading(false)
       }
+    } finally {
+      if (!isBackground) setIsLoading(false)
     }
-
-    fetchPosts()
   }, [])
+
+  useEffect(() => {
+    fetchPosts()
+    const interval = setInterval(() => fetchPosts(true), 10000)
+    return () => clearInterval(interval)
+  }, [fetchPosts])
 
   if (isLoading) {
     return <div className="flex items-center justify-center p-8">.</div>
