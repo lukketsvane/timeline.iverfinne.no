@@ -3,10 +3,6 @@ import { getPublishedPosts, getPostContent, getSafeScope } from '@/lib/notion'
 import { serialize } from 'next-mdx-remote/serialize'
 import remarkGfm from 'remark-gfm'
 
-export const dynamic = 'force-dynamic';
-
-const noCacheHeaders = { 'Cache-Control': 'no-store, max-age=0' };
-
 export async function GET(request: NextRequest) {
   try {
     const withContent = request.nextUrl.searchParams.get('content') === '1'
@@ -14,11 +10,11 @@ export async function GET(request: NextRequest) {
     const posts = await getPublishedPosts()
 
     if (posts.length === 0) {
-       return NextResponse.json([], { headers: noCacheHeaders })
+       return NextResponse.json([])
     }
 
     if (!withContent) {
-      return NextResponse.json(posts, { headers: noCacheHeaders })
+      return NextResponse.json(posts)
     }
 
     // Return posts with pre-serialized content
@@ -36,7 +32,7 @@ export async function GET(request: NextRequest) {
       }
     }))
 
-    return NextResponse.json(postsWithContent, { headers: noCacheHeaders })
+    return NextResponse.json(postsWithContent)
   } catch (error: any) {
     console.error('Error fetching posts from Notion:', error)
     return NextResponse.json({
