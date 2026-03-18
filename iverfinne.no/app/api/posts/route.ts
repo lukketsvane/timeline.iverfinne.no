@@ -1,14 +1,14 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { getPublishedPosts, getPostContent, getSafeScope } from '@/lib/notion'
 import { serialize } from 'next-mdx-remote/serialize'
 import remarkGfm from 'remark-gfm'
 
+export const dynamic = 'force-dynamic';
 export const revalidate = 60;
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url)
-    const withContent = searchParams.get('content') === '1'
+    const withContent = request.nextUrl.searchParams.get('content') === '1'
 
     const posts = await getPublishedPosts()
 

@@ -309,7 +309,7 @@ export const getPublishedPosts = unstable_cache(
         filter: {
           or: [
             { property: "Status", status: { equals: "Ferdig" } },
-            { property: "Status", status: { equals: "Done" } }
+            { property: "Status", status: { equals: "Complete" } }
           ]
         },
         sorts: [
@@ -388,7 +388,7 @@ export async function getPostIdBySlug(slug: string): Promise<string | null> {
                 {
                   or: [
                     { property: "Status", status: { equals: "Ferdig" } },
-                    { property: "Status", status: { equals: "Done" } }
+                    { property: "Status", status: { equals: "Complete" } }
                   ]
                 },
                 { property: "Slug", rich_text: { equals: slug } } 
@@ -408,7 +408,7 @@ export async function getPostBySlug(slug: string): Promise<Post | null> {
         {
           or: [
             { property: "Status", status: { equals: "Ferdig" } },
-            { property: "Status", status: { equals: "Done" } }
+            { property: "Status", status: { equals: "Complete" } }
           ]
         },
         { property: "Slug", rich_text: { equals: slug } }
