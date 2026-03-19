@@ -1,31 +1,9 @@
 export const revalidate = 60
 
-import { getPublishedPosts, getPostBySlug, getPostContent, getSafeScope, VALID_TYPES } from '@/lib/notion'
+import { getPublishedPosts, getPostBySlug, serializePostContent, VALID_TYPES } from '@/lib/notion'
 import { notFound, redirect } from 'next/navigation'
-import { serialize } from 'next-mdx-remote/serialize'
-import remarkGfm from 'remark-gfm'
-import rehypePrismPlus from 'rehype-prism-plus'
 import MDXBlog from '@/components/mdx-blog'
 import SlugPageClient from '@/components/slug-page-client'
-
-async function serializePost(post: any) {
-  if (!post.id) return post
-  try {
-    const content = await getPostContent(post.id)
-    const serialized = await serialize(content, {
-      mdxOptions: {
-        remarkPlugins: [remarkGfm],
-        rehypePlugins: [[rehypePrismPlus, { ignoreMissing: true }]],
-        format: 'mdx',
-      },
-      scope: getSafeScope(content)
-    })
-    return { ...post, content, serialized }
-  } catch (e) {
-    console.error(`Error serializing post ${post.id}:`, e)
-    return post
-  }
-}
 
 export default async function DynamicPage({ params }: { params: Promise<{ slug: string[] }> }) {
   const { slug: segments } = await params
@@ -36,11 +14,9 @@ export default async function DynamicPage({ params }: { params: Promise<{ slug: 
 
     if (VALID_TYPES.includes(slugLower)) {
       const posts = await getPublishedPosts()
-      const postsWithContent = await Promise.all(posts.map(serializePost))
-      const displayType = segments[0].charAt(0).toUpperCase() + segments[0].slice(1)
       return (
         <div className="w-full max-w-6xl mx-auto px-4 py-8 overflow-x-hidden">
-          <MDXBlog initialPosts={JSON.parse(JSON.stringify(postsWithContent))} initialType={displayType} />
+          <MDXBlog initialPosts={JSON.parse(JSON.stringify(posts))} initialType={segments[0].charAt(0).toUpperCase() + segments[0].slice(1)} />
         </div>
       )
     }
@@ -62,14 +38,13 @@ export default async function DynamicPage({ params }: { params: Promise<{ slug: 
       notFound()
     }
 
-    // Fetch single post directly instead of loading all posts
     const post = await getPostBySlug(slugSeg)
 
     if (!post || post.type.toLowerCase() !== typeSeg.toLowerCase()) {
       notFound()
     }
 
-    const fullPost = await serializePost(post)
+    const fullPost = await serializePostContent(post)
 
     return <SlugPageClient post={JSON.parse(JSON.stringify(fullPost))} />
   }
