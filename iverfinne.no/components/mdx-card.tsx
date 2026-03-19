@@ -317,7 +317,6 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
                       src={image}
                       alt=""
                       fill
-                      unoptimized
                       className="object-cover"
                       sizes="176px"
                     />
@@ -337,7 +336,6 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
                       src={bookCover}
                       alt={`Omslag for ${post.title}`}
                       fill
-                      unoptimized
                       className="object-cover"
                       sizes="(max-width: 640px) 80px, 96px"
                     />
@@ -392,7 +390,6 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
                       src={projectThumb}
                       alt=""
                       fill
-                      unoptimized
                       className="object-cover"
                       sizes="80px"
                     />

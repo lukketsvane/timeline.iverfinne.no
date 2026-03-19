@@ -8,6 +8,23 @@ const notion = new Client({
   auth: process.env.NOTION_API_KEY,
 });
 
+// Proxy Notion S3 URLs through our API to prevent expiration
+function proxyImageUrl(url: string | undefined): string | undefined {
+  if (!url) return url;
+  if (url.includes('s3.us-west-2.amazonaws.com') || url.includes('s3.amazonaws.com')) {
+    return `/api/notion-image?url=${encodeURIComponent(url)}`;
+  }
+  return url;
+}
+
+// Replace all Notion S3 image URLs in markdown content
+function proxyMarkdownImages(content: string): string {
+  return content.replace(
+    /!\[([^\]]*)\]\((https:\/\/[^\s)]*s3[^\s)]*amazonaws\.com[^\s)]*)\)/g,
+    (_, alt, url) => `![${alt}](/api/notion-image?url=${encodeURIComponent(url)})`
+  );
+}
+
 const n2m = new NotionToMarkdown({ notionClient: notion });
 
 // Custom block transformers for rich Notion formatting
@@ -226,22 +243,22 @@ function getPageProperties(page: any) {
   }
   
   // Prøv å finne eit bilete (omslag) på fleire måtar
-  let image = getUrl(["Omslag", "Cover", "Bilete", "Thumbnail"]) || getAnyImageUrl() || undefined;
-  
+  let image = proxyImageUrl(getUrl(["Omslag", "Cover", "Bilete", "Thumbnail"]) || getAnyImageUrl() || undefined);
+
   if (!image && page.cover) {
     if (page.cover.type === "external") {
-      image = page.cover.external.url;
+      image = proxyImageUrl(page.cover.external.url);
     } else if (page.cover.type === "file") {
-      image = page.cover.file.url;
+      image = proxyImageUrl(page.cover.file.url);
     }
   }
 
   let icon: string | undefined = undefined;
   if (page.icon) {
     if (page.icon.type === "external") {
-      icon = page.icon.external.url;
+      icon = proxyImageUrl(page.icon.external.url);
     } else if (page.icon.type === "file") {
-      icon = page.icon.file.url;
+      icon = proxyImageUrl(page.icon.file.url);
     } else if (page.icon.type === "emoji") {
       icon = page.icon.emoji;
     }
@@ -330,7 +347,7 @@ export const getPublishedPosts = unstable_cache(
               const images = blocks.results
                 .filter((b: any) => b.type === 'image')
                 .map((b: any) => ({
-                  src: b.image.type === 'external' ? b.image.external.url : b.image.file.url,
+                  src: proxyImageUrl(b.image.type === 'external' ? b.image.external.url : b.image.file.url)!,
                   alt: b.image.caption?.[0]?.plain_text || props.title
                 }));
               if (images.length > 0) thumbnails = images;
@@ -367,7 +384,7 @@ export const getPostContent = unstable_cache(
   async (pageId: string): Promise<string> => {
     const mdblocks = await n2m.pageToMarkdown(pageId);
     const mdObject = n2m.toMarkdownString(mdblocks);
-    return mdObject.parent || "";
+    return proxyMarkdownImages(mdObject.parent || "");
   },
   ['post-content'],
   { revalidate: 60, tags: ['posts'] }
@@ -376,7 +393,7 @@ export const getPostContent = unstable_cache(
 export async function getPostContentDirect(pageId: string): Promise<string> {
   const mdblocks = await n2m.pageToMarkdown(pageId);
   const mdObject = n2m.toMarkdownString(mdblocks);
-  return mdObject.parent || "";
+  return proxyMarkdownImages(mdObject.parent || "");
 }
 
 export async function getPostIdBySlug(slug: string): Promise<string | null> {
@@ -425,7 +442,7 @@ export async function getPostBySlug(slug: string): Promise<Post | null> {
     const images = blocks.results
       .filter((b: any) => b.type === 'image')
       .map((b: any) => ({
-        src: b.image.type === 'external' ? b.image.external.url : b.image.file.url,
+        src: proxyImageUrl(b.image.type === 'external' ? b.image.external.url : b.image.file.url)!,
         alt: b.image.caption?.[0]?.plain_text || props.title
       }));
     if (images.length > 0) thumbnails = images;
