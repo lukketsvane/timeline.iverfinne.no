@@ -1,6 +1,10 @@
 // Notion API client library
 import { Client } from "@notionhq/client";
 import { NotionToMarkdown } from "notion-to-md";
+import { serialize } from "next-mdx-remote/serialize";
+import type { MDXRemoteSerializeResult } from "next-mdx-remote";
+import remarkGfm from "remark-gfm";
+import rehypePrismPlus from "rehype-prism-plus";
 import { Post } from "@/types/post";
 // No unstable_cache — route-level revalidate=60 handles caching
 
@@ -374,17 +378,7 @@ export async function getPublishedPosts(): Promise<Post[]> {
           const props = getPageProperties(page);
           let thumbnails = props.image ? [{ src: props.image, alt: props.title }] : [];
           if (props.type === "Bilete") {
-            const blocks = await withRetry(() => notion.blocks.children.list({ block_id: page.id }));
-            const images = blocks.results
-              .filter((b: any) => b.type === 'image')
-              .map((b: any) => ({
-                // Use stable block ID proxy — no expiring S3 URLs
-                src: b.image.type === 'external'
-                  ? b.image.external.url
-                  : proxyBlockImage(b.id),
-                alt: b.image.caption?.[0]?.plain_text || props.title
-              }));
-            if (images.length > 0) thumbnails = images;
+            thumbnails = await fetchBileteThumbnails(page.id, props.title, props.image);
           }
           // Fetch OG metadata for Lenkje posts
           let ogData: { ogTitle?: string; ogDescription?: string; ogImage?: string } = {};
@@ -417,10 +411,46 @@ export async function getPostContent(pageId: string): Promise<string> {
   return proxyMarkdownImages(mdObject.parent || "");
 }
 
-export async function getPostContentDirect(pageId: string): Promise<string> {
-  const mdblocks = await n2m.pageToMarkdown(pageId);
-  const mdObject = n2m.toMarkdownString(mdblocks);
-  return proxyMarkdownImages(mdObject.parent || "");
+// Shared MDX serialization — single source of truth for all serialize calls
+export async function serializeMarkdown(content: string): Promise<MDXRemoteSerializeResult> {
+  return serialize(content, {
+    mdxOptions: {
+      remarkPlugins: [remarkGfm],
+      rehypePlugins: [[rehypePrismPlus, { ignoreMissing: true }]],
+      format: 'mdx',
+    },
+    scope: getSafeScope(content),
+  });
+}
+
+export async function serializePostContent(post: Post): Promise<Post & { serialized?: MDXRemoteSerializeResult }> {
+  if (!post.id) return post;
+  try {
+    const content = await getPostContent(post.id);
+    const serialized = await serializeMarkdown(content);
+    return { ...post, content, serialized };
+  } catch (e) {
+    console.error(`Error serializing post ${post.id}:`, e);
+    return post;
+  }
+}
+
+// Shared Bilete thumbnail extraction
+async function fetchBileteThumbnails(
+  pageId: string,
+  fallbackTitle: string,
+  fallbackImage?: string
+): Promise<{ src: string; alt: string }[]> {
+  let thumbnails = fallbackImage ? [{ src: fallbackImage, alt: fallbackTitle }] : [];
+  const blocks = await withRetry(() => notion.blocks.children.list({ block_id: pageId }));
+  const images = blocks.results
+    .filter((b: any) => b.type === 'image')
+    .map((b: any) => ({
+      src: b.image.type === 'external' ? b.image.external.url : proxyBlockImage(b.id),
+      alt: b.image.caption?.[0]?.plain_text || fallbackTitle,
+    }));
+  if (images.length > 0) thumbnails = images;
+  return thumbnails;
 }
 
 export async function getPostIdBySlug(slug: string): Promise<string | null> {
@@ -465,16 +495,7 @@ export async function getPostBySlug(slug: string): Promise<Post | null> {
   const content = await getPostContent(page.id);
   let thumbnails = props.image ? [{ src: props.image, alt: props.title }] : [];
   if (props.type === "Bilete") {
-    const blocks = await withRetry(() => notion.blocks.children.list({ block_id: page.id }));
-    const images = blocks.results
-      .filter((b: any) => b.type === 'image')
-      .map((b: any) => ({
-        src: b.image.type === 'external'
-          ? b.image.external.url
-          : proxyBlockImage(b.id),
-        alt: b.image.caption?.[0]?.plain_text || props.title
-      }));
-    if (images.length > 0) thumbnails = images;
+    thumbnails = await fetchBileteThumbnails(page.id, props.title, props.image);
   }
   return {
     ...props,

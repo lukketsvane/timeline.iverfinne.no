@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getPublishedPosts, getPostContent, getSafeScope } from '@/lib/notion'
-import { serialize } from 'next-mdx-remote/serialize'
-import remarkGfm from 'remark-gfm'
+import { getPublishedPosts, serializePostContent } from '@/lib/notion'
 
 export const dynamic = 'force-dynamic'
 
@@ -19,20 +17,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(posts)
     }
 
-    // Return posts with pre-serialized content
-    const postsWithContent = await Promise.all(posts.map(async (post) => {
-      if (!post.id) return post
-      try {
-        const content = await getPostContent(post.id)
-        const serialized = await serialize(content, {
-          mdxOptions: { remarkPlugins: [remarkGfm], format: 'mdx' },
-          scope: getSafeScope(content)
-        })
-        return { ...post, content, serialized }
-      } catch {
-        return post
-      }
-    }))
+    const postsWithContent = await Promise.all(posts.map(serializePostContent))
 
     return NextResponse.json(postsWithContent)
   } catch (error: any) {
