@@ -91,7 +91,7 @@ export function AudioPlayer({ src, title, className = '' }: AudioPlayerProps) {
 
   return (
     <div
-      className={`flex items-center gap-3 rounded-full bg-gray-100 dark:bg-gray-800/80 px-3 py-2 select-none ${className}`}
+      className={`inline-flex items-center gap-1.5 rounded-full bg-gray-100/80 dark:bg-gray-800/50 px-2 py-1 select-none ${className}`}
       onClick={(e) => e.stopPropagation()}
     >
       <audio ref={audioRef} src={src} preload="metadata" />
@@ -99,7 +99,7 @@ export function AudioPlayer({ src, title, className = '' }: AudioPlayerProps) {
       {/* Play/Pause button */}
       <button
         onClick={togglePlay}
-        className="w-8 h-8 flex items-center justify-center rounded-full bg-foreground text-background shrink-0 hover:opacity-80 transition-opacity"
+        className="w-5 h-5 flex items-center justify-center rounded-full bg-foreground/80 text-background shrink-0 hover:bg-foreground transition-colors"
         aria-label={isPlaying ? 'Pause' : 'Spel av'}
       >
         <AnimatePresence mode="wait" initial={false}>
@@ -110,7 +110,7 @@ export function AudioPlayer({ src, title, className = '' }: AudioPlayerProps) {
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.5, opacity: 0 }}
               transition={{ duration: 0.15 }}
-              width="14" height="14" viewBox="0 0 14 14" fill="currentColor"
+              width="10" height="10" viewBox="0 0 14 14" fill="currentColor"
             >
               <rect x="2" y="1" width="3.5" height="12" rx="1" />
               <rect x="8.5" y="1" width="3.5" height="12" rx="1" />
@@ -122,7 +122,7 @@ export function AudioPlayer({ src, title, className = '' }: AudioPlayerProps) {
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.5, opacity: 0 }}
               transition={{ duration: 0.15 }}
-              width="14" height="14" viewBox="0 0 14 14" fill="currentColor"
+              width="10" height="10" viewBox="0 0 14 14" fill="currentColor"
             >
               <path d="M3 1.5v11l9-5.5z" />
             </motion.svg>
@@ -131,26 +131,26 @@ export function AudioPlayer({ src, title, className = '' }: AudioPlayerProps) {
       </button>
 
       {/* Progress bar */}
-      <div className="flex-1 flex items-center gap-2 min-w-0">
-        <span className="text-[11px] tabular-nums text-muted-foreground w-8 text-right shrink-0">
+      <div className="flex items-center gap-1.5 min-w-0">
+        <span className="text-[10px] tabular-nums text-muted-foreground/70 w-6 text-right shrink-0">
           {formatTime(currentTime)}
         </span>
         <div
           ref={progressRef}
-          className="flex-1 h-1 bg-gray-300 dark:bg-gray-600 rounded-full cursor-pointer relative group"
+          className="w-24 h-0.5 bg-gray-300/60 dark:bg-gray-600/40 rounded-full cursor-pointer relative group"
           onClick={handleProgressClick}
           onPointerDown={handlePointerDown}
         >
           <div
-            className="absolute inset-y-0 left-0 bg-foreground rounded-full transition-[width] duration-75"
+            className="absolute inset-y-0 left-0 bg-foreground/60 rounded-full transition-[width] duration-75"
             style={{ width: `${progress}%` }}
           />
           <div
-            className="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-foreground rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"
+            className="absolute top-1/2 -translate-y-1/2 w-2 h-2 bg-foreground/60 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
             style={{ left: `${progress}%`, transform: `translate(-50%, -50%)` }}
           />
         </div>
-        <span className="text-[11px] tabular-nums text-muted-foreground w-8 shrink-0">
+        <span className="text-[10px] tabular-nums text-muted-foreground/70 w-6 shrink-0">
           {formatTime(duration)}
         </span>
       </div>
