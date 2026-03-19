@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { revalidateTag } from 'next/cache'
 import { revalidatePath } from 'next/cache'
 
 export async function POST(request: NextRequest) {
@@ -21,13 +20,10 @@ export async function POST(request: NextRequest) {
     console.log('[webhook] received:', eventType, 'entity:', entityId)
     console.log('[webhook] payload:', JSON.stringify(body).slice(0, 500))
 
-    // Invalidate all cached Notion data
-    revalidateTag('posts')
-
-    // Revalidate all pages that depend on posts
+    // Revalidate all pages — no unstable_cache, just route cache
     revalidatePath('/', 'layout')
 
-    console.log('[webhook] revalidated tags and paths')
+    console.log('[webhook] revalidated all paths')
     return NextResponse.json({
       ok: true,
       revalidated: true,

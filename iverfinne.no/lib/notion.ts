@@ -2,13 +2,25 @@
 import { Client } from "@notionhq/client";
 import { NotionToMarkdown } from "notion-to-md";
 import { Post } from "@/types/post";
-import { unstable_cache } from 'next/cache';
+// No unstable_cache — route-level revalidate=60 handles caching
 
 const notion = new Client({
   auth: process.env.NOTION_API_KEY,
 });
 
-// Proxy Notion S3 URLs through our API to prevent expiration
+// Proxy Notion images through our API using stable identifiers
+// Block images: /api/notion-image?block=<block-id>
+// Page covers:  /api/notion-image?page=<page-id>&type=cover
+// Page icons:   /api/notion-image?page=<page-id>&type=icon
+// Fallback:     /api/notion-image?url=<encoded-url> (for non-Notion URLs)
+function proxyBlockImage(blockId: string): string {
+  return `/api/notion-image?block=${blockId}`;
+}
+
+function proxyPageImage(pageId: string, type: 'cover' | 'icon'): string {
+  return `/api/notion-image?page=${pageId}&type=${type}`;
+}
+
 function proxyImageUrl(url: string | undefined): string | undefined {
   if (!url) return url;
   if (url.includes('s3.us-west-2.amazonaws.com') || url.includes('s3.amazonaws.com')) {
@@ -17,7 +29,8 @@ function proxyImageUrl(url: string | undefined): string | undefined {
   return url;
 }
 
-// Replace all Notion S3 image URLs in markdown content
+// Replace Notion S3 image URLs in markdown — these still use URL-based proxy
+// since we don't have block IDs in markdown content
 function proxyMarkdownImages(content: string): string {
   return content.replace(
     /!\[([^\]]*)\]\((https:\/\/[^\s)]*s3[^\s)]*amazonaws\.com[^\s)]*)\)/g,
@@ -247,18 +260,19 @@ function getPageProperties(page: any) {
 
   if (!image && page.cover) {
     if (page.cover.type === "external") {
-      image = proxyImageUrl(page.cover.external.url);
+      image = page.cover.external.url;
     } else if (page.cover.type === "file") {
-      image = proxyImageUrl(page.cover.file.url);
+      // S3 URL expires — use stable page-based proxy
+      image = proxyPageImage(page.id, 'cover');
     }
   }
 
   let icon: string | undefined = undefined;
   if (page.icon) {
     if (page.icon.type === "external") {
-      icon = proxyImageUrl(page.icon.external.url);
+      icon = page.icon.external.url;
     } else if (page.icon.type === "file") {
-      icon = proxyImageUrl(page.icon.file.url);
+      icon = proxyPageImage(page.id, 'icon');
     } else if (page.icon.type === "emoji") {
       icon = page.icon.emoji;
     }
@@ -317,78 +331,73 @@ async function fetchOgMetadata(url: string): Promise<{ ogTitle?: string; ogDescr
   }
 }
 
-export const getPublishedPosts = unstable_cache(
-  async (): Promise<Post[]> => {
-    const databaseId = getDatabaseId();
-    try {
-      const response = await notion.databases.query({
-        database_id: databaseId,
-        filter: {
-          or: [
-            { property: "Status", status: { equals: "Ferdig" } },
-            { property: "Status", status: { equals: "Complete" } }
-          ]
+export async function getPublishedPosts(): Promise<Post[]> {
+  const databaseId = getDatabaseId();
+  try {
+    const response = await notion.databases.query({
+      database_id: databaseId,
+      filter: {
+        or: [
+          { property: "Status", status: { equals: "Ferdig" } },
+          { property: "Status", status: { equals: "Complete" } }
+        ]
+      },
+      sorts: [
+        {
+          property: "Dato",
+          direction: "descending",
         },
-        sorts: [
-          {
-            property: "Dato",
-            direction: "descending",
-          },
-        ],
-      });
+      ],
+    });
 
-      const posts = await Promise.all(response.results
-        .map(async (page): Promise<Post | null> => {
-          try {
-            const props = getPageProperties(page);
-            let thumbnails = props.image ? [{ src: props.image, alt: props.title }] : [];
-            if (props.type === "Bilete") {
-              const blocks = await notion.blocks.children.list({ block_id: page.id });
-              const images = blocks.results
-                .filter((b: any) => b.type === 'image')
-                .map((b: any) => ({
-                  src: proxyImageUrl(b.image.type === 'external' ? b.image.external.url : b.image.file.url)!,
-                  alt: b.image.caption?.[0]?.plain_text || props.title
-                }));
-              if (images.length > 0) thumbnails = images;
-            }
-            // Fetch OG metadata for Lenkje posts
-            let ogData: { ogTitle?: string; ogDescription?: string; ogImage?: string } = {};
-            if (props.type === "Lenkje" && props.url) {
-              ogData = await fetchOgMetadata(props.url);
-            }
-
-            return {
-              ...props,
-              content: "",
-              thumbnails,
-              ...ogData,
-            };
-          } catch (e) {
-            console.error(`Error processing Notion page ${page.id}:`, e);
-            return null;
+    const posts = await Promise.all(response.results
+      .map(async (page): Promise<Post | null> => {
+        try {
+          const props = getPageProperties(page);
+          let thumbnails = props.image ? [{ src: props.image, alt: props.title }] : [];
+          if (props.type === "Bilete") {
+            const blocks = await notion.blocks.children.list({ block_id: page.id });
+            const images = blocks.results
+              .filter((b: any) => b.type === 'image')
+              .map((b: any) => ({
+                // Use stable block ID proxy — no expiring S3 URLs
+                src: b.image.type === 'external'
+                  ? b.image.external.url
+                  : proxyBlockImage(b.id),
+                alt: b.image.caption?.[0]?.plain_text || props.title
+              }));
+            if (images.length > 0) thumbnails = images;
           }
-        }));
+          // Fetch OG metadata for Lenkje posts
+          let ogData: { ogTitle?: string; ogDescription?: string; ogImage?: string } = {};
+          if (props.type === "Lenkje" && props.url) {
+            ogData = await fetchOgMetadata(props.url);
+          }
 
-      return posts.filter((post): post is Post => post !== null);
-    } catch (error: any) {
-      console.error("Notion API error:", error);
-      throw error;
-    }
-  },
-  ['published-posts'],
-  { revalidate: 60, tags: ['posts'] }
-);
+          return {
+            ...props,
+            content: "",
+            thumbnails,
+            ...ogData,
+          };
+        } catch (e) {
+          console.error(`Error processing Notion page ${page.id}:`, e);
+          return null;
+        }
+      }));
 
-export const getPostContent = unstable_cache(
-  async (pageId: string): Promise<string> => {
-    const mdblocks = await n2m.pageToMarkdown(pageId);
-    const mdObject = n2m.toMarkdownString(mdblocks);
-    return proxyMarkdownImages(mdObject.parent || "");
-  },
-  ['post-content'],
-  { revalidate: 60, tags: ['posts'] }
-);
+    return posts.filter((post): post is Post => post !== null);
+  } catch (error: any) {
+    console.error("Notion API error:", error);
+    throw error;
+  }
+}
+
+export async function getPostContent(pageId: string): Promise<string> {
+  const mdblocks = await n2m.pageToMarkdown(pageId);
+  const mdObject = n2m.toMarkdownString(mdblocks);
+  return proxyMarkdownImages(mdObject.parent || "");
+}
 
 export async function getPostContentDirect(pageId: string): Promise<string> {
   const mdblocks = await n2m.pageToMarkdown(pageId);
@@ -442,7 +451,9 @@ export async function getPostBySlug(slug: string): Promise<Post | null> {
     const images = blocks.results
       .filter((b: any) => b.type === 'image')
       .map((b: any) => ({
-        src: proxyImageUrl(b.image.type === 'external' ? b.image.external.url : b.image.file.url)!,
+        src: b.image.type === 'external'
+          ? b.image.external.url
+          : proxyBlockImage(b.id),
         alt: b.image.caption?.[0]?.plain_text || props.title
       }));
     if (images.length > 0) thumbnails = images;
