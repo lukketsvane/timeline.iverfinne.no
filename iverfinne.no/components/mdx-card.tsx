@@ -381,6 +381,12 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
                   </time>
                   <p className="text-muted-foreground text-sm font-serif">{post.description}</p>
                   {renderTags()}
+                  {/* Audio player for posts with lyd */}
+                  {post.lyd && post.type !== "Lenkje" && (
+                    <div className="mt-2">
+                      <AudioPlayer src={post.lyd} title={post.title} />
+                    </div>
+                  )}
                 </div>
 
                 {/* Project thumbnail - Right Aligned */}
@@ -404,13 +410,6 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
                     {readTime} min
                   </div>
                 )}
-              </div>
-            )}
-
-            {/* Audio player for posts with lyd */}
-            {post.lyd && post.type !== "Lenkje" && (
-              <div className="mt-1">
-                <AudioPlayer src={post.lyd} title={post.title} />
               </div>
             )}
 

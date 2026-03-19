@@ -91,7 +91,7 @@ export function AudioPlayer({ src, title, className = '' }: AudioPlayerProps) {
 
   return (
     <div
-      className={`inline-flex items-center gap-1.5 rounded-full bg-gray-100/80 dark:bg-gray-800/50 px-2 py-1 select-none ${className}`}
+      className={`inline-flex items-center gap-1.5 select-none ${className}`}
       onClick={(e) => e.stopPropagation()}
     >
       <audio ref={audioRef} src={src} preload="metadata" />
