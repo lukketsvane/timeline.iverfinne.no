@@ -164,6 +164,7 @@ export function ImageGallery({ images = [], className, initialIndex = null, onIn
                   key={index}
                   src={image.src}
                   alt={image.alt}
+                  loading="lazy"
                   onClick={(e) => { e.stopPropagation(); goTo(index) }}
                   className="h-[250px] sm:h-[350px] w-auto rounded-lg object-cover cursor-pointer hover:brightness-90 active:brightness-75 transition-[filter] duration-150"
                   style={{ maxWidth: 'min(800px, 85vw)' }}
