@@ -302,6 +302,17 @@ function getPageProperties(page: any) {
     }
   }
 
+  // Lyd (audio) — files property from Notion
+  const getLyd = () => {
+    const lydProp = findProp("lyd");
+    if (!lydProp || !lydProp.files || !Array.isArray(lydProp.files) || lydProp.files.length === 0) return undefined;
+    const file = lydProp.files[0];
+    if (file.type === "file") return file.file.url;
+    if (file.type === "external") return file.external.url;
+    return undefined;
+  };
+  const lyd = getLyd();
+
   const uid = `${type}-${slug}`;
 
   return {
@@ -315,6 +326,7 @@ function getPageProperties(page: any) {
     tags,
     image,
     url,
+    lyd,
     icon
   };
 }
