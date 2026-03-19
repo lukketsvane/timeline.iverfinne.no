@@ -313,12 +313,11 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
                 </div>
                 {image && (
                   <div className="relative w-32 sm:w-44 shrink-0 bg-gray-100 dark:bg-gray-800">
-                    <NextImage
+                    {/* Use plain <img> — ogImage is an arbitrary external URL not in remotePatterns */}
+                    <img
                       src={image}
                       alt=""
-                      fill
-                      className="object-cover"
-                      sizes="176px"
+                      className="object-cover w-full h-full"
                     />
                   </div>
                 )}
@@ -338,6 +337,7 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
                       fill
                       className="object-cover"
                       sizes="(max-width: 640px) 80px, 96px"
+                      unoptimized={bookCover.startsWith('/api/')}
                     />
                   </div>
                 )}
@@ -392,6 +392,7 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
                       fill
                       className="object-cover"
                       sizes="80px"
+                      unoptimized={projectThumb.startsWith('/api/')}
                     />
                   </div>
                 )}
@@ -443,6 +444,7 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
                           alt={img.alt}
                           fill
                           className="object-contain"
+                          unoptimized={img.src.startsWith('/api/')}
                         />
                       )}
                       
