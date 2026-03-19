@@ -124,7 +124,7 @@ export default function SlugPageClient({ post }: SlugPageClientProps) {
         </header>
 
         {post.lyd && (
-          <div className="mb-8">
+          <div className="mb-6">
             <AudioPlayer src={post.lyd} title={post.title} />
           </div>
         )}

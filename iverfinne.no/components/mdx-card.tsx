@@ -409,7 +409,7 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
 
             {/* Audio player for posts with lyd */}
             {post.lyd && post.type !== "Lenkje" && (
-              <div className="mt-2 mb-1 max-w-md">
+              <div className="mt-1">
                 <AudioPlayer src={post.lyd} title={post.title} />
               </div>
             )}
