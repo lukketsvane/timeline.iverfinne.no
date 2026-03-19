@@ -210,8 +210,8 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
 
   const renderTags = () => {
     return (
-      <div className="flex gap-1.5 flex-wrap mt-2">
-        <Badge 
+      <div className="flex gap-1.5 flex-wrap mt-2 items-center">
+        <Badge
           className={cn(
             "text-xs px-2 py-0.5 rounded-full font-medium transition-colors border",
             getTagColor(post.type)
@@ -220,7 +220,7 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
           {post.type}
         </Badge>
         {Array.isArray(post.tags) && post.tags.map((tag) => (
-          <Badge 
+          <Badge
             key={`${post.uid}-tag-${tag}`}
             className={cn(
               "text-xs px-2 py-0.5 rounded-sm font-medium transition-colors border",
@@ -230,6 +230,9 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
             {tag}
           </Badge>
         ))}
+        {post.lyd && post.type !== "Lenkje" && (
+          <AudioPlayer src={post.lyd} title={post.title} />
+        )}
       </div>
     )
   }
@@ -381,12 +384,6 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
                   </time>
                   <p className="text-muted-foreground text-sm font-serif">{post.description}</p>
                   {renderTags()}
-                  {/* Audio player for posts with lyd */}
-                  {post.lyd && post.type !== "Lenkje" && (
-                    <div className="mt-2">
-                      <AudioPlayer src={post.lyd} title={post.title} />
-                    </div>
-                  )}
                 </div>
 
                 {/* Project thumbnail - Right Aligned */}
