@@ -1,47 +1,64 @@
 # iverfinne.no
 
-Personleg nettstad og portefølje driven av Notion API.
+Personleg nettstad og portefølje der innhald blir skrive i Notion og publisert automatisk når **Status** er sett til **Ferdig**.
+
+## Oversikt (flyt)
+> **Publiseringsflyt**: Skriv i Notion → set **Status = Ferdig** → Make pollar kvart 15. minutt → nettstaden revaliderer og oppdaterer seg
+
+Dette prosjektet er bygd for **ISR (Incremental Static Regeneration)**, der nettsida kan revalidere statiske sider utan full rebuild.
 
 ## Arkitektur
-- **Rammeverk:** Next.js 16 (App Router) med React 19.
-- **Innhald:** Henta direkte frå Notion-database via `@notionhq/client`.
-- **Rendering:** MDX-prosessering med `next-mdx-remote` (v6+).
-- **Yting:** Server-side caching med `unstable_cache` og førehandsserialisering for umiddelbar respons ved utviding av innlegg.
-- **Navigasjon:** Statisk genererte ruter (`/[slug]`) for lynrask lasting.
-- **Styling:** Tailwind CSS med Framer Motion for mjuke overgangar.
+- **Rammeverk:** Next.js (App Router)
+- **Innhaldskjelde:** Notion database via `@notionhq/client`
+- **Publisering:** Berre element med **Status = Ferdig** blir publiserte
+- **Revalidering:** Triggerast via `GET /api/revalidate?secret=...`
+- **Synk:** Ein Make-automatisering pollar Notion-databasen kvart 15. minutt og triggar revalidering
 
 ## Datamodell (Notion)
-Databasen i Notion må ha følgjande eigenskapar:
+Notion-databasen må ha desse eigenskapane for at innhald skal kunne visast på nettstaden:
 
-| Eigenskap | Type | Skildring |
+| Eigenskap | Type | Merknad |
 | :--- | :--- | :--- |
-| **Namn** | title | Hovudtittel (påkravd) |
-| **Status** | status | `Å gjere`, `Under arbeid`, `Ferdig` (berre `Ferdig` blir publisert) |
-| **Type** | select | `Skriving`, `Bok`, `Prosjekt`, `Lenkje` |
+| **Namn** | title | Hovudtittel for innhaldet |
+| **Status** | status | Må vere **Ferdig** for publisering |
+| **Type** | select | `Skriving` · `Bok` · `Prosjekt` · `Lenkje` · `Bilete` · `Interaktiv` · `Presentasjon` |
 | **Dato** | date | Publiseringsdato |
-| **Merkelappar** | multi_select | Kategorisering (t.d. design, filosofi, 3D) |
-| **Slug** | rich_text | URL-identifikator (t.d. `art-i-materialhistorie`) |
-| **Samandrag** | rich_text | Kort tekst for kortvisning |
+| **Slug** | text | URL-venleg slug, t.d. `mitt-innlegg`. Blir automatisk generert frå tittel om tom |
+| **Samandrag** | text | Kort samandrag for førehandsvising (valfritt) |
+| **Merkelappar** | multi_select | Kategorisering, t.d. `design`, `ai`, `d3js` (valfritt) |
 
-## Utvikling
-### Miljøvariablar
-Opprett `.env.local` i `iverfinne.no/`:
-- `NOTION_API_KEY`: Din interne integrasjonsnøkkel.
-- `NOTION_DATABASE_ID`: ID til Notion-databasen.
+### Om `Slug`
+- `Slug` bør vere stabil over tid når innlegget først er publisert.
+- Dersom feltet er tomt, blir slug generert frå tittelen (tilrådd for enkel flyt).
 
-### Køyr lokalt
-```bash
-cd iverfinne.no
-pnpm install
-pnpm run dev
-```
+## Synkronisering (Make)
+Nettstaden er laga for å bli revalidert automatisk med Make.
 
-## Struktur
-- `app/`: Ruter, API-punkt og globale stilar.
-- `components/`: UI-komponentar og MDX-oppsett.
-- `lib/`: Integrasjonar (Notion, tag-logikk) og verktøy.
-- `public/`: Statiske filer (ikoner, modellar).
-- `types/`: TypeScript-definisjonar.
+### Scenario
+**Namn:** `iverfinne.no – Notion → Revalidate`
 
-## Robusthet
-Innhaldet blir rendra med ein automatisk `getSafeScope` som fangar opp ord i krøllparentesar `{}` frå Notion og definerer dei som tomme strengar. Dette hindrar `ReferenceError` viss teksten inneheld JSX-liknande fragment.
+**Modul 1 — Notion: Watch Data Source Items**
+- Watch By: `Data Source`
+- Trigger By: `updated time`
+- Limit: `1`
+- Where to start: `From now on`
+
+**Modul 2 — HTTP: Make a request**
+- Method: `GET`
+- URL: `https://iverfinne.no/api/revalidate`
+- Query:
+	- `secret`: `REVALIDATION_SECRET`
+
+**Scheduler:** `Every 15 minutes` (må vere slått på i scenarioet)
+
+## Miljøvariablar
+Opprett `.env.local`:
+
+- `NOTION_API_KEY`  
+  Intern integrasjonsnøkkel (Notion).
+- `NOTION_DATABASE_ID`  
+  ID til Notion-databasen / data source som blir lest.
+- `REVALIDATION_SECRET`  
+  Hemmeleg nøkkel som må matche både Vercel env og Make query string.
+
+## Køyr lokalt
