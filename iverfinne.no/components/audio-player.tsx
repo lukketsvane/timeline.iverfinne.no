@@ -91,7 +91,7 @@ export function AudioPlayer({ src, title, className = '' }: AudioPlayerProps) {
 
   return (
     <div
-      className={`inline-flex items-center gap-1.5 rounded-full bg-gray-100/80 dark:bg-gray-800/50 px-2 py-1 select-none ${className}`}
+      className={`inline-flex items-center gap-1.5 select-none ${className}`}
       onClick={(e) => e.stopPropagation()}
     >
       <audio ref={audioRef} src={src} preload="metadata" />
@@ -99,7 +99,7 @@ export function AudioPlayer({ src, title, className = '' }: AudioPlayerProps) {
       {/* Play/Pause button */}
       <button
         onClick={togglePlay}
-        className="w-5 h-5 flex items-center justify-center rounded-full bg-foreground/80 text-background shrink-0 hover:bg-foreground transition-colors"
+        className="w-5 h-5 flex items-center justify-center text-foreground shrink-0 hover:text-foreground/70 transition-colors"
         aria-label={isPlaying ? 'Pause' : 'Spel av'}
       >
         <AnimatePresence mode="wait" initial={false}>
