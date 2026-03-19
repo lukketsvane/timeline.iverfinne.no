@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useRef, useEffect } from "react"
+import { useState, useMemo, useEffect } from "react"
 import NextImage from "next/image"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -9,6 +9,7 @@ import { MDXRemote } from 'next-mdx-remote'
 import type { MDXRemoteSerializeResult } from 'next-mdx-remote'
 import { motion, AnimatePresence } from 'framer-motion'
 import { cn } from "@/lib/utils"
+import { ImageGallery } from "@/components/image-gallery"
 import { 
   Link2, 
   Minus, 
@@ -191,7 +192,7 @@ function extractOutgoingLinks(content: string, postUrl?: string): SocialLink[] {
 }
 
 export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCardProps) {
-  const [enlargedImage, setEnlargedImage] = useState<string | null>(null)
+  const [enlargedImageIndex, setEnlargedImageIndex] = useState<number | null>(null)
   const bookCover = post.type === "Bok" ? (post.image || post.icon || getFirstImageFromContent(post.content)) : null
   const projectThumb = post.type === "Prosjekt" ? (post.image || getFirstImageFromContent(post.content)) : null
   const projectLinks = post.type === "Prosjekt" ? extractOutgoingLinks(post.content, post.url) : []
@@ -199,14 +200,11 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
   const figmaUrl = post.type === "Presentasjon" ? getFigmaEmbedUrl(post.content, post.url) : null
   const linkHostname = post.type === "Lenkje" && post.url ? (() => { try { return new URL(post.url).hostname.replace('www.', '') } catch { return '' } })() : ''
 
-  // Scroll lock + escape key for enlarged image
-  useEffect(() => {
-    if (!enlargedImage) return
-    document.body.style.overflow = 'hidden'
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setEnlargedImage(null) }
-    window.addEventListener('keydown', onKey)
-    return () => { document.body.style.overflow = ''; window.removeEventListener('keydown', onKey) }
-  }, [enlargedImage])
+  // Build list of navigable (non-.glb) images from thumbnails
+  const galleryImages = useMemo(() => {
+    if (!post.thumbnails) return []
+    return post.thumbnails.filter(img => !img.src.endsWith('.glb'))
+  }, [post.thumbnails])
 
   const renderTags = () => {
     return (
@@ -426,7 +424,8 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
                       onClick={(e) => {
                         if (post.type === "Bilete" && !img.src.endsWith('.glb')) {
                           e.stopPropagation()
-                          setEnlargedImage(img.src)
+                          const galleryIdx = galleryImages.findIndex(g => g.src === img.src)
+                          if (galleryIdx !== -1) setEnlargedImageIndex(galleryIdx)
                         }
                       }}
                     >
@@ -444,6 +443,8 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
                           alt={img.alt}
                           fill
                           className="object-contain"
+                          sizes="(max-width: 640px) 25vw, 155px"
+                          loading="lazy"
                           unoptimized={img.src.startsWith('/api/')}
                         />
                       )}
@@ -514,8 +515,8 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
                             }}
                           />
                         ) : (
-                          <div className="flex items-center justify-center p-4 text-muted-foreground italic">
-                            Lastar innhald...
+                          <div className="flex items-center justify-center p-8">
+                            <div className="h-5 w-5 rounded-full border-2 border-muted-foreground/20 border-t-muted-foreground/60 animate-spin" />
                           </div>
                         )}
                       </>
@@ -526,32 +527,15 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
             </AnimatePresence>
           </motion.article>
 
-          {/* Tap-to-enlarge lightbox */}
-          <AnimatePresence>
-            {enlargedImage && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.2, ease: [0.25, 0.1, 0.25, 1] }}
-                className="fixed inset-0 z-[200] flex items-center justify-center cursor-pointer"
-                style={{ backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)' }}
-                onClick={() => setEnlargedImage(null)}
-              >
-                <div className="absolute inset-0 bg-white/80 dark:bg-black/80" />
-                <motion.img
-                  src={enlargedImage}
-                  alt=""
-                  initial={{ scale: 0.9, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  exit={{ scale: 0.95, opacity: 0 }}
-                  transition={{ duration: 0.2, ease: [0.25, 0.1, 0.25, 1] }}
-                  className="relative z-10 max-w-[92vw] max-h-[90vh] object-contain rounded-lg select-none"
-                  draggable={false}
-                />
-              </motion.div>
-            )}
-          </AnimatePresence>
+          {/* Image gallery lightbox with navigation, gestures, keyboard support */}
+          {galleryImages.length > 0 && (
+            <ImageGallery
+              images={galleryImages}
+              viewerOnly
+              initialIndex={enlargedImageIndex}
+              onIndexChange={setEnlargedImageIndex}
+            />
+          )}
         </div>
       </div>
     </div>
