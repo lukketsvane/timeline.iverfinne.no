@@ -11,6 +11,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useEffect, useState } from 'react'
 import { fullPageMdxComponents } from '@/lib/mdx-components'
 import WebDesignKeys from '@/components/WebDesignKeys'
+import { AudioPlayer } from '@/components/audio-player'
 
 const components = {
   ...fullPageMdxComponents,
@@ -121,6 +122,12 @@ export default function SlugPageClient({ post }: SlugPageClientProps) {
             )}
           </div>
         </header>
+
+        {post.lyd && (
+          <div className="mb-8">
+            <AudioPlayer src={post.lyd} title={post.title} />
+          </div>
+        )}
 
         {post.type === "Bilete" && post.thumbnails && (
           <div className="mb-12 flex flex-col gap-4">

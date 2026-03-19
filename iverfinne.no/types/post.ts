@@ -10,6 +10,7 @@ export interface Post {
   image?: string
   content: string
   url?: string
+  lyd?: string
   icon?: string
   thumbnails?: { src: string; alt: string }[]
   ogTitle?: string

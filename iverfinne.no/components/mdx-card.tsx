@@ -50,6 +50,7 @@ import Link from 'next/link'
 import { getTagColor } from "@/lib/tag-utils"
 import { HtmlIframe } from "@/components/html-iframe"
 import { ModelViewer } from "@/components/model-viewer"
+import { AudioPlayer } from "@/components/audio-player"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { baseMdxComponents } from "@/lib/mdx-components"
@@ -83,6 +84,7 @@ interface Post {
   coverimage?: string
   content: string
   url?: string
+  lyd?: string
   icon?: string
   thumbnails?: { src: string; alt: string }[]
   ogTitle?: string
@@ -396,12 +398,19 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
                 )}
 
                 {/* Read time for Skriving */}
-                {post.type === "Skriving" && readTime > 0 && (
+                {post.type === "Skriving" && readTime > 0 && !post.lyd && (
                   <div className="shrink-0 flex items-center text-xs text-muted-foreground whitespace-nowrap pt-1">
                     <Clock className="w-3.5 h-3.5 mr-1" />
                     {readTime} min
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* Audio player for posts with lyd */}
+            {post.lyd && post.type !== "Lenkje" && (
+              <div className="mt-2 mb-1 max-w-md">
+                <AudioPlayer src={post.lyd} title={post.title} />
               </div>
             )}
 
