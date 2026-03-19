@@ -1,6 +1,6 @@
 export const revalidate = 60
 
-import { getPublishedPosts, getPostContent, getSafeScope, VALID_TYPES } from '@/lib/notion'
+import { getPublishedPosts, getPostBySlug, getPostContent, getSafeScope, VALID_TYPES } from '@/lib/notion'
 import { notFound, redirect } from 'next/navigation'
 import { serialize } from 'next-mdx-remote/serialize'
 import remarkGfm from 'remark-gfm'
@@ -62,12 +62,10 @@ export default async function DynamicPage({ params }: { params: Promise<{ slug: 
       notFound()
     }
 
-    const posts = await getPublishedPosts()
-    const post = posts.find(
-      p => p.slug === slugSeg && p.type.toLowerCase() === typeSeg.toLowerCase()
-    )
+    // Fetch single post directly instead of loading all posts
+    const post = await getPostBySlug(slugSeg)
 
-    if (!post || !post.id) {
+    if (!post || post.type.toLowerCase() !== typeSeg.toLowerCase()) {
       notFound()
     }
 

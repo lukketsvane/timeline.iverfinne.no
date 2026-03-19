@@ -8,6 +8,24 @@ const notion = new Client({
   auth: process.env.NOTION_API_KEY,
 });
 
+// Retry wrapper for Notion API calls that handles 429 rate limits
+async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error: any) {
+      if (error?.status === 429 && attempt < maxRetries) {
+        const delay = Math.pow(2, attempt + 1) * 1000; // 2s, 4s, 8s
+        console.warn(`Notion rate limited, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+      throw error;
+    }
+  }
+  throw new Error("Unreachable");
+}
+
 // Proxy Notion images through our API using stable identifiers
 // Block images: /api/notion-image?block=<block-id>
 // Page covers:  /api/notion-image?page=<page-id>&type=cover
@@ -55,7 +73,7 @@ n2m.setCustomTransformer("callout", async (block: any) => {
   let childContent = "";
   if (block.has_children) {
     try {
-      const children = await notion.blocks.children.list({ block_id: block.id });
+      const children = await withRetry(() => notion.blocks.children.list({ block_id: block.id }));
       const childMd = await n2m.blocksToMarkdown(children.results);
       const childStr = n2m.toMarkdownString(childMd);
       childContent = childStr.parent || "";
@@ -83,7 +101,7 @@ for (const level of [1, 2, 3] as const) {
       let childContent = "";
       if (block.has_children) {
         try {
-          const children = await notion.blocks.children.list({ block_id: block.id });
+          const children = await withRetry(() => notion.blocks.children.list({ block_id: block.id }));
           const childMd = await n2m.blocksToMarkdown(children.results);
           const childStr = n2m.toMarkdownString(childMd);
           childContent = childStr.parent || "";
@@ -334,7 +352,7 @@ async function fetchOgMetadata(url: string): Promise<{ ogTitle?: string; ogDescr
 export async function getPublishedPosts(): Promise<Post[]> {
   const databaseId = getDatabaseId();
   try {
-    const response = await notion.databases.query({
+    const response = await withRetry(() => notion.databases.query({
       database_id: databaseId,
       filter: {
         or: [
@@ -348,7 +366,7 @@ export async function getPublishedPosts(): Promise<Post[]> {
           direction: "descending",
         },
       ],
-    });
+    }));
 
     const posts = await Promise.all(response.results
       .map(async (page): Promise<Post | null> => {
@@ -356,7 +374,7 @@ export async function getPublishedPosts(): Promise<Post[]> {
           const props = getPageProperties(page);
           let thumbnails = props.image ? [{ src: props.image, alt: props.title }] : [];
           if (props.type === "Bilete") {
-            const blocks = await notion.blocks.children.list({ block_id: page.id });
+            const blocks = await withRetry(() => notion.blocks.children.list({ block_id: page.id }));
             const images = blocks.results
               .filter((b: any) => b.type === 'image')
               .map((b: any) => ({
@@ -407,7 +425,7 @@ export async function getPostContentDirect(pageId: string): Promise<string> {
 
 export async function getPostIdBySlug(slug: string): Promise<string | null> {
     const databaseId = getDatabaseId();
-    const response = await notion.databases.query({
+    const response = await withRetry(() => notion.databases.query({
         database_id: databaseId,
         filter: {
             and: [
@@ -417,17 +435,17 @@ export async function getPostIdBySlug(slug: string): Promise<string | null> {
                     { property: "Status", status: { equals: "Complete" } }
                   ]
                 },
-                { property: "Slug", rich_text: { equals: slug } } 
+                { property: "Slug", rich_text: { equals: slug } }
             ]
         }
-    });
+    }));
     if (response.results.length > 0) return response.results[0].id;
     return null;
 }
 
 export async function getPostBySlug(slug: string): Promise<Post | null> {
   const databaseId = getDatabaseId();
-  const response = await notion.databases.query({
+  const response = await withRetry(() => notion.databases.query({
     database_id: databaseId,
     filter: {
       and: [
@@ -440,14 +458,14 @@ export async function getPostBySlug(slug: string): Promise<Post | null> {
         { property: "Slug", rich_text: { equals: slug } }
       ]
     }
-  });
+  }));
   if (response.results.length === 0) return null;
   const page = response.results[0];
   const props = getPageProperties(page);
   const content = await getPostContent(page.id);
   let thumbnails = props.image ? [{ src: props.image, alt: props.title }] : [];
   if (props.type === "Bilete") {
-    const blocks = await notion.blocks.children.list({ block_id: page.id });
+    const blocks = await withRetry(() => notion.blocks.children.list({ block_id: page.id }));
     const images = blocks.results
       .filter((b: any) => b.type === 'image')
       .map((b: any) => ({
