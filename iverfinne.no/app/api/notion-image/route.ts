@@ -5,6 +5,31 @@ export const dynamic = 'force-dynamic'
 
 const notion = new Client({ auth: process.env.NOTION_API_KEY })
 
+// Allowed hostnames for the URL-based image proxy to prevent SSRF
+const ALLOWED_HOSTS = [
+  'prod-files-secure.s3.us-west-2.amazonaws.com',
+  's3.us-west-2.amazonaws.com',
+  's3.amazonaws.com',
+  'i.ibb.co',
+  'm.media-amazon.com',
+  'raw.githubusercontent.com',
+  'covers.openlibrary.org',
+  'images.unsplash.com',
+  'upload.wikimedia.org',
+]
+
+function isAllowedUrl(urlString: string): boolean {
+  try {
+    const parsed = new URL(urlString)
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return false
+    return ALLOWED_HOSTS.some(
+      host => parsed.hostname === host || parsed.hostname.endsWith('.' + host)
+    )
+  } catch {
+    return false
+  }
+}
+
 async function fetchAndReturn(imageUrl: string): Promise<Response> {
   const response = await fetch(imageUrl, { signal: AbortSignal.timeout(15000) })
   if (!response.ok) {
@@ -60,10 +85,10 @@ export async function GET(request: NextRequest) {
       return fetchAndReturn(imageUrl)
     }
 
-    // URL-based fallback (for S3 URLs in markdown content)
+    // URL-based fallback — fetch and serve external images
     if (url) {
-      if (!url.includes('s3.us-west-2.amazonaws.com') && !url.includes('s3.amazonaws.com')) {
-        return Response.redirect(url, 302)
+      if (!isAllowedUrl(url)) {
+        return new Response('URL not allowed', { status: 403 })
       }
       return fetchAndReturn(url)
     }

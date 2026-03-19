@@ -45,7 +45,9 @@ function proxyPageImage(pageId: string, type: 'cover' | 'icon'): string {
 
 function proxyImageUrl(url: string | undefined): string | undefined {
   if (!url) return url;
-  if (url.includes('s3.us-west-2.amazonaws.com') || url.includes('s3.amazonaws.com')) {
+  // Proxy all external URLs through our API so NextImage can serve them
+  // without needing every domain in remotePatterns
+  if (url.startsWith('http://') || url.startsWith('https://')) {
     return `/api/notion-image?url=${encodeURIComponent(url)}`;
   }
   return url;
@@ -282,7 +284,7 @@ function getPageProperties(page: any) {
 
   if (!image && page.cover) {
     if (page.cover.type === "external") {
-      image = page.cover.external.url;
+      image = proxyPageImage(page.id, 'cover');
     } else if (page.cover.type === "file") {
       // S3 URL expires — use stable page-based proxy
       image = proxyPageImage(page.id, 'cover');
@@ -446,7 +448,7 @@ async function fetchBileteThumbnails(
   const images = blocks.results
     .filter((b: any) => b.type === 'image')
     .map((b: any) => ({
-      src: b.image.type === 'external' ? b.image.external.url : proxyBlockImage(b.id),
+      src: proxyBlockImage(b.id),
       alt: b.image.caption?.[0]?.plain_text || fallbackTitle,
     }));
   if (images.length > 0) thumbnails = images;
