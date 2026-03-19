@@ -1,3 +1,5 @@
+export const revalidate = 60
+
 import HomePage from '@/components/home-page'
 import { getPublishedPosts, getPostContent, getSafeScope } from '@/lib/notion'
 import { serialize } from 'next-mdx-remote/serialize'

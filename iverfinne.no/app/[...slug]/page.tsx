@@ -1,3 +1,5 @@
+export const revalidate = 60
+
 import { getPublishedPosts, getPostContent, getSafeScope, VALID_TYPES } from '@/lib/notion'
 import { notFound, redirect } from 'next/navigation'
 import { serialize } from 'next-mdx-remote/serialize'
