@@ -336,7 +336,7 @@ export function getSafeScope(content: string): Record<string, string> {
 
 async function fetchOgMetadata(url: string): Promise<{ ogTitle?: string; ogDescription?: string; ogImage?: string }> {
   try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(5000), headers: { 'User-Agent': 'bot' } });
+    const res = await fetch(url, { signal: AbortSignal.timeout(3000), headers: { 'User-Agent': 'bot' } });
     if (!res.ok) return {};
     const html = await res.text();
     const get = (property: string) => {
@@ -428,7 +428,8 @@ export async function serializeMarkdown(content: string): Promise<MDXRemoteSeria
 export async function serializePostContent(post: Post): Promise<Post & { serialized?: MDXRemoteSerializeResult }> {
   if (!post.id) return post;
   try {
-    const content = await getPostContent(post.id);
+    // Reuse already-fetched content when available to avoid a second Notion API round-trip
+    const content = post.content || await getPostContent(post.id);
     const serialized = await serializeMarkdown(content);
     return { ...post, content, serialized };
   } catch (e) {

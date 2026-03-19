@@ -1,6 +1,6 @@
 export const revalidate = 60
 
-import { getPublishedPosts, getPostBySlug, serializePostContent, VALID_TYPES } from '@/lib/notion'
+import { getPublishedPosts, getPostBySlug, serializeMarkdown, VALID_TYPES } from '@/lib/notion'
 import { notFound, redirect } from 'next/navigation'
 import MDXBlog from '@/components/mdx-blog'
 import SlugPageClient from '@/components/slug-page-client'
@@ -44,7 +44,10 @@ export default async function DynamicPage({ params }: { params: Promise<{ slug: 
       notFound()
     }
 
-    const fullPost = await serializePostContent(post)
+    // post.content is already populated by getPostBySlug — serialize it directly
+    // to avoid a second round of Notion API calls inside serializePostContent
+    const serialized = await serializeMarkdown(post.content)
+    const fullPost = { ...post, serialized }
 
     return <SlugPageClient post={JSON.parse(JSON.stringify(fullPost))} />
   }
