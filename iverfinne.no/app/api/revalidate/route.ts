@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { revalidateTag } from 'next/cache'
 import { revalidatePath } from 'next/cache'
 
 export async function GET(request: NextRequest) {
@@ -9,7 +8,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid secret' }, { status: 401 })
   }
 
-  revalidateTag('posts')
   revalidatePath('/', 'layout')
 
   return NextResponse.json({
