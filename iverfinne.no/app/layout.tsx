@@ -16,6 +16,15 @@ const APP_DEFAULT_TITLE = 'iverfinne.no'
 const APP_TITLE_TEMPLATE = '%s - iverfinne.no'
 const APP_DESCRIPTION = 'Personleg nettside og blogg'
 
+// Global default social sharing image (1200x630, the size expected by
+// Facebook, Messenger, Discord, Slack, LinkedIn, Twitter/X, etc.)
+const OG_IMAGE = {
+  url: '/og-image.png',
+  width: 1200,
+  height: 630,
+  alt: APP_DEFAULT_TITLE,
+}
+
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
@@ -49,20 +58,23 @@ export const metadata: Metadata = {
   openGraph: {
     type: 'website',
     siteName: APP_NAME,
+    url: '/',
     title: {
       default: APP_DEFAULT_TITLE,
       template: APP_TITLE_TEMPLATE,
     },
     description: APP_DESCRIPTION,
     locale: 'nn_NO',
+    images: [OG_IMAGE],
   },
   twitter: {
-    card: 'summary',
+    card: 'summary_large_image',
     title: {
       default: APP_DEFAULT_TITLE,
       template: APP_TITLE_TEMPLATE,
     },
     description: APP_DESCRIPTION,
+    images: [OG_IMAGE.url],
   },
 }
 
