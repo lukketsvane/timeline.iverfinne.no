@@ -34,7 +34,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
     if (!post) return {}
 
-    const image = post.image || post.ogImage
+    // Fall back to the global default sharing image when a post has none, so
+    // every page always renders a large image card across platforms.
+    const image = post.image || post.ogImage || '/og-image.png'
     const description = post.description || `${post.title} — ${post.type} på iverfinne.no`
     const canonical = `/${post.type.toLowerCase()}/${post.slug}`
 
@@ -48,15 +50,16 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
         title: post.title,
         description,
         type: 'article',
+        url: canonical,
         publishedTime: post.date,
         authors: ['Iver Finne'],
-        ...(image && { images: [{ url: image }] }),
+        images: [{ url: image }],
       },
       twitter: {
-        card: image ? 'summary_large_image' : 'summary',
+        card: 'summary_large_image',
         title: post.title,
         description,
-        ...(image && { images: [image] }),
+        images: [image],
       },
     }
   }
