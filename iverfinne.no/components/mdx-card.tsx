@@ -291,39 +291,41 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
               const description = post.ogDescription || post.description
               const image = post.ogImage || post.image
               return (
-              <div className="flex border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden hover:border-gray-300 dark:hover:border-gray-600 transition-colors">
-                <div className="flex-1 p-3 sm:p-4 min-w-0 flex flex-col justify-center">
-                  <h2 className="text-base sm:text-lg font-semibold tracking-tight line-clamp-1 mb-1">
-                    {title}
-                  </h2>
-                  {description && (
-                    <p className="text-muted-foreground text-xs sm:text-sm line-clamp-2 mb-2">{description}</p>
-                  )}
-                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    {linkHostname && (
-                      <>
-                        <img
-                          src={`https://www.google.com/s2/favicons?domain=${linkHostname}&sz=16`}
-                          alt=""
-                          width={14}
-                          height={14}
-                          className="rounded-sm"
-                        />
-                        <span className="truncate">{linkHostname}</span>
-                      </>
-                    )}
-                  </div>
-                </div>
+              // Facebook Messenger-style link card: full-width image on top at the
+              // standard Open Graph aspect ratio (1.91:1), with the site/title/
+              // description below. This mirrors how Messenger, Facebook, etc. render
+              // shared links and avoids the previous side-image strip cropping.
+              <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden hover:border-gray-300 dark:hover:border-gray-600 transition-colors">
                 {image && (
-                  <div className="relative w-32 sm:w-44 shrink-0 bg-gray-100 dark:bg-gray-800">
+                  <div className="relative w-full aspect-[1.91/1] bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
                     {/* Use plain <img> — ogImage is an arbitrary external URL not in remotePatterns */}
                     <img
                       src={image}
                       alt=""
-                      className="object-cover w-full h-full"
+                      className="absolute inset-0 w-full h-full object-cover"
                     />
                   </div>
                 )}
+                <div className="p-3 sm:p-4 min-w-0 bg-gray-50 dark:bg-gray-800/40">
+                  {linkHostname && (
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1.5">
+                      <img
+                        src={`https://www.google.com/s2/favicons?domain=${linkHostname}&sz=16`}
+                        alt=""
+                        width={14}
+                        height={14}
+                        className="rounded-sm"
+                      />
+                      <span className="truncate uppercase tracking-wide">{linkHostname}</span>
+                    </div>
+                  )}
+                  <h2 className="text-base sm:text-lg font-semibold tracking-tight line-clamp-2 mb-1">
+                    {title}
+                  </h2>
+                  {description && (
+                    <p className="text-muted-foreground text-xs sm:text-sm line-clamp-2">{description}</p>
+                  )}
+                </div>
               </div>
               )
             })()}
