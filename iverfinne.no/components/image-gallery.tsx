@@ -156,7 +156,7 @@ export function ImageGallery({ images = [], className, initialIndex = null, onIn
     <>
       {/* Thumbnail strip */}
       {!viewerOnly && (
-        <Card className={cn("w-full max-w-[100vw] overflow-hidden border-none bg-transparent shadow-none", className)}>
+        <Card className={cn("w-full max-w-full overflow-hidden border-none bg-transparent shadow-none", className)}>
           <div className="relative w-full overflow-x-auto scrollbar-hide" style={{ WebkitOverflowScrolling: 'touch' as any }}>
             <div className="flex gap-4 w-max py-2 px-1">
               {images.map((image, index) => (
