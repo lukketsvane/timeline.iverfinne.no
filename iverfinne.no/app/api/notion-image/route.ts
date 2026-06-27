@@ -40,8 +40,10 @@ async function fetchAndReturn(imageUrl: string): Promise<Response> {
   return new Response(buffer, {
     headers: {
       'Content-Type': contentType,
-      // Cache for 5 minutes — proxy is cheap, freshness matters
-      'Cache-Control': 'public, max-age=300, s-maxage=300',
+      // Images keyed by stable block/page ids rarely change. Cache at the edge
+      // for an hour and serve stale while revalidating in the background, so
+      // image loads stay fast without re-hitting Notion on every request.
+      'Cache-Control': 'public, max-age=300, s-maxage=3600, stale-while-revalidate=86400',
     }
   })
 }
