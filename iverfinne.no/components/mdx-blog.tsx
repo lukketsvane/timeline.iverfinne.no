@@ -316,17 +316,17 @@ export default function MDXBlog({ initialPosts = [], initialType }: MDXBlogProps
   }
 
   return (
-    <div
-      className={cn(
-        'max-w-full overflow-x-hidden min-h-screen transition-colors duration-700',
-        view === 'skissebok' && 'bg-neutral-950'
-      )}
-    >
+    <div className="max-w-full overflow-x-hidden min-h-screen">
       <div className="flex items-center justify-between gap-3 px-2 sm:px-4 pt-4">
         <Link href="/" aria-label="iverfinne.no" className="flex items-center">
-          <img src="/icon.svg" alt="" width={28} height={28} className="h-7 w-7" />
+          <img src={view === 'skissebok' ? '/icon-white.png' : '/icon.svg'} alt="" width={28} height={28} className="h-7 w-7" />
         </Link>
-        <div className="inline-flex items-center rounded-full bg-gray-100 dark:bg-gray-800 p-1 text-sm font-medium">
+        <div
+          className={cn(
+            'inline-flex items-center rounded-full p-1 text-sm font-medium transition-colors',
+            view === 'skissebok' ? 'bg-white/10' : 'bg-gray-100 dark:bg-gray-800'
+          )}
+        >
           {([
             ['timeline', 'Tidslinje', 'bg-blue-600'],
             ['gallery', 'Galleri', 'bg-orange-500'],
@@ -339,7 +339,9 @@ export default function MDXBlog({ initialPosts = [], initialType }: MDXBlogProps
                 "px-3 py-1.5 rounded-full transition-colors",
                 view === v
                   ? `${activeColor} text-white shadow-sm`
-                  : "text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100"
+                  : view === 'skissebok'
+                    ? "text-gray-300 hover:text-white"
+                    : "text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100"
               )}
             >
               {label}
