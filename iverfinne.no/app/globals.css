@@ -63,6 +63,8 @@
 
 body {
   font-family: var(--font-geist-sans), system-ui, sans-serif;
+  font-feature-settings: "kern", "liga", "calt";
+  letter-spacing: -0.011em;
   -webkit-tap-highlight-color: transparent;
   scroll-behavior: smooth;
   text-rendering: optimizeLegibility;
@@ -91,7 +93,15 @@ body {
 
   p {
     font-family: var(--font-newsreader), serif;
+    font-feature-settings: "kern", "liga";
+    letter-spacing: 0;
+    text-wrap: pretty;
     @apply leading-relaxed;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    text-wrap: balance;
+    letter-spacing: -0.02em;
   }
 }
 

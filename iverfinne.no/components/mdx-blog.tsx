@@ -48,14 +48,15 @@ interface FilterButtonProps {
   variant?: "type" | "tag" | "default"
 }
 
-const typeColorMap: Record<string, { active: string; inactive: string }> = {
-  Skriving: { active: "bg-blue-500 text-white border-blue-500", inactive: "bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-950 dark:text-blue-400 dark:border-blue-800" },
-  Bok: { active: "bg-green-500 text-white border-green-500", inactive: "bg-green-50 text-green-600 border-green-200 dark:bg-green-950 dark:text-green-400 dark:border-green-800" },
-  Prosjekt: { active: "bg-purple-500 text-white border-purple-500", inactive: "bg-purple-50 text-purple-600 border-purple-200 dark:bg-purple-950 dark:text-purple-400 dark:border-purple-800" },
-  Lenkje: { active: "bg-orange-500 text-white border-orange-500", inactive: "bg-orange-50 text-orange-600 border-orange-200 dark:bg-orange-950 dark:text-orange-400 dark:border-orange-800" },
-  Interaktiv: { active: "bg-pink-500 text-white border-pink-500", inactive: "bg-pink-50 text-pink-600 border-pink-200 dark:bg-pink-950 dark:text-pink-400 dark:border-pink-800" },
-  Bilete: { active: "bg-teal-500 text-white border-teal-500", inactive: "bg-teal-50 text-teal-600 border-teal-200 dark:bg-teal-950 dark:text-teal-400 dark:border-teal-800" },
-  Presentasjon: { active: "bg-indigo-500 text-white border-indigo-500", inactive: "bg-indigo-50 text-indigo-600 border-indigo-200 dark:bg-indigo-950 dark:text-indigo-400 dark:border-indigo-800" },
+// Solid, full-colour fill per type — used for the always-on filter pills.
+const typeColorMap: Record<string, string> = {
+  Skriving: "bg-blue-500",
+  Bok: "bg-green-500",
+  Prosjekt: "bg-purple-500",
+  Lenkje: "bg-orange-500",
+  Interaktiv: "bg-pink-500",
+  Bilete: "bg-teal-500",
+  Presentasjon: "bg-indigo-500",
 }
 
 const FilterButton = ({ label, isActive, onClick, variant = "default" }: FilterButtonProps) => {
@@ -65,10 +66,12 @@ const FilterButton = ({ label, isActive, onClick, variant = "default" }: FilterB
   const typeColor = typeColorMap[label]
   const variantStyles = {
     type: cn(
-      "rounded-full border",
-      typeColor
-        ? (isActive ? typeColor.active : typeColor.inactive)
-        : (isActive ? color : "bg-white dark:bg-gray-900 text-gray-400 border-gray-200 dark:border-gray-800 hover:border-gray-300")
+      "rounded-full border-0 text-white",
+      typeColor || "bg-gray-500",
+      // Always full colour; the selected one gets a ring.
+      isActive
+        ? "ring-2 ring-offset-2 ring-gray-900 dark:ring-white dark:ring-offset-gray-950"
+        : "opacity-90 hover:opacity-100"
     ),
     tag: cn(
       "rounded-sm border",
@@ -109,7 +112,7 @@ export default function MDXBlog({ initialPosts = [], initialType }: MDXBlogProps
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [expandedPosts, setExpandedPosts] = useState<Set<string>>(new Set())
   const [error, setError] = useState<string | null>(null)
-  const [view, setView] = useState<'timeline' | 'gallery'>('timeline')
+  const [view, setView] = useState<'timeline' | 'gallery' | 'skissebok'>('timeline')
 
   const uniqueTags = useMemo(() => {
     const tagSet = new Set<string>()
@@ -303,14 +306,18 @@ export default function MDXBlog({ initialPosts = [], initialType }: MDXBlogProps
           <img src="/icon.svg" alt="" width={28} height={28} className="h-7 w-7" />
         </Link>
         <div className="inline-flex items-center rounded-full bg-gray-100 dark:bg-gray-800 p-1 text-sm font-medium">
-          {([['timeline', 'Tidslinje'], ['gallery', 'Bildegalleri']] as const).map(([v, label]) => (
+          {([
+            ['timeline', 'Tidslinje', 'bg-blue-600'],
+            ['gallery', 'Bildegalleri', 'bg-orange-500'],
+            ['skissebok', 'Skissebok', 'bg-red-500'],
+          ] as const).map(([v, label, activeColor]) => (
             <button
               key={v}
               onClick={() => setView(v)}
               className={cn(
-                "px-4 py-1.5 rounded-full transition-colors",
+                "px-3 py-1.5 rounded-full transition-colors",
                 view === v
-                  ? "bg-black text-white dark:bg-white dark:text-black shadow-sm"
+                  ? `${activeColor} text-white shadow-sm`
                   : "text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100"
               )}
             >
@@ -363,6 +370,11 @@ export default function MDXBlog({ initialPosts = [], initialType }: MDXBlogProps
           <div className="mt-4 -mx-4 sm:mx-0">
             <GalleryView posts={filteredPosts} />
           </div>
+        ) : view === 'skissebok' ? (
+          <div className="mt-20 flex flex-col items-center justify-center text-center text-muted-foreground">
+            <p className="font-serif text-lg text-foreground">Skisseboka kjem snart.</p>
+            <p className="mt-1 text-sm">Ein digital tvilling av skisseboka mi — under arbeid.</p>
+          </div>
         ) : (
         <motion.div
           className="relative mt-4"
@@ -378,10 +390,10 @@ export default function MDXBlog({ initialPosts = [], initialType }: MDXBlogProps
               return (
                 <div key={post.uid}>
                   {showYear && (
-                    <div className="relative grid grid-cols-1 sm:grid-cols-[auto,1fr] gap-2 sm:gap-4 mb-4 pl-5 sm:pl-0">
+                    <div className="relative grid grid-cols-1 sm:grid-cols-[auto,1fr] gap-2 sm:gap-4 pl-5 sm:pl-0">
                       <div className="hidden sm:block w-24 shrink-0" />
                       <div className="relative">
-                        <div className="absolute left-0 w-0.5 top-0 bottom-0 bg-gray-200 dark:bg-gray-700 -translate-x-1/2" />
+                        <div className="absolute left-0 w-0.5 -top-4 bottom-0 bg-gray-200 dark:bg-gray-700 -translate-x-1/2" />
                         <div className="py-4">
                           <span className="bg-white dark:bg-gray-900 px-3 py-1 text-sm font-bold text-gray-400 border border-gray-200 dark:border-gray-700 rounded-full relative z-10 -translate-x-1/2 inline-block">
                             {currentYear}
@@ -399,11 +411,9 @@ export default function MDXBlog({ initialPosts = [], initialType }: MDXBlogProps
                 </div>
               )
             })
-          ) : (
-            <p className="text-gray-500 dark:text-gray-400 text-sm">
-              {error ? 'Feil ved lasting av innlegg' : 'Fann ingen innlegg som passar søket.'}
-            </p>
-          )}
+          ) : error ? (
+            <p className="text-gray-500 dark:text-gray-400 text-sm">Feil ved lasting av innlegg</p>
+          ) : null}
         </motion.div>
         )}
       </main>
