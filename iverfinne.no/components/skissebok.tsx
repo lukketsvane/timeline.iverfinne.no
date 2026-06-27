@@ -24,6 +24,7 @@ const SEED: Drawing[] = [
 ]
 
 const COVER_SRC = '/skissebok/moleskine-cover.jpg'
+const COVER_BACK_SRC = '/skissebok/moleskine-back.webp'
 
 // Moleskine Large proportions.
 const PW = 1.3
@@ -122,7 +123,7 @@ function FlipBook({ drawings }: { drawings: Drawing[] }) {
     }
 
     const coverFace = (back: boolean) => {
-      const mat = new THREE.MeshBasicMaterial({ map: loadTex(COVER_SRC, back) })
+      const mat = new THREE.MeshBasicMaterial({ map: loadTex(back ? COVER_BACK_SRC : COVER_SRC, back) })
       const mesh = new THREE.Mesh(new THREE.PlaneGeometry(PW, PH), mat)
       mesh.position.set(PW / 2, 0, back ? -(DEPTH / 2 + 0.001) : DEPTH / 2 + 0.001)
       if (back) mesh.rotation.y = Math.PI

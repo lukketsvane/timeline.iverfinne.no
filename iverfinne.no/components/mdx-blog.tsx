@@ -357,7 +357,7 @@ export default function MDXBlog({ initialPosts = [], initialType }: MDXBlogProps
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-gray-500" />
               <Input
                 placeholder="Leit i arkivet..."
-                className="pl-10 pr-10 py-2 text-sm"
+                className="pl-10 pr-10 py-2 text-sm focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-gray-300 dark:focus-visible:border-gray-600"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
