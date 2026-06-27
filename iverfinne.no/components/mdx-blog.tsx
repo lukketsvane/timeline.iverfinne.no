@@ -8,6 +8,7 @@ import { motion } from 'framer-motion'
 import { cn } from "@/lib/utils"
 import { MDXCard } from "./mdx-card"
 import GalleryView from "./gallery-view"
+import Skissebok from "./skissebok"
 import type { MDXRemoteSerializeResult } from 'next-mdx-remote'
 import { getTagColor } from "@/lib/tag-utils"
 import { useRouter } from "next/navigation"
@@ -366,10 +367,7 @@ export default function MDXBlog({ initialPosts = [], initialType }: MDXBlogProps
             <GalleryView posts={filteredPosts} />
           </div>
         ) : view === 'skissebok' ? (
-          <div className="mt-20 flex flex-col items-center justify-center text-center text-muted-foreground">
-            <p className="font-serif text-lg text-foreground">Skisseboka kjem snart.</p>
-            <p className="mt-1 text-sm">Ein digital tvilling av skisseboka mi — under arbeid.</p>
-          </div>
+          <Skissebok />
         ) : (
         <motion.div
           className="relative mt-4"
