@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { cn } from '@/lib/utils'
+import { useEffect, useRef, useState } from 'react'
+import * as THREE from 'three'
 
 // Digital sketchbook. Each drawing is named skb_YYYYMMDD_FORMAT_NR.png where
 // FORMAT is `page` (single 13×21 leaf) or `spread` (full 26×21 open spread).
@@ -15,148 +15,232 @@ const file = (date: string, format: Format, nr: number): Drawing => ({
   src: `/skissebok/skb_${date}_${format}_${String(nr).padStart(2, '0')}.png`,
 })
 
-// Newest first — sorted by date, then number.
-const DRAWINGS: Drawing[] = [
+// Bundled seed — used until the Notion-backed drawings load (newest first).
+const SEED: Drawing[] = [
   file('20260627', 'page', 1),
   file('20241028', 'page', 2),
   file('20241020', 'spread', 1),
   file('20241020', 'page', 3),
 ]
 
-// Moleskine Large: open spread 26×21 cm.
+const COVER_SRC = '/skissebok/moleskine-cover.jpg'
+
+// Moleskine Large proportions.
+const PW = 1.3
+const PH = 2.1
+const DEPTH = 0.02
+const GAP = 0.006
 const SPREAD_AR = '26 / 21'
-const PAPER = 'bg-[#f6f2e7] dark:bg-[#ece6d6]'
-const FLIP = 'transform 0.8s cubic-bezier(0.645, 0.045, 0.355, 1)'
 
-// 20260627 → "27.06.2026"
-function formatDate(date: string) {
-  return `${date.slice(6, 8)}.${date.slice(4, 6)}.${date.slice(0, 4)}`
-}
+const formatDate = (d: string) => `${d.slice(6, 8)}.${d.slice(4, 6)}.${d.slice(0, 4)}`
 
-// One 13×21 leaf face. A `spread` drawing is split across two faces, each
-// showing its own half so the whole image reappears when the spread is open.
+// One 13×21 leaf face.
 type Face =
-  | { kind: 'page'; drawing: Drawing; half?: 'left' | 'right' }
   | { kind: 'cover'; side: 'front' | 'back' }
-  | { kind: 'blank' } // endpaper / padding
+  | { kind: 'blank' }
+  | { kind: 'page'; drawing: Drawing }
 
-// The black Moleskine board — front cover carries the elastic closure.
-function Cover({ side }: { side: 'front' | 'back' }) {
-  const round = side === 'front' ? 'rounded-l-[3px] rounded-r-[16px]' : 'rounded-r-[3px] rounded-l-[16px]'
-  return (
-    <div className={cn('relative h-full w-full overflow-hidden bg-gradient-to-br from-[#232323] via-[#141414] to-[#070707] shadow-2xl', round)}>
-      {/* leatherette sheen */}
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(120%_80%_at_72%_18%,rgba(255,255,255,0.07),transparent_60%)]" />
-      {/* board bevel */}
-      <div className={cn('pointer-events-none absolute inset-[3px] ring-1 ring-inset ring-white/5', round)} />
-      {/* elastic closure band near the fore-edge */}
-      {side === 'front' && (
-        <div className="absolute right-[8%] top-0 h-full w-[7px] bg-gradient-to-r from-black/50 via-[#303030] to-black/50 shadow-[0_0_5px_rgba(0,0,0,0.7)]" />
-      )}
-    </div>
-  )
-}
-
-function FaceContent({ face }: { face: Face }) {
-  if (face.kind === 'cover') return <Cover side={face.side} />
-  if (face.kind === 'blank') return <div className={cn('h-full w-full', PAPER)} />
-  return (
-    <img
-      src={face.drawing.src}
-      alt=""
-      draggable={false}
-      className="h-full w-full object-cover"
-      style={face.half ? { objectPosition: face.half === 'left' ? 'left center' : 'right center' } : undefined}
-    />
-  )
-}
-
-// Lay drawings into single-page faces. Spreads must straddle an open spread,
-// i.e. occupy a (left page, right page) pair, so pad to an odd index first.
-function buildDrawingFaces(drawings: Drawing[]): Face[] {
-  const faces: Face[] = []
-  for (const d of drawings) {
-    if (d.format === 'spread') {
-      if (faces.length % 2 === 0) faces.push({ kind: 'blank' })
-      faces.push({ kind: 'page', drawing: d, half: 'left' }, { kind: 'page', drawing: d, half: 'right' })
-    } else {
-      faces.push({ kind: 'page', drawing: d })
-    }
-  }
-  if (faces.length % 2 !== 0) faces.push({ kind: 'blank' })
-  return faces
+function buildFaces(drawings: Drawing[]): Face[] {
+  const inner: Face[] = drawings.map((d) => ({ kind: 'page', drawing: d }))
+  if (inner.length % 2 !== 0) inner.push({ kind: 'blank' })
+  return [{ kind: 'cover', side: 'front' }, { kind: 'blank' }, ...inner, { kind: 'blank' }, { kind: 'cover', side: 'back' }]
 }
 
 const faceDate = (f?: Face): string | null => (f && f.kind === 'page' ? f.drawing.date : null)
 
-// ── 3D flip book ──────────────────────────────────────────────────────────
-function FlipBook() {
-  // Wrap the drawing pages between hard covers + endpapers so the book opens
-  // from the closed front cover and closes onto the back cover.
-  const faces: Face[] = [
-    { kind: 'cover', side: 'front' },
-    { kind: 'blank' },
-    ...buildDrawingFaces(DRAWINGS),
-    { kind: 'blank' },
-    { kind: 'cover', side: 'back' },
-  ]
-  const leaves: { front: Face; back: Face }[] = []
-  for (let i = 0; i < faces.length; i += 2) {
-    leaves.push({ front: faces[i], back: faces[i + 1] })
-  }
+// A leaf = front face (+z) and back face (−z), hinged at the spine (local x=0).
+type Leaf = { group: THREE.Group; target: number }
 
+function FlipBook({ drawings }: { drawings: Drawing[] }) {
+  const mountRef = useRef<HTMLDivElement>(null)
+  const leavesRef = useRef<Leaf[]>([])
+  const bookRef = useRef<THREE.Group | null>(null)
   const [turned, setTurned] = useState(0)
-  const atStart = turned === 0
-  const atEnd = turned === leaves.length
+  const turnedRef = useRef(0)
 
-  // Slide the closed book to centre its single visible cover; centre the spread once open.
-  const shift = atStart ? '-25%' : atEnd ? '25%' : '0%'
-  const currentDate = atStart || atEnd ? null : faceDate(faces[2 * turned]) ?? faceDate(faces[2 * turned - 1])
+  const faces = buildFaces(drawings)
+  const leafCount = Math.floor(faces.length / 2)
+
+  // ── Build the scene once per drawing set ────────────────────────────────
+  useEffect(() => {
+    const mount = mountRef.current
+    if (!mount) return
+
+    const scene = new THREE.Scene()
+    const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 100)
+    camera.position.set(0, 0, 5)
+
+    let renderer: THREE.WebGLRenderer
+    try {
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true })
+    } catch {
+      return
+    }
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+    renderer.outputColorSpace = THREE.SRGBColorSpace
+    mount.appendChild(renderer.domElement)
+    renderer.domElement.style.width = '100%'
+    renderer.domElement.style.height = '100%'
+
+    scene.add(new THREE.AmbientLight(0xffffff, 0.85))
+    const key = new THREE.DirectionalLight(0xffffff, 0.7)
+    key.position.set(2, 3, 4)
+    scene.add(key)
+
+    const loader = new THREE.TextureLoader()
+    const loadTex = (src: string, mirror = false) => {
+      const tex = loader.load(src)
+      tex.colorSpace = THREE.SRGBColorSpace
+      tex.anisotropy = renderer.capabilities.getMaxAnisotropy()
+      if (mirror) {
+        tex.wrapS = THREE.RepeatWrapping
+        tex.repeat.x = -1
+      }
+      return tex
+    }
+
+    const paperMat = () => new THREE.MeshStandardMaterial({ color: 0xf3eedd, roughness: 0.95, metalness: 0 })
+    const edgeMat = new THREE.MeshStandardMaterial({ color: 0xe7e0cd, roughness: 1 })
+    const coverMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.6, metalness: 0.05 })
+
+    // A drawing sits on a plane in front of the paper, scaled to "contain" it.
+    const drawingPlane = (src: string, back: boolean) => {
+      const mat = new THREE.MeshStandardMaterial({ map: loadTex(src, back), roughness: 0.95, transparent: true })
+      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mat)
+      // Fit to image aspect once the texture has loaded.
+      const img = new Image()
+      img.onload = () => {
+        const ar = img.naturalWidth / img.naturalHeight
+        const maxW = PW * 0.9
+        const maxH = PH * 0.9
+        let w = maxW
+        let h = w / ar
+        if (h > maxH) { h = maxH; w = h * ar }
+        mesh.scale.set(w, h, 1)
+      }
+      img.src = src
+      mesh.scale.set(PW * 0.9, PH * 0.9, 1)
+      mesh.position.set(PW / 2, 0, back ? -(DEPTH / 2 + 0.001) : DEPTH / 2 + 0.001)
+      if (back) mesh.rotation.y = Math.PI
+      return mesh
+    }
+
+    const coverFace = (back: boolean) => {
+      const mat = new THREE.MeshStandardMaterial({ map: loadTex(COVER_SRC, back), roughness: 0.55, metalness: 0.05 })
+      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(PW, PH), mat)
+      mesh.position.set(PW / 2, 0, back ? -(DEPTH / 2 + 0.001) : DEPTH / 2 + 0.001)
+      if (back) mesh.rotation.y = Math.PI
+      return mesh
+    }
+
+    const book = new THREE.Group()
+    const leaves: Leaf[] = []
+
+    for (let i = 0; i < leafCount; i++) {
+      const front = faces[2 * i]
+      const back = faces[2 * i + 1]
+      const isCoverLeaf = front.kind === 'cover' || back.kind === 'cover'
+
+      const group = new THREE.Group()
+
+      // Board: paper for inner leaves, black for the cover leaves.
+      const boardMat = isCoverLeaf ? coverMat : paperMat()
+      const board = new THREE.Mesh(
+        new THREE.BoxGeometry(PW, PH, DEPTH),
+        [edgeMat, edgeMat, edgeMat, edgeMat, boardMat, boardMat]
+      )
+      board.position.set(PW / 2, 0, 0)
+      group.add(board)
+
+      if (front.kind === 'page') group.add(drawingPlane(front.drawing.src, false))
+      if (front.kind === 'cover') group.add(coverFace(false))
+      if (back.kind === 'page') group.add(drawingPlane(back.drawing.src, true))
+      if (back.kind === 'cover') group.add(coverFace(true))
+
+      // Front cover carries the elastic closure band near the fore-edge.
+      if (front.kind === 'cover' && front.side === 'front') {
+        const band = new THREE.Mesh(
+          new THREE.PlaneGeometry(0.045, PH),
+          new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.5 })
+        )
+        band.position.set(PW * 0.9, 0, DEPTH / 2 + 0.002)
+        group.add(band)
+      }
+
+      group.position.z = (leafCount - i) * GAP
+      book.add(group)
+      leaves.push({ group, target: 0 })
+    }
+
+    scene.add(book)
+    bookRef.current = book
+    leavesRef.current = leaves
+
+    // ── Resize ────────────────────────────────────────────────────────────
+    const resize = () => {
+      const w = mount.clientWidth
+      const h = mount.clientHeight
+      if (!w || !h) return
+      renderer.setSize(w, h, false)
+      camera.aspect = w / h
+      camera.updateProjectionMatrix()
+    }
+    resize()
+    const ro = new ResizeObserver(resize)
+    ro.observe(mount)
+
+    // ── Animation loop ──────────────────────────────────────────────────────
+    let raf = 0
+    const tick = () => {
+      const ls = leavesRef.current
+      for (const l of ls) l.group.rotation.y += (l.target - l.group.rotation.y) * 0.12
+      // Centre the closed cover; centre the spread once open.
+      const t = turnedRef.current
+      const targetX = t === 0 ? -PW / 2 : t === leafCount ? PW / 2 : 0
+      book.position.x += (targetX - book.position.x) * 0.12
+      renderer.render(scene, camera)
+      raf = requestAnimationFrame(tick)
+    }
+    book.position.x = -PW / 2
+    raf = requestAnimationFrame(tick)
+
+    return () => {
+      cancelAnimationFrame(raf)
+      ro.disconnect()
+      renderer.dispose()
+      scene.traverse((o) => {
+        if (o instanceof THREE.Mesh) {
+          o.geometry.dispose()
+          const m = o.material
+          ;(Array.isArray(m) ? m : [m]).forEach((mm: THREE.Material & { map?: THREE.Texture }) => {
+            mm.map?.dispose()
+            mm.dispose()
+          })
+        }
+      })
+      if (renderer.domElement.parentNode === mount) mount.removeChild(renderer.domElement)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [drawings])
+
+  // ── Apply page turns imperatively ────────────────────────────────────────
+  useEffect(() => {
+    turnedRef.current = turned
+    leavesRef.current.forEach((l, i) => { l.target = turned > i ? -Math.PI : 0 })
+  }, [turned])
+
+  const currentDate =
+    turned === 0 || turned === leafCount ? null : faceDate(faces[2 * turned]) ?? faceDate(faces[2 * turned - 1])
+
+  const flip = (dir: number) => setTurned((t) => Math.max(0, Math.min(leafCount, t + dir)))
 
   return (
     <div className="flex w-full flex-col items-center gap-4">
-      <div
-        className="mx-auto w-full max-w-3xl"
-        style={{ perspective: '2400px', transform: `translateX(${shift})`, transition: FLIP }}
-      >
-        <div className="relative w-full" style={{ aspectRatio: SPREAD_AR, transformStyle: 'preserve-3d' }}>
-          {/* Hard back board — frames the cream pages once the book is open */}
-          <div
-            className="absolute -inset-x-[1.4%] -inset-y-[2.2%] rounded-[14px] bg-gradient-to-br from-[#1f1f1f] via-[#141414] to-[#070707] shadow-2xl transition-opacity duration-500"
-            style={{ opacity: atStart || atEnd ? 0 : 1 }}
-          />
-          {/* Soft gutter shading either side of the spine — a gentle fold, not a hard groove */}
-          <div className="pointer-events-none absolute inset-y-0 left-1/2 z-40 h-full w-1/2 -translate-x-full bg-gradient-to-l from-black/12 to-transparent to-30%" />
-          <div className="pointer-events-none absolute inset-y-0 left-1/2 z-40 h-full w-1/2 bg-gradient-to-r from-black/12 to-transparent to-30%" />
-
-          {leaves.map((leaf, i) => {
-            const isTurned = turned > i
-            return (
-              <div
-                key={i}
-                onClick={() => setTurned(isTurned ? i : i + 1)}
-                className="absolute right-0 top-0 h-full w-1/2 cursor-pointer"
-                style={{
-                  transformOrigin: 'left center',
-                  transformStyle: 'preserve-3d',
-                  transform: `rotateY(${isTurned ? -180 : 0}deg)`,
-                  transition: FLIP,
-                  zIndex: isTurned ? i : leaves.length - i,
-                }}
-              >
-                <div className="absolute inset-0 overflow-hidden" style={{ backfaceVisibility: 'hidden' }}>
-                  <FaceContent face={leaf.front} />
-                </div>
-                <div
-                  className="absolute inset-0 overflow-hidden"
-                  style={{ backfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}
-                >
-                  <FaceContent face={leaf.back} />
-                </div>
-              </div>
-            )
-          })}
-        </div>
+      <div className="relative mx-auto w-full max-w-3xl" style={{ aspectRatio: SPREAD_AR }}>
+        <div ref={mountRef} className="absolute inset-0" />
+        {/* Click the left / right half to turn the leaves */}
+        <button type="button" aria-label="Førre" onClick={() => flip(-1)} className="absolute inset-y-0 left-0 w-1/2 cursor-w-resize" />
+        <button type="button" aria-label="Neste" onClick={() => flip(1)} className="absolute inset-y-0 right-0 w-1/2 cursor-e-resize" />
       </div>
 
       <div className="mx-auto h-5 w-full max-w-3xl">
@@ -167,9 +251,22 @@ function FlipBook() {
 }
 
 export default function Skissebok() {
+  const [drawings, setDrawings] = useState<Drawing[]>(SEED)
+
+  useEffect(() => {
+    let alive = true
+    fetch('/api/skissebok')
+      .then((r) => r.json())
+      .then((d) => {
+        if (alive && Array.isArray(d?.drawings) && d.drawings.length) setDrawings(d.drawings)
+      })
+      .catch(() => {})
+    return () => { alive = false }
+  }, [])
+
   return (
     <div className="mt-6 flex flex-col items-center gap-6">
-      <FlipBook />
+      <FlipBook drawings={drawings} />
     </div>
   )
 }

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo, useRef, useCallback } from "react"
-import { Search } from 'lucide-react'
+import { Search, ChevronDown } from 'lucide-react'
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { motion } from 'framer-motion'
@@ -113,6 +113,7 @@ export default function MDXBlog({ initialPosts = [], initialType }: MDXBlogProps
   const [expandedPosts, setExpandedPosts] = useState<Set<string>>(new Set())
   const [error, setError] = useState<string | null>(null)
   const [view, setView] = useState<'timeline' | 'gallery' | 'skissebok'>('timeline')
+  const [filtersOpen, setFiltersOpen] = useState(false)
 
   const uniqueTags = useMemo(() => {
     const tagSet = new Set<string>()
@@ -300,7 +301,12 @@ export default function MDXBlog({ initialPosts = [], initialType }: MDXBlogProps
   }
 
   return (
-    <div className="max-w-full overflow-x-hidden">
+    <div
+      className={cn(
+        'max-w-full overflow-x-hidden min-h-screen transition-colors duration-700',
+        view === 'skissebok' && 'bg-neutral-950'
+      )}
+    >
       <div className="flex items-center justify-between gap-3 px-2 sm:px-4 pt-4">
         <Link href="/" aria-label="iverfinne.no" className="flex items-center">
           <img src="/icon.svg" alt="" width={28} height={28} className="h-7 w-7" />
@@ -308,7 +314,7 @@ export default function MDXBlog({ initialPosts = [], initialType }: MDXBlogProps
         <div className="inline-flex items-center rounded-full bg-gray-100 dark:bg-gray-800 p-1 text-sm font-medium">
           {([
             ['timeline', 'Tidslinje', 'bg-blue-600'],
-            ['gallery', 'Bildegalleri', 'bg-orange-500'],
+            ['gallery', 'Galleri', 'bg-orange-500'],
             ['skissebok', 'Skissebok', 'bg-red-500'],
           ] as const).map(([v, label, activeColor]) => (
             <button
@@ -336,12 +342,22 @@ export default function MDXBlog({ initialPosts = [], initialType }: MDXBlogProps
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-gray-500" />
               <Input
                 placeholder="Leit i arkivet..."
-                className="pl-10 py-2 text-sm"
+                className="pl-10 pr-10 py-2 text-sm"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
+              <button
+                type="button"
+                onClick={() => setFiltersOpen((o) => !o)}
+                aria-label="Vis/skjul filter"
+                aria-expanded={filtersOpen}
+                className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+              >
+                <ChevronDown className={cn('h-4 w-4 transition-transform', filtersOpen && 'rotate-180')} />
+              </button>
             </div>
             {/* Empty selection means "all" — so every pill reads as selected by default. */}
+            {filtersOpen && (
             <div className="flex flex-wrap gap-1.5">
               {contentTypes.map((type) => (
                 <FilterButton
@@ -362,6 +378,7 @@ export default function MDXBlog({ initialPosts = [], initialType }: MDXBlogProps
                 />
               ))}
             </div>
+            )}
           </>
         )}
         {view === 'gallery' ? (

@@ -411,7 +411,13 @@ export const getPublishedPosts = cache(async (): Promise<Post[]> => {
       ],
     }));
 
-    const posts = await Promise.all(response.results
+    // Skissebok rows live in the same database but are drawings, not posts —
+    // keep them out of the timeline and gallery.
+    const visible = response.results.filter(
+      (page: any) => (page.properties?.Type?.select?.name || "").toLowerCase() !== "skissebok"
+    );
+
+    const posts = await Promise.all(visible
       .map(async (page): Promise<Post | null> => {
         try {
           const props = getPageProperties(page);
@@ -441,6 +447,68 @@ export const getPublishedPosts = cache(async (): Promise<Post[]> => {
   } catch (error: any) {
     console.error("Notion API error:", error);
     throw error;
+  }
+});
+
+// ── Skissebok ───────────────────────────────────────────────────────────────
+// Sketchbook drawings live in the same Notion database as Type = "Skissebok".
+// Each row carries a Dato, a Format (page | spread), an Nr, and the drawing
+// itself (a Teikning/Bilete file property, else the page cover).
+export type SkissebokDrawing = { date: string; format: "page" | "spread"; nr: number; src: string };
+
+export const getSkissebokDrawings = cache(async (): Promise<SkissebokDrawing[]> => {
+  let databaseId: string;
+  try {
+    databaseId = getDatabaseId();
+  } catch {
+    return [];
+  }
+  try {
+    const response = await withRetry(() => notion.databases.query({
+      database_id: databaseId,
+      filter: {
+        and: [
+          { property: "Type", select: { equals: "Skissebok" } },
+          { or: [
+            { property: "Status", status: { equals: "Ferdig" } },
+            { property: "Status", status: { equals: "Complete" } },
+          ] },
+        ],
+      },
+      sorts: [{ property: "Dato", direction: "descending" }],
+    }));
+
+    return response.results
+      .map((page: any): SkissebokDrawing | null => {
+        const props = page.properties || {};
+        const find = (name: string) => {
+          const key = Object.keys(props).find(k => k.toLowerCase() === name.toLowerCase());
+          return key ? props[key] : null;
+        };
+
+        const dateStart = find("Dato")?.date?.start || find("Date")?.date?.start;
+        if (!dateStart) return null;
+        const date = dateStart.replace(/-/g, "").slice(0, 8); // YYYY-MM-DD → YYYYMMDD
+
+        const format = (find("Format")?.select?.name || "page").toLowerCase() === "spread" ? "spread" : "page";
+        const nr = find("Nr")?.number ?? 0;
+
+        // Prefer an uploaded file property, fall back to the page cover.
+        let src: string | undefined;
+        const fileProp = find("Teikning") || find("Bilete") || find("Fil");
+        if (fileProp?.files?.length) {
+          const f = fileProp.files[0];
+          src = proxyImageUrl(f.type === "file" ? f.file?.url : f.external?.url);
+        }
+        if (!src && page.cover) src = proxyPageImage(page.id, "cover");
+        if (!src) return null;
+
+        return { date, format, nr, src };
+      })
+      .filter((d): d is SkissebokDrawing => d !== null);
+  } catch (error) {
+    console.error("Notion skissebok error:", error);
+    return [];
   }
 });
 
