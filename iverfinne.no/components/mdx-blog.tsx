@@ -353,10 +353,10 @@ export default function MDXBlog({ initialPosts = [], initialType }: MDXBlogProps
           ))}
         </div>
         {view === 'gallery' ? (
-          // Full-bleed on mobile: the mosaic spans exactly the viewport width
-          // with a small inner padding, so frames never get clipped. Normal
-          // containment from sm: up.
-          <div className="mt-4 relative left-1/2 w-screen -translate-x-1/2 px-2 sm:left-0 sm:w-auto sm:translate-x-0 sm:px-0">
+          // Pull out to the container edge on mobile (the -mx exactly cancels the
+          // p-4 wrapper, so an ancestor's overflow-x-hidden never clips the
+          // frames). Normal containment from sm: up.
+          <div className="mt-4 -mx-4 sm:mx-0">
             <GalleryView posts={filteredPosts} />
           </div>
         ) : (
