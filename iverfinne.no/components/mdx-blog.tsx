@@ -66,12 +66,11 @@ const FilterButton = ({ label, isActive, onClick, variant = "default" }: FilterB
   const typeColor = typeColorMap[label]
   const variantStyles = {
     type: cn(
-      "rounded-full border-0 text-white",
-      typeColor || "bg-gray-500",
-      // Always full colour; the selected one gets a ring.
+      "rounded-full border-0",
+      // Selected = full colour; unselected = light grey. No outline.
       isActive
-        ? "ring-2 ring-offset-2 ring-gray-900 dark:ring-white dark:ring-offset-gray-950"
-        : "opacity-90 hover:opacity-100"
+        ? cn(typeColor || "bg-gray-500", "text-white")
+        : "bg-gray-100 text-gray-500 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700"
     ),
     tag: cn(
       "rounded-sm border",
@@ -337,27 +336,23 @@ export default function MDXBlog({ initialPosts = [], initialType }: MDXBlogProps
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        {/* Category filters, directly under the search field */}
+        {/* Category filters, directly under the search field. Empty selection
+            means "all" — so every pill reads as selected by default. */}
         <div className="flex flex-wrap gap-1.5">
           {contentTypes.map((type) => (
             <FilterButton
               key={type.value}
               label={type.label}
-              isActive={selectedTypes.includes(type.value)}
+              isActive={selectedTypes.length === 0 || selectedTypes.includes(type.value)}
               onClick={() => {
-                const isSelected = selectedTypes.includes(type.value)
-                const newTypes = isSelected
-                  ? selectedTypes.filter((t) => t !== type.value)
-                  : [...selectedTypes, type.value]
-
-                setSelectedTypes(newTypes)
-
-                // Naviger til ny rute viss nøyaktig éin type er vald
-                if (newTypes.length === 1) {
-                  router.push(`/${newTypes[0].toLowerCase()}`)
-                } else if (newTypes.length === 0) {
-                  router.push('/')
-                }
+                setSelectedTypes((prev) => {
+                  // From "all" (empty), the first click isolates to just this type.
+                  if (prev.length === 0) return [type.value]
+                  // Otherwise toggle it; deselecting the last one returns to "all".
+                  return prev.includes(type.value)
+                    ? prev.filter((t) => t !== type.value)
+                    : [...prev, type.value]
+                })
               }}
               variant="type"
             />
