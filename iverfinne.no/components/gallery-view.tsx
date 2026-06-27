@@ -19,16 +19,16 @@ interface GalleryPost {
 // Random fill colours shown behind each frame while the image loads.
 const FILL_COLORS = ['#EF4444', '#1D4ED8', '#F97316', '#06B6D4']
 
-// Frame shapes derived from the physical wooden block set.
-// `ar` is the CSS aspect-ratio (width / height).
+// Frame shapes = the wooden blocks seen from the side, i.e. rounded
+// rectangles only (no circles or pills). `ar` is the CSS aspect-ratio
+// (width / height) taken from each block's side profile.
 const SHAPES: { ar: number; radius: string }[] = [
   { ar: 1, radius: 'rounded-2xl' },    // cyan_kube 30×30 / oransje_rektangel 45×45
-  { ar: 1, radius: 'rounded-full' },   // raud_sylinder, topp (sirkel)
   { ar: 0.5, radius: 'rounded-2xl' },  // blå_liten 30×60, ståande
   { ar: 2, radius: 'rounded-2xl' },    // blå_liten, liggjande
   { ar: 0.4, radius: 'rounded-2xl' },  // blå_stor 30×75, ståande
   { ar: 2.5, radius: 'rounded-2xl' },  // blå_stor, liggjande
-  { ar: 0.5, radius: 'rounded-full' }, // raud_sylinder, side (pille)
+  { ar: 0.5, radius: 'rounded-2xl' },  // raud_sylinder 30×60, frå sida
 ]
 
 // Stable hash so each post keeps the same shape/colour across renders (and
