@@ -31,7 +31,6 @@ const PW = 1.3
 const PH = 2.1
 const DEPTH = 0.012
 const GAP = 0.02
-const SPREAD_AR = '26 / 21'
 
 const formatDate = (d: string) => `${d.slice(6, 8)}.${d.slice(4, 6)}.${d.slice(0, 4)}`
 
@@ -65,6 +64,7 @@ const faceDate = (f?: Face): string | null => (f && f.kind === 'page' ? f.drawin
 type Leaf = { group: THREE.Group; target: number; from: number; t0: number | null }
 
 const FLIP_MS = 1150
+const FRAME_MARGIN = 1.22 // headroom so a lifted/turning page never clips the canvas
 const easeInOut = (p: number) => (p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2)
 
 function FlipBook({ drawings }: { drawings: Drawing[] }) {
@@ -84,9 +84,9 @@ function FlipBook({ drawings }: { drawings: Drawing[] }) {
 
     const scene = new THREE.Scene()
     const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 100)
-    // Pull in so the open spread fills the canvas width (book and canvas share
-    // the 26/21 aspect, so this fills height too).
-    camera.position.set(0, 0, 3.7)
+    // Distance is re-derived every frame to frame the visible content; start
+    // near the closed-cover target so there's no zoom jump on load.
+    camera.position.set(0, 0, 4.5)
 
     let renderer: THREE.WebGLRenderer
     try {
@@ -259,12 +259,23 @@ function FlipBook({ drawings }: { drawings: Drawing[] }) {
         // Lift the turning leaf in an arc so it clears the stack instead of
         // clipping through it; settle into left/right order at either end.
         const prog = Math.min(1, Math.abs(l.group.rotation.y) / Math.PI)
-        const lift = Math.sin(prog * Math.PI) * 0.6
+        const lift = Math.sin(prog * Math.PI) * 0.3
         const base = (l.target < 0 ? i : leafCount - i) * GAP
         l.group.position.z = base + lift
       }
-      const targetX = centerOffset(turnedRef.current)
-      book.position.x += (targetX - book.position.x) * 0.12
+
+      const t = turnedRef.current
+      const both = hasContent(faces[2 * t - 1]) && hasContent(faces[2 * t])
+      book.position.x += (centerOffset(t) - book.position.x) * 0.12
+
+      // Frame the visible content: a lone page fills the height, an open spread
+      // fills the width — with margin so a lifted/turning page never clips.
+      const halfW = (both ? PW : PW / 2) * FRAME_MARGIN
+      const halfH = (PH / 2) * FRAME_MARGIN
+      const tanHalf = Math.tan((camera.fov * Math.PI) / 360)
+      const targetZ = Math.max(halfH / tanHalf, halfW / (tanHalf * camera.aspect))
+      camera.position.z += (targetZ - camera.position.z) * 0.1
+
       renderer.render(scene, camera)
       raf = requestAnimationFrame(tick)
     }
@@ -310,8 +321,10 @@ function FlipBook({ drawings }: { drawings: Drawing[] }) {
   const flip = (dir: number) => setTurned((t) => Math.max(0, Math.min(leafCount, t + dir)))
 
   return (
-    <div className="flex w-full flex-col items-center gap-4">
-      <div className="relative mx-auto w-full max-w-5xl" style={{ aspectRatio: SPREAD_AR }}>
+    <div className="flex w-full flex-col items-center gap-3">
+      {/* Tall canvas centred in the viewport; the camera frames the book inside
+          it with margin, so the page-turn never clips against the edges. */}
+      <div className="relative mx-auto h-[72svh] w-full max-w-5xl">
         <div ref={mountRef} className="absolute inset-0" />
         {/* Click the left / right half to turn the leaves */}
         <button type="button" aria-label="Førre" onClick={() => flip(-1)} className="absolute inset-y-0 left-0 w-1/2 cursor-w-resize" />
