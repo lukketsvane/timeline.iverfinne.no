@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { motion } from 'framer-motion'
 import { cn } from "@/lib/utils"
 import { MDXCard } from "./mdx-card"
+import GalleryView from "./gallery-view"
 import type { MDXRemoteSerializeResult } from 'next-mdx-remote'
 import { getTagColor } from "@/lib/tag-utils"
 import { useRouter } from "next/navigation"
@@ -107,6 +108,7 @@ export default function MDXBlog({ initialPosts = [], initialType }: MDXBlogProps
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [expandedPosts, setExpandedPosts] = useState<Set<string>>(new Set())
   const [error, setError] = useState<string | null>(null)
+  const [view, setView] = useState<'timeline' | 'gallery'>('timeline')
 
   const uniqueTags = useMemo(() => {
     const tagSet = new Set<string>()
@@ -294,56 +296,27 @@ export default function MDXBlog({ initialPosts = [], initialType }: MDXBlogProps
   }
 
   return (
-    <div className="flex flex-col lg:flex-row gap-4 p-4 max-w-full overflow-x-hidden">
-      <aside className="w-full lg:w-48 space-y-4 shrink-0">
-        <div className="space-y-2">
-          <div className="flex flex-wrap gap-1.5">
-            {contentTypes.map((type) => (
-              <FilterButton
-                key={type.value}
-                label={type.label}
-                isActive={selectedTypes.includes(type.value)}
-                onClick={() => {
-                  const isSelected = selectedTypes.includes(type.value)
-                  const newTypes = isSelected
-                    ? selectedTypes.filter((t) => t !== type.value)
-                    : [...selectedTypes, type.value]
-                  
-                  setSelectedTypes(newTypes)
-                  
-                  // Naviger til ny rute viss nøyaktig éin type er vald
-                  if (newTypes.length === 1) {
-                    router.push(`/${newTypes[0].toLowerCase()}`)
-                  } else if (newTypes.length === 0) {
-                    router.push('/')
-                  }
-                }}
-                variant="type"
-              />
-            ))}
-          </div>
+    <div className="max-w-full overflow-x-hidden">
+      <div className="flex justify-center px-2 sm:px-4 pt-4">
+        <div className="inline-flex items-center rounded-full bg-gray-100 dark:bg-gray-800 p-1 text-sm font-medium">
+          {([['timeline', 'Tidslinje'], ['gallery', 'Bildegalleri']] as const).map(([v, label]) => (
+            <button
+              key={v}
+              onClick={() => setView(v)}
+              className={cn(
+                "px-4 py-1.5 rounded-full transition-colors",
+                view === v
+                  ? "bg-black text-white dark:bg-white dark:text-black shadow-sm"
+                  : "text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100"
+              )}
+            >
+              {label}
+            </button>
+          ))}
         </div>
-        <div className="space-y-2">
-          <div className="flex flex-wrap gap-1.5">
-            {uniqueTags.slice(0, 5).map((tag) => (
-              <FilterButton
-                key={tag}
-                label={tag}
-                isActive={selectedTags.includes(tag)}
-                onClick={() => {
-                  setSelectedTags((prev) =>
-                    prev.includes(tag)
-                      ? prev.filter((t) => t !== tag)
-                      : [...prev, tag]
-                  )
-                }}
-                variant="tag"
-              />
-            ))}
-          </div>
-        </div>
-      </aside>
-      <main className="flex-1 space-y-4 min-w-0">
+      </div>
+    <div className="p-4 max-w-full overflow-x-hidden">
+      <main className="space-y-4 min-w-0">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-gray-500" />
           <Input
@@ -353,7 +326,41 @@ export default function MDXBlog({ initialPosts = [], initialType }: MDXBlogProps
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <motion.div 
+        {/* Category filters, directly under the search field */}
+        <div className="flex flex-wrap gap-1.5">
+          {contentTypes.map((type) => (
+            <FilterButton
+              key={type.value}
+              label={type.label}
+              isActive={selectedTypes.includes(type.value)}
+              onClick={() => {
+                const isSelected = selectedTypes.includes(type.value)
+                const newTypes = isSelected
+                  ? selectedTypes.filter((t) => t !== type.value)
+                  : [...selectedTypes, type.value]
+
+                setSelectedTypes(newTypes)
+
+                // Naviger til ny rute viss nøyaktig éin type er vald
+                if (newTypes.length === 1) {
+                  router.push(`/${newTypes[0].toLowerCase()}`)
+                } else if (newTypes.length === 0) {
+                  router.push('/')
+                }
+              }}
+              variant="type"
+            />
+          ))}
+        </div>
+        {view === 'gallery' ? (
+          // Full-bleed on mobile: the mosaic spans exactly the viewport width
+          // with a small inner padding, so frames never get clipped. Normal
+          // containment from sm: up.
+          <div className="mt-4 relative left-1/2 w-screen -translate-x-1/2 px-2 sm:left-0 sm:w-auto sm:translate-x-0 sm:px-0">
+            <GalleryView posts={filteredPosts} />
+          </div>
+        ) : (
+        <motion.div
           className="relative mt-4"
           layout
           transition={{ duration: 0.2, ease: "linear" }}
@@ -394,7 +401,9 @@ export default function MDXBlog({ initialPosts = [], initialType }: MDXBlogProps
             </p>
           )}
         </motion.div>
+        )}
       </main>
+    </div>
     </div>
   )
 }
