@@ -15,7 +15,7 @@ export default async function DynamicPage({ params }: { params: Promise<{ slug: 
     if (VALID_TYPES.includes(slugLower)) {
       const posts = await getPublishedPosts()
       return (
-        <div className="w-full max-w-6xl mx-auto px-2 sm:px-4 py-8 overflow-x-hidden">
+        <div className="w-full max-w-6xl mx-auto px-4 py-8 overflow-x-hidden">
           <MDXBlog initialPosts={JSON.parse(JSON.stringify(posts))} initialType={segments[0].charAt(0).toUpperCase() + segments[0].slice(1)} />
         </div>
       )

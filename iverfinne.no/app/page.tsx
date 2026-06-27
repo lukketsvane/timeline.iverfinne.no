@@ -16,7 +16,7 @@ export default async function Home() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify([websiteJsonLd, personJsonLd]) }}
       />
-      <div className="w-full max-w-6xl mx-auto px-2 sm:px-4 py-8 overflow-x-hidden">
+      <div className="w-full max-w-6xl mx-auto px-4 py-8 overflow-x-hidden">
         <HomePage initialPosts={JSON.parse(JSON.stringify(posts))} />
       </div>
     </>
