@@ -316,7 +316,12 @@ export default function MDXBlog({ initialPosts = [], initialType }: MDXBlogProps
   }
 
   return (
-    <div className="max-w-full overflow-x-hidden min-h-screen">
+    <div
+      className={cn(
+        'max-w-full overflow-x-hidden',
+        view === 'skissebok' ? 'flex h-[100svh] flex-col overflow-hidden' : 'min-h-screen'
+      )}
+    >
       <div className="flex items-center justify-between gap-3 px-2 sm:px-4 pt-4">
         <Link href="/" aria-label="iverfinne.no" className="flex items-center">
           <img src={view === 'skissebok' ? '/icon-white.png' : '/icon.svg'} alt="" width={28} height={28} className="h-7 w-7" />
@@ -349,8 +354,8 @@ export default function MDXBlog({ initialPosts = [], initialType }: MDXBlogProps
           ))}
         </div>
       </div>
-    <div className="p-4 max-w-full overflow-x-hidden">
-      <main className="space-y-4 min-w-0">
+    <div className={cn('max-w-full overflow-x-hidden', view === 'skissebok' ? 'flex min-h-0 flex-1 flex-col px-4' : 'p-4')}>
+      <main className={cn('min-w-0', view === 'skissebok' ? 'flex min-h-0 flex-1 flex-col' : 'space-y-4')}>
         {/* Search + category filters only apply to the timeline; the gallery and
             sketchbook tabs show everything, so hide them there. */}
         {view === 'timeline' && (
