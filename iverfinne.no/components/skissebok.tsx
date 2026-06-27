@@ -35,14 +35,25 @@ const SPREAD_AR = '26 / 21'
 
 const formatDate = (d: string) => `${d.slice(6, 8)}.${d.slice(4, 6)}.${d.slice(0, 4)}`
 
-// One 13×21 leaf face.
+// One 13×21 leaf face. A `spread` drawing is split into a left and right half
+// that land on the two facing pages of an open spread.
 type Face =
   | { kind: 'cover'; side: 'front' | 'back' }
   | { kind: 'blank' }
-  | { kind: 'page'; drawing: Drawing }
+  | { kind: 'page'; drawing: Drawing; half?: 'left' | 'right' }
 
 function buildFaces(drawings: Drawing[]): Face[] {
-  const inner: Face[] = drawings.map((d) => ({ kind: 'page', drawing: d }))
+  const inner: Face[] = []
+  for (const d of drawings) {
+    if (d.format === 'spread') {
+      // The left half must sit on a left page (a back face, i.e. an odd index
+      // once the two cover/endpaper faces are prepended), so pad to make it so.
+      if (inner.length % 2 === 0) inner.push({ kind: 'blank' })
+      inner.push({ kind: 'page', drawing: d, half: 'left' }, { kind: 'page', drawing: d, half: 'right' })
+    } else {
+      inner.push({ kind: 'page', drawing: d })
+    }
+  }
   if (inner.length % 2 !== 0) inner.push({ kind: 'blank' })
   return [{ kind: 'cover', side: 'front' }, { kind: 'blank' }, ...inner, { kind: 'blank' }, { kind: 'cover', side: 'back' }]
 }
@@ -69,7 +80,9 @@ function FlipBook({ drawings }: { drawings: Drawing[] }) {
 
     const scene = new THREE.Scene()
     const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 100)
-    camera.position.set(0, 0, 5)
+    // Pull in so the open spread fills the canvas width (book and canvas share
+    // the 26/21 aspect, so this fills height too).
+    camera.position.set(0, 0, 3.7)
 
     let renderer: THREE.WebGLRenderer
     try {
@@ -84,15 +97,24 @@ function FlipBook({ drawings }: { drawings: Drawing[] }) {
     renderer.domElement.style.height = '100%'
 
     const loader = new THREE.TextureLoader()
-    const loadTex = (src: string, mirror = false) => {
+    const loadTex = (src: string) => {
       const tex = loader.load(src)
       tex.colorSpace = THREE.SRGBColorSpace
       tex.anisotropy = renderer.capabilities.getMaxAnisotropy()
-      if (mirror) {
-        tex.wrapS = THREE.RepeatWrapping
-        tex.repeat.x = -1
-      }
       return tex
+    }
+
+    // Map the image region u∈[u0,u1] onto a PlaneGeometry(1,1). Back faces are
+    // rotated π about Y, so swap the horizontal UVs to keep the image readable.
+    const setUV = (geo: THREE.PlaneGeometry, u0: number, u1: number, back: boolean) => {
+      const left = back ? u1 : u0
+      const right = back ? u0 : u1
+      const uv = geo.attributes.uv as THREE.BufferAttribute
+      uv.setXY(0, left, 1)
+      uv.setXY(1, right, 1)
+      uv.setXY(2, left, 0)
+      uv.setXY(3, right, 0)
+      uv.needsUpdate = true
     }
 
     // Unlit materials so the drawings and cover show at their true brightness.
@@ -101,30 +123,40 @@ function FlipBook({ drawings }: { drawings: Drawing[] }) {
     const coverMat = new THREE.MeshBasicMaterial({ color: 0x141414 })
 
     // A drawing sits on a plane in front of the paper, scaled to "contain" it.
-    const drawingPlane = (src: string, back: boolean) => {
-      const mat = new THREE.MeshBasicMaterial({ map: loadTex(src, back), transparent: true })
-      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mat)
-      // Fit to image aspect once the texture has loaded.
-      const img = new Image()
-      img.onload = () => {
-        const ar = img.naturalWidth / img.naturalHeight
-        const maxW = PW * 0.9
-        const maxH = PH * 0.9
-        let w = maxW
-        let h = w / ar
-        if (h > maxH) { h = maxH; w = h * ar }
-        mesh.scale.set(w, h, 1)
+    // A spread shows only its left/right half so it spans the open spread.
+    const drawingPlane = (src: string, back: boolean, half?: 'left' | 'right') => {
+      const geo = new THREE.PlaneGeometry(1, 1)
+      const [u0, u1] = half === 'left' ? [0, 0.5] : half === 'right' ? [0.5, 1] : [0, 1]
+      setUV(geo, u0, u1, back)
+      const mat = new THREE.MeshBasicMaterial({ map: loadTex(src), transparent: true })
+      const mesh = new THREE.Mesh(geo, mat)
+      if (half) {
+        // A spread half is page-shaped — fill the page full-bleed so the two
+        // halves meet at the spine.
+        mesh.scale.set(PW, PH, 1)
+      } else {
+        // Single page: "contain" the drawing with a small margin.
+        const fit = (ar: number) => {
+          let w = PW * 0.9
+          let h = w / ar
+          if (h > PH * 0.9) { h = PH * 0.9; w = h * ar }
+          mesh.scale.set(w, h, 1)
+        }
+        const img = new Image()
+        img.onload = () => fit(img.naturalWidth / img.naturalHeight)
+        img.src = src
+        fit(PW / PH)
       }
-      img.src = src
-      mesh.scale.set(PW * 0.9, PH * 0.9, 1)
       mesh.position.set(PW / 2, 0, back ? -(DEPTH / 2 + 0.001) : DEPTH / 2 + 0.001)
       if (back) mesh.rotation.y = Math.PI
       return mesh
     }
 
     const coverFace = (back: boolean) => {
-      const mat = new THREE.MeshBasicMaterial({ map: loadTex(back ? COVER_BACK_SRC : COVER_SRC, back) })
-      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(PW, PH), mat)
+      const geo = new THREE.PlaneGeometry(PW, PH)
+      setUV(geo, 0, 1, back)
+      const mat = new THREE.MeshBasicMaterial({ map: loadTex(back ? COVER_BACK_SRC : COVER_SRC) })
+      const mesh = new THREE.Mesh(geo, mat)
       mesh.position.set(PW / 2, 0, back ? -(DEPTH / 2 + 0.001) : DEPTH / 2 + 0.001)
       if (back) mesh.rotation.y = Math.PI
       return mesh
@@ -149,9 +181,9 @@ function FlipBook({ drawings }: { drawings: Drawing[] }) {
       board.position.set(PW / 2, 0, 0)
       group.add(board)
 
-      if (front.kind === 'page') group.add(drawingPlane(front.drawing.src, false))
+      if (front.kind === 'page') group.add(drawingPlane(front.drawing.src, false, front.half))
       if (front.kind === 'cover') group.add(coverFace(false))
-      if (back.kind === 'page') group.add(drawingPlane(back.drawing.src, true))
+      if (back.kind === 'page') group.add(drawingPlane(back.drawing.src, true, back.half))
       if (back.kind === 'cover') group.add(coverFace(true))
 
       // Front cover carries the elastic closure band near the fore-edge.
@@ -242,14 +274,14 @@ function FlipBook({ drawings }: { drawings: Drawing[] }) {
 
   return (
     <div className="flex w-full flex-col items-center gap-4">
-      <div className="relative mx-auto w-full max-w-3xl" style={{ aspectRatio: SPREAD_AR }}>
+      <div className="relative mx-auto w-full max-w-5xl" style={{ aspectRatio: SPREAD_AR }}>
         <div ref={mountRef} className="absolute inset-0" />
         {/* Click the left / right half to turn the leaves */}
         <button type="button" aria-label="Førre" onClick={() => flip(-1)} className="absolute inset-y-0 left-0 w-1/2 cursor-w-resize" />
         <button type="button" aria-label="Neste" onClick={() => flip(1)} className="absolute inset-y-0 right-0 w-1/2 cursor-e-resize" />
       </div>
 
-      <div className="mx-auto h-5 w-full max-w-3xl">
+      <div className="mx-auto h-5 w-full max-w-5xl">
         {currentDate && <span className="text-sm tabular-nums text-muted-foreground">{formatDate(currentDate)}</span>}
       </div>
     </div>
