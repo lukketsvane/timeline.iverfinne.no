@@ -319,10 +319,11 @@ export default function MDXBlog({ initialPosts = [], initialType }: MDXBlogProps
     <div
       className={cn(
         'max-w-full overflow-x-hidden',
-        // Skissebok is exactly one screen tall. Pull it out of the page's padded
-        // container with `fixed` so the 100svh height never adds page scroll.
+        // Skissebok fills exactly one screen with no page scroll. Stay inside the
+        // page's padded container (so the header spacing matches the other tabs)
+        // and subtract that container's py-8 (4rem) from 100svh.
         view === 'skissebok'
-          ? 'fixed inset-x-0 top-0 z-40 flex h-[100svh] flex-col overflow-hidden bg-[#0a0a0a]'
+          ? 'flex h-[calc(100svh-4rem)] flex-col overflow-hidden'
           : 'min-h-screen'
       )}
     >
