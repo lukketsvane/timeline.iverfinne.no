@@ -77,9 +77,7 @@ export default function GalleryView({ posts }: { posts: GalleryPost[] }) {
   // posts without one) — an image gallery shouldn't be padded with blanks.
   const withImages = posts.filter((p) => pickImage(p))
 
-  if (withImages.length === 0) {
-    return <p className="text-gray-500 dark:text-gray-400 text-sm">Fann ingen bilete som passar søket.</p>
-  }
+  if (withImages.length === 0) return null
 
   return (
     <div className="columns-2 sm:columns-3 lg:columns-4 gap-3">
