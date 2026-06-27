@@ -11,6 +11,7 @@ import GalleryView from "./gallery-view"
 import type { MDXRemoteSerializeResult } from 'next-mdx-remote'
 import { getTagColor } from "@/lib/tag-utils"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
 
 interface Post {
   uid: string
@@ -297,7 +298,10 @@ export default function MDXBlog({ initialPosts = [], initialType }: MDXBlogProps
 
   return (
     <div className="max-w-full overflow-x-hidden">
-      <div className="flex justify-center px-2 sm:px-4 pt-4">
+      <div className="relative flex items-center justify-center px-2 sm:px-4 pt-4">
+        <Link href="/" aria-label="iverfinne.no" className="absolute left-2 sm:left-4 flex items-center">
+          <img src="/icon.svg" alt="" width={28} height={28} className="h-7 w-7" />
+        </Link>
         <div className="inline-flex items-center rounded-full bg-gray-100 dark:bg-gray-800 p-1 text-sm font-medium">
           {([['timeline', 'Tidslinje'], ['gallery', 'Bildegalleri']] as const).map(([v, label]) => (
             <button
