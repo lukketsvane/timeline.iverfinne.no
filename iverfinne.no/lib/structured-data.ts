@@ -110,3 +110,17 @@ export function generatePersonJsonLd() {
     url: SITE_URL,
   }
 }
+
+export function generateBreadcrumbJsonLd(post: Post) {
+  const typeUrl = `${SITE_URL}/${post.type.toLowerCase()}`
+  const postUrl = `${typeUrl}/${post.slug}`
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Heim', item: SITE_URL },
+      { '@type': 'ListItem', position: 2, name: post.type, item: typeUrl },
+      { '@type': 'ListItem', position: 3, name: post.title, item: postUrl },
+    ],
+  }
+}
