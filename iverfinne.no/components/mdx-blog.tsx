@@ -359,7 +359,7 @@ export default function MDXBlog({ initialPosts = [], initialType }: MDXBlogProps
           ))}
         </div>
       </div>
-    <div className={cn('max-w-full overflow-x-hidden', view === 'skissebok' ? 'flex min-h-0 flex-1 flex-col px-4' : 'p-4')}>
+    <div className={cn('max-w-full overflow-x-hidden', view === 'skissebok' ? 'flex min-h-0 flex-1 flex-col' : 'p-4')}>
       <main className={cn('min-w-0', view === 'skissebok' ? 'flex min-h-0 flex-1 flex-col' : 'space-y-4')}>
         {/* Search + category filters only apply to the timeline; the gallery and
             sketchbook tabs show everything, so hide them there. */}

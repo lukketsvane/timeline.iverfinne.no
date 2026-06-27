@@ -64,7 +64,10 @@ const faceDate = (f?: Face): string | null => (f && f.kind === 'page' ? f.drawin
 type Leaf = { group: THREE.Group; target: number; from: number; t0: number | null }
 
 const FLIP_MS = 1150
-const FRAME_MARGIN = 1.22 // headroom so a lifted/turning page never clips the canvas
+// The book fills the canvas width edge-to-edge (no horizontal margin); the
+// vertical margin keeps headroom so a lifted/turning page never clips.
+const FRAME_MARGIN_X = 1.0
+const FRAME_MARGIN_Y = 1.22
 const easeInOut = (p: number) => (p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2)
 
 function FlipBook({ drawings }: { drawings: Drawing[] }) {
@@ -258,8 +261,8 @@ function FlipBook({ drawings }: { drawings: Drawing[] }) {
       // Fixed framing: always fit the full open spread (width 2·PW, height PH)
       // with margin. The book "takes the width" and the zoom stays put — it
       // never re-derives per page or per turn.
-      const halfW = PW * FRAME_MARGIN
-      const halfH = (PH / 2) * FRAME_MARGIN
+      const halfW = PW * FRAME_MARGIN_X
+      const halfH = (PH / 2) * FRAME_MARGIN_Y
       camera.position.z = Math.max(halfH / tanHalf, halfW / (tanHalf * camera.aspect))
     }
     resize()
@@ -349,14 +352,14 @@ function FlipBook({ drawings }: { drawings: Drawing[] }) {
     <div className="flex min-h-0 w-full flex-1 flex-col items-center gap-2 py-2">
       {/* Canvas fills the leftover viewport; the camera frames the book inside
           it with margin, so the page-turn never clips against the edges. */}
-      <div className="relative mx-auto min-h-0 w-full max-w-5xl flex-1">
+      <div className="relative mx-auto min-h-0 w-full flex-1">
         <div ref={mountRef} className="absolute inset-0" />
         {/* Click the left / right half to turn the leaves */}
         <button type="button" aria-label="Førre" onClick={() => flip(-1)} className="absolute inset-y-0 left-0 w-1/2 cursor-w-resize" />
         <button type="button" aria-label="Neste" onClick={() => flip(1)} className="absolute inset-y-0 right-0 w-1/2 cursor-e-resize" />
       </div>
 
-      <div className="mx-auto h-5 w-full max-w-5xl shrink-0">
+      <div className="mx-auto h-5 w-full max-w-5xl shrink-0 px-4">
         {currentDate && <span className="text-sm tabular-nums text-muted-foreground">{formatDate(currentDate)}</span>}
       </div>
     </div>
