@@ -104,16 +104,16 @@ function FlipBook({ drawings }: { drawings: Drawing[] }) {
       return tex
     }
 
-    // Map the image region u∈[u0,u1] onto a PlaneGeometry(1,1). Back faces are
-    // rotated π about Y, so swap the horizontal UVs to keep the image readable.
-    const setUV = (geo: THREE.PlaneGeometry, u0: number, u1: number, back: boolean) => {
+    // Map the image region u∈[u0,u1], v∈[v0,v1] onto a PlaneGeometry. Back faces
+    // are rotated π about Y, so swap the horizontal UVs to keep them readable.
+    const setUV = (geo: THREE.PlaneGeometry, u0: number, u1: number, v0: number, v1: number, back: boolean) => {
       const left = back ? u1 : u0
       const right = back ? u0 : u1
       const uv = geo.attributes.uv as THREE.BufferAttribute
-      uv.setXY(0, left, 1)
-      uv.setXY(1, right, 1)
-      uv.setXY(2, left, 0)
-      uv.setXY(3, right, 0)
+      uv.setXY(0, left, v1)
+      uv.setXY(1, right, v1)
+      uv.setXY(2, left, v0)
+      uv.setXY(3, right, v0)
       uv.needsUpdate = true
     }
 
@@ -122,30 +122,29 @@ function FlipBook({ drawings }: { drawings: Drawing[] }) {
     const edgeMat = new THREE.MeshBasicMaterial({ color: 0xddd5c0 })
     const coverMat = new THREE.MeshBasicMaterial({ color: 0x141414 })
 
-    // A drawing sits on a plane in front of the paper, scaled to "contain" it.
-    // A spread shows only its left/right half so it spans the open spread.
+    // Each drawing fills its whole page (full-bleed). A spread shows its
+    // left/right half; a single page is centre-cropped to the page aspect so it
+    // fills edge-to-edge without distortion.
     const drawingPlane = (src: string, back: boolean, half?: 'left' | 'right') => {
       const geo = new THREE.PlaneGeometry(1, 1)
-      const [u0, u1] = half === 'left' ? [0, 0.5] : half === 'right' ? [0.5, 1] : [0, 1]
-      setUV(geo, u0, u1, back)
+      const applyUV = (u0: number, u1: number, v0: number, v1: number) => setUV(geo, u0, u1, v0, v1, back)
+      if (half === 'left') applyUV(0, 0.5, 0, 1)
+      else if (half === 'right') applyUV(0.5, 1, 0, 1)
+      else applyUV(0, 1, 0, 1)
+
       const mat = new THREE.MeshBasicMaterial({ map: loadTex(src), transparent: true })
       const mesh = new THREE.Mesh(geo, mat)
-      if (half) {
-        // A spread half is page-shaped — fill the page full-bleed so the two
-        // halves meet at the spine.
-        mesh.scale.set(PW, PH, 1)
-      } else {
-        // Single page: "contain" the drawing with a small margin.
-        const fit = (ar: number) => {
-          let w = PW * 0.9
-          let h = w / ar
-          if (h > PH * 0.9) { h = PH * 0.9; w = h * ar }
-          mesh.scale.set(w, h, 1)
-        }
+      mesh.scale.set(PW, PH, 1)
+
+      if (!half) {
+        const target = PW / PH
         const img = new Image()
-        img.onload = () => fit(img.naturalWidth / img.naturalHeight)
+        img.onload = () => {
+          const ar = img.naturalWidth / img.naturalHeight
+          if (ar > target) { const vis = target / ar; applyUV((1 - vis) / 2, (1 + vis) / 2, 0, 1) }
+          else { const vis = ar / target; applyUV(0, 1, (1 - vis) / 2, (1 + vis) / 2) }
+        }
         img.src = src
-        fit(PW / PH)
       }
       mesh.position.set(PW / 2, 0, back ? -(DEPTH / 2 + 0.001) : DEPTH / 2 + 0.001)
       if (back) mesh.rotation.y = Math.PI
@@ -154,7 +153,7 @@ function FlipBook({ drawings }: { drawings: Drawing[] }) {
 
     const coverFace = (back: boolean) => {
       const geo = new THREE.PlaneGeometry(PW, PH)
-      setUV(geo, 0, 1, back)
+      setUV(geo, 0, 1, 0, 1, back)
       const mat = new THREE.MeshBasicMaterial({ map: loadTex(back ? COVER_BACK_SRC : COVER_SRC) })
       const mesh = new THREE.Mesh(geo, mat)
       mesh.position.set(PW / 2, 0, back ? -(DEPTH / 2 + 0.001) : DEPTH / 2 + 0.001)
@@ -218,6 +217,18 @@ function FlipBook({ drawings }: { drawings: Drawing[] }) {
     const ro = new ResizeObserver(resize)
     ro.observe(mount)
 
+    // Centre whichever page(s) actually carry content: a full spread centres on
+    // the spine, a lone page centres itself (so it never sits off to one side).
+    const hasContent = (f?: Face) => !!f && (f.kind === 'page' || f.kind === 'cover')
+    const centerOffset = (t: number) => {
+      const left = hasContent(faces[2 * t - 1])
+      const right = hasContent(faces[2 * t])
+      if (left && right) return 0
+      if (right) return -PW / 2
+      if (left) return PW / 2
+      return 0
+    }
+
     // ── Animation loop ──────────────────────────────────────────────────────
     let raf = 0
     const tick = () => {
@@ -232,9 +243,7 @@ function FlipBook({ drawings }: { drawings: Drawing[] }) {
         const base = (l.target < 0 ? i : leafCount - i) * GAP
         l.group.position.z = base + lift
       }
-      // Centre the closed cover; centre the spread once open.
-      const t = turnedRef.current
-      const targetX = t === 0 ? -PW / 2 : t === leafCount ? PW / 2 : 0
+      const targetX = centerOffset(turnedRef.current)
       book.position.x += (targetX - book.position.x) * 0.12
       renderer.render(scene, camera)
       raf = requestAnimationFrame(tick)
