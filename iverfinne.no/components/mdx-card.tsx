@@ -102,7 +102,7 @@ interface MDXCardProps {
 }
 
 const TimelineConnector = () => (
-  <div className="absolute left-0 w-px top-0 bottom-0 bg-gray-200 dark:bg-gray-800 -translate-x-1/2" />
+  <div className="absolute left-0 sm:left-0 w-0.5 top-0 bottom-0 bg-gray-200 dark:bg-gray-700 -translate-x-1/2" />
 )
 
 const TimelineNode = ({ type, onToggle, url }: { type: string, onToggle: () => void, url?: string }) => {
@@ -126,12 +126,12 @@ const TimelineNode = ({ type, onToggle, url }: { type: string, onToggle: () => v
   }
   
   return (
-    <button
+    <button 
       onClick={handleClick}
       className={cn(
-        "absolute left-0 top-5 w-3.5 h-3.5 rounded-full -translate-x-1/2 ring-4 ring-white dark:ring-gray-950 z-10 shadow-sm transition-transform hover:scale-125 cursor-pointer",
+        "absolute left-0 sm:left-0 top-[1.125rem] w-3 h-3 sm:w-4 sm:h-4 rounded-full -translate-x-1/2 border-2 border-white dark:border-gray-900 z-10 transition-transform hover:scale-125 cursor-pointer",
         typeColors[type as keyof typeof typeColors] || "bg-gray-500"
-      )}
+      )} 
       aria-label={type === "Lenkje" ? "Opna lenkje" : "Utvid eller skjul innhald"}
     />
   )
@@ -264,7 +264,7 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
   }
 
   return (
-    <div className="relative grid grid-cols-1 sm:grid-cols-[auto,1fr] gap-2 sm:gap-4 max-w-full pl-4 sm:pl-0">
+    <div className="relative grid grid-cols-1 sm:grid-cols-[auto,1fr] gap-2 sm:gap-4 max-w-full pl-5 sm:pl-0">
       <div className="hidden sm:block text-right pt-5 pr-6 w-24 shrink-0">
         <time className="text-lg font-semibold text-muted-foreground whitespace-nowrap lowercase">
           <span className="font-extrabold">{day}.</span> {month}
@@ -275,20 +275,14 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
           <TimelineNode type={post.type} onToggle={handleCardClick} url={post.url} />
           <TimelineConnector />
         </div>
-        <div className="pb-6 pt-0">
+        <div className="pb-8 pt-0">
           <motion.article
             className={cn(
-              "relative rounded-xl transition-colors",
+              "relative rounded-lg p-4 transition-colors",
               post.type === "Lenkje"
-                // Lenkje renders its own bordered bookmark box below, so keep the
-                // wrapper padding-free to align it with the other card boxes.
-                ? "cursor-alias"
-                : cn(
-                    "border p-4 shadow-sm bg-white dark:bg-gray-900/60 border-gray-200 dark:border-gray-800",
-                    isExpanded
-                      ? "dark:bg-gray-800"
-                      : "hover:border-gray-300 dark:hover:border-gray-700 cursor-pointer"
-                  )
+                ? "hover:bg-blue-50/30 dark:hover:bg-blue-900/10 cursor-alias"
+                : (isExpanded ? "dark:bg-gray-800" : "hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer"),
+              "ml-0"
             )}
             onClick={handleCardClick}
             initial={false}
@@ -304,7 +298,7 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
               // standard Open Graph aspect ratio (1.91:1), with the site/title/
               // description below. This mirrors how Messenger, Facebook, etc. render
               // shared links and avoids the previous side-image strip cropping.
-              <div className="border border-gray-200 dark:border-gray-800 rounded-xl shadow-sm overflow-hidden hover:border-gray-300 dark:hover:border-gray-700 transition-colors">
+              <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden hover:border-gray-300 dark:hover:border-gray-600 transition-colors">
                 {image && (
                   <div className="relative w-full aspect-[1.91/1] bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
                     {/* Use plain <img> — ogImage is an arbitrary external URL not in remotePatterns */}
