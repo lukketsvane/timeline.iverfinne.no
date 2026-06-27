@@ -1,7 +1,10 @@
 import type { MetadataRoute } from 'next'
 import { getPublishedPosts, VALID_TYPES } from '@/lib/notion'
 
-export const dynamic = 'force-dynamic'
+// Revalidate hourly instead of force-dynamic: a sitemap doesn't need realtime
+// data, and force-dynamic re-ran the full Notion query (+ OG + thumbnail
+// fetches) on every crawler hit.
+export const revalidate = 3600
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const posts = await getPublishedPosts()

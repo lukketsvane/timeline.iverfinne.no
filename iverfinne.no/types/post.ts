@@ -12,6 +12,7 @@ export interface Post {
   url?: string
   lyd?: string
   icon?: string
+  sosialbilete?: string
   thumbnails?: { src: string; alt: string }[]
   ogTitle?: string
   ogDescription?: string

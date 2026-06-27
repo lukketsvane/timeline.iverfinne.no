@@ -6,7 +6,10 @@ import type { MDXRemoteSerializeResult } from "next-mdx-remote";
 import remarkGfm from "remark-gfm";
 import rehypePrismPlus from "rehype-prism-plus";
 import { Post } from "@/types/post";
-// No unstable_cache — route-level revalidate=60 handles caching
+import { cache } from "react";
+import { unstable_cache } from "next/cache";
+// React cache() dedupes Notion calls within a single render pass; the
+// route-level revalidate=60 still caches the rendered output across requests.
 
 const notion = new Client({
   auth: process.env.NOTION_API_KEY,
@@ -313,6 +316,19 @@ function getPageProperties(page: any) {
   };
   const lyd = getLyd();
 
+  // Sosialbilete (social image override) — optional file property. When set,
+  // Lenkje cards use this instead of the link target's og:image. Empty = no
+  // change, so only rows with an uploaded image are overridden.
+  const getFileUrl = (name: string): string | undefined => {
+    const prop = findProp(name);
+    if (!prop || !prop.files || !Array.isArray(prop.files) || prop.files.length === 0) return undefined;
+    const file = prop.files[0];
+    if (file.type === "file") return file.file?.url;
+    if (file.type === "external") return file.external?.url;
+    return undefined;
+  };
+  const sosialbilete = proxyImageUrl(getFileUrl("sosialbilete"));
+
   const uid = `${type}-${slug}`;
 
   return {
@@ -327,7 +343,8 @@ function getPageProperties(page: any) {
     image,
     url,
     lyd,
-    icon
+    icon,
+    sosialbilete
   };
 }
 
@@ -367,7 +384,15 @@ async function fetchOgMetadata(url: string): Promise<{ ogTitle?: string; ogDescr
   }
 }
 
-export async function getPublishedPosts(): Promise<Post[]> {
+// Cache OG metadata across requests — link targets rarely change, so avoid
+// re-fetching and re-parsing external HTML on every list regeneration.
+const fetchOgMetadataCached = unstable_cache(
+  fetchOgMetadata,
+  ['og-metadata'],
+  { revalidate: 3600 }
+);
+
+export const getPublishedPosts = cache(async (): Promise<Post[]> => {
   const databaseId = getDatabaseId();
   try {
     const response = await withRetry(() => notion.databases.query({
@@ -397,7 +422,7 @@ export async function getPublishedPosts(): Promise<Post[]> {
           // Fetch OG metadata for Lenkje posts
           let ogData: { ogTitle?: string; ogDescription?: string; ogImage?: string } = {};
           if (props.type === "Lenkje" && props.url) {
-            ogData = await fetchOgMetadata(props.url);
+            ogData = await fetchOgMetadataCached(props.url);
           }
 
           return {
@@ -417,7 +442,7 @@ export async function getPublishedPosts(): Promise<Post[]> {
     console.error("Notion API error:", error);
     throw error;
   }
-}
+});
 
 export async function getPostContent(pageId: string): Promise<string> {
   const mdblocks = await n2m.pageToMarkdown(pageId);
@@ -488,7 +513,7 @@ export async function getPostIdBySlug(slug: string): Promise<string | null> {
     return null;
 }
 
-export async function getPostBySlug(slug: string): Promise<Post | null> {
+export const getPostBySlug = cache(async (slug: string): Promise<Post | null> => {
   const databaseId = getDatabaseId();
   const response = await withRetry(() => notion.databases.query({
     database_id: databaseId,
@@ -517,4 +542,4 @@ export async function getPostBySlug(slug: string): Promise<Post | null> {
     content,
     thumbnails,
   };
-}
+});
