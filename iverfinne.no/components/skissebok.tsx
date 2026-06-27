@@ -99,14 +99,39 @@ function FlipBook({ drawings }: { drawings: Drawing[] }) {
     mount.appendChild(renderer.domElement)
     renderer.domElement.style.width = '100%'
     renderer.domElement.style.height = '100%'
+    // Preload everything, then fade the book in once it's all decoded.
+    renderer.domElement.style.opacity = '0'
+    renderer.domElement.style.transition = 'opacity 0.5s ease'
+    const reveal = () => { renderer.domElement.style.opacity = '1' }
 
-    const loader = new THREE.TextureLoader()
+    const manager = new THREE.LoadingManager(reveal)
+    const revealTimer = setTimeout(reveal, 2500) // fallback if a texture stalls
+    const loader = new THREE.TextureLoader(manager)
     const loadTex = (src: string) => {
       const tex = loader.load(src)
       tex.colorSpace = THREE.SRGBColorSpace
       tex.anisotropy = renderer.capabilities.getMaxAnisotropy()
       return tex
     }
+
+    // Rounded-rectangle alpha mask → slightly rounded Moleskine corners.
+    const cw = 256
+    const ch = Math.round((cw * PH) / PW)
+    const cvs = document.createElement('canvas')
+    cvs.width = cw
+    cvs.height = ch
+    const ctx = cvs.getContext('2d')!
+    ctx.fillStyle = '#fff'
+    const rad = cw * 0.035
+    ctx.beginPath()
+    ctx.moveTo(rad, 0)
+    ctx.arcTo(cw, 0, cw, ch, rad)
+    ctx.arcTo(cw, ch, 0, ch, rad)
+    ctx.arcTo(0, ch, 0, 0, rad)
+    ctx.arcTo(0, 0, cw, 0, rad)
+    ctx.closePath()
+    ctx.fill()
+    const cornerMask = new THREE.CanvasTexture(cvs)
 
     // Map the image region u∈[u0,u1], v∈[v0,v1] onto a PlaneGeometry. Back faces
     // are rotated π about Y, so swap the horizontal UVs to keep them readable.
@@ -125,9 +150,9 @@ function FlipBook({ drawings }: { drawings: Drawing[] }) {
     // PAPER is the Moleskine cream — drawings multiply over it, so a scan's white
     // background becomes this colour while the ink stays dark.
     const PAPER = 0xf2eee0
-    const paperMat = () => new THREE.MeshBasicMaterial({ color: PAPER })
+    const paperMat = () => new THREE.MeshBasicMaterial({ color: PAPER, alphaMap: cornerMask, transparent: true })
     const edgeMat = new THREE.MeshBasicMaterial({ color: 0xddd5c0 })
-    const coverMat = new THREE.MeshBasicMaterial({ color: 0x141414 })
+    const coverMat = new THREE.MeshBasicMaterial({ color: 0x141414, alphaMap: cornerMask, transparent: true })
 
     // Each drawing fills its whole page (full-bleed). A spread shows its
     // left/right half; a single page is centre-cropped to the page aspect so it
@@ -168,7 +193,7 @@ function FlipBook({ drawings }: { drawings: Drawing[] }) {
     const coverFace = (back: boolean) => {
       const geo = new THREE.PlaneGeometry(PW, PH)
       setUV(geo, 0, 1, 0, 1, back)
-      const mat = new THREE.MeshBasicMaterial({ map: loadTex(back ? COVER_BACK_SRC : COVER_SRC) })
+      const mat = new THREE.MeshBasicMaterial({ map: loadTex(back ? COVER_BACK_SRC : COVER_SRC), alphaMap: cornerMask, transparent: true })
       const mesh = new THREE.Mesh(geo, mat)
       mesh.position.set(PW / 2, 0, back ? -(DEPTH / 2 + 0.001) : DEPTH / 2 + 0.001)
       if (back) mesh.rotation.y = Math.PI
@@ -265,16 +290,21 @@ function FlipBook({ drawings }: { drawings: Drawing[] }) {
       }
 
       const t = turnedRef.current
-      const both = hasContent(faces[2 * t - 1]) && hasContent(faces[2 * t])
       book.position.x += (centerOffset(t) - book.position.x) * 0.12
 
       // Frame the visible content: a lone page fills the height, an open spread
-      // fills the width — with margin so a lifted/turning page never clips.
-      const halfW = (both ? PW : PW / 2) * FRAME_MARGIN
+      // fills the width. While anything is turning, frame for the full spread —
+      // and snap *outward* instantly so the widening view can never clip; only
+      // ease inward (when settling onto a lone page).
+      const turning = ls.some((l) => l.t0 !== null)
+      const wide = turning || (hasContent(faces[2 * t - 1]) && hasContent(faces[2 * t]))
+      const halfW = (wide ? PW : PW / 2) * FRAME_MARGIN
       const halfH = (PH / 2) * FRAME_MARGIN
       const tanHalf = Math.tan((camera.fov * Math.PI) / 360)
       const targetZ = Math.max(halfH / tanHalf, halfW / (tanHalf * camera.aspect))
-      camera.position.z += (targetZ - camera.position.z) * 0.1
+      camera.position.z = targetZ > camera.position.z
+        ? targetZ
+        : camera.position.z + (targetZ - camera.position.z) * 0.08
 
       renderer.render(scene, camera)
       raf = requestAnimationFrame(tick)
@@ -284,7 +314,9 @@ function FlipBook({ drawings }: { drawings: Drawing[] }) {
 
     return () => {
       cancelAnimationFrame(raf)
+      clearTimeout(revealTimer)
       ro.disconnect()
+      cornerMask.dispose()
       renderer.dispose()
       scene.traverse((o) => {
         if (o instanceof THREE.Mesh) {
@@ -321,17 +353,17 @@ function FlipBook({ drawings }: { drawings: Drawing[] }) {
   const flip = (dir: number) => setTurned((t) => Math.max(0, Math.min(leafCount, t + dir)))
 
   return (
-    <div className="flex w-full flex-col items-center gap-3">
-      {/* Tall canvas centred in the viewport; the camera frames the book inside
+    <div className="flex min-h-0 w-full flex-1 flex-col items-center gap-2 py-2">
+      {/* Canvas fills the leftover viewport; the camera frames the book inside
           it with margin, so the page-turn never clips against the edges. */}
-      <div className="relative mx-auto h-[72svh] w-full max-w-5xl">
+      <div className="relative mx-auto min-h-0 w-full max-w-5xl flex-1">
         <div ref={mountRef} className="absolute inset-0" />
         {/* Click the left / right half to turn the leaves */}
         <button type="button" aria-label="Førre" onClick={() => flip(-1)} className="absolute inset-y-0 left-0 w-1/2 cursor-w-resize" />
         <button type="button" aria-label="Neste" onClick={() => flip(1)} className="absolute inset-y-0 right-0 w-1/2 cursor-e-resize" />
       </div>
 
-      <div className="mx-auto h-5 w-full max-w-5xl">
+      <div className="mx-auto h-5 w-full max-w-5xl shrink-0">
         {currentDate && <span className="text-sm tabular-nums text-muted-foreground">{formatDate(currentDate)}</span>}
       </div>
     </div>
@@ -340,6 +372,14 @@ function FlipBook({ drawings }: { drawings: Drawing[] }) {
 
 export default function Skissebok() {
   const [drawings, setDrawings] = useState<Drawing[]>(SEED)
+
+  // Warm the browser cache for every drawing up front.
+  useEffect(() => {
+    for (const src of [...drawings.map((d) => d.src), COVER_SRC, COVER_BACK_SRC]) {
+      const img = new Image()
+      img.src = src
+    }
+  }, [drawings])
 
   useEffect(() => {
     let alive = true
@@ -353,7 +393,7 @@ export default function Skissebok() {
   }, [])
 
   return (
-    <div className="mt-6 flex flex-col items-center gap-6">
+    <div className="flex min-h-0 w-full flex-1 flex-col items-center">
       <FlipBook drawings={drawings} />
     </div>
   )
