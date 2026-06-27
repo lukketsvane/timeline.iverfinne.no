@@ -376,7 +376,9 @@ export default function MDXBlog({ initialPosts = [], initialType }: MDXBlogProps
           </div>
         )}
         {view === 'gallery' ? (
-          <div className="mt-4">
+          // Pull the mosaic closer to the screen edges on mobile (cancels the
+          // container padding); normal spacing from sm: up.
+          <div className="mt-4 -mx-5 sm:mx-0">
             <GalleryView posts={filteredPosts} />
           </div>
         ) : (
