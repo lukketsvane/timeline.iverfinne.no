@@ -257,7 +257,7 @@ export default function MDXBlog({ initialPosts = [], initialType }: MDXBlogProps
       if (res.ok) {
         const data = await res.json()
         if (data.source) {
-          setPosts(prev => prev.map(p => (p.uid === uid ? { ...p, serialized: data.source } : p)))
+          setPosts(prev => prev.map(p => (p.uid === uid ? { ...p, serialized: data.source, content: data.content ?? p.content } : p)))
         }
       }
     } catch (e) {
