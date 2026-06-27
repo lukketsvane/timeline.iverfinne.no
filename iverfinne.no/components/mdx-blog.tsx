@@ -352,30 +352,11 @@ export default function MDXBlog({ initialPosts = [], initialType }: MDXBlogProps
             />
           ))}
         </div>
-        {/* Tag chips: hidden until the user starts searching (or has tags active) */}
-        {(search.trim().length > 0 || selectedTags.length > 0) && uniqueTags.length > 0 && (
-          <div className="flex flex-wrap gap-1.5">
-            {uniqueTags.map((tag) => (
-              <FilterButton
-                key={tag}
-                label={tag}
-                isActive={selectedTags.includes(tag)}
-                onClick={() => {
-                  setSelectedTags((prev) =>
-                    prev.includes(tag)
-                      ? prev.filter((t) => t !== tag)
-                      : [...prev, tag]
-                  )
-                }}
-                variant="tag"
-              />
-            ))}
-          </div>
-        )}
         {view === 'gallery' ? (
-          // Pull the mosaic closer to the screen edges on mobile (cancels the
-          // container padding); normal spacing from sm: up.
-          <div className="mt-4 -mx-5 sm:mx-0">
+          // Full-bleed on mobile: the mosaic spans exactly the viewport width
+          // with a small inner padding, so frames never get clipped. Normal
+          // containment from sm: up.
+          <div className="mt-4 relative left-1/2 w-screen -translate-x-1/2 px-2 sm:left-0 sm:w-auto sm:translate-x-0 sm:px-0">
             <GalleryView posts={filteredPosts} />
           </div>
         ) : (
