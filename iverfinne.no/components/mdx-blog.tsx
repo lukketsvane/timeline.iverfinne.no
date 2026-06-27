@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useRef, useCallback } from "react"
 import { Search } from 'lucide-react'
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -118,8 +118,12 @@ export default function MDXBlog({ initialPosts = [], initialType }: MDXBlogProps
     return Array.from(tagSet).sort()
   }, [posts])
 
+  const inflightRef = useRef<Set<string>>(new Set())
+  const prefetchStartedRef = useRef(false)
+
   useEffect(() => {
     setPosts(initialPosts)
+    prefetchStartedRef.current = false
   }, [initialPosts])
 
   // Update selected types if initialType changes (via route navigation)
@@ -237,43 +241,56 @@ export default function MDXBlog({ initialPosts = [], initialType }: MDXBlogProps
     }
   }, [posts, search, selectedTypes, selectedTags])
 
-  const handlePostToggle = async (uid: string) => {
+  // Fetch + serialize a single post's content and merge it into state. Guarded
+  // so the same post is never fetched twice concurrently.
+  const ensureSerialized = useCallback(async (id: string, uid: string) => {
+    if (inflightRef.current.has(id)) return
+    inflightRef.current.add(id)
     try {
-      setExpandedPosts(prev => {
-        const next = new Set(prev)
-        if (next.has(uid)) {
-          next.delete(uid)
-          return next
-        } 
-        return next.add(uid)
-      })
-
-      const postIndex = posts.findIndex(p => p.uid === uid)
-      if (postIndex === -1) return
-
-      const post = posts[postIndex]
-      if (!post.serialized && post.id) {
-          try {
-            const res = await fetch(`/api/posts/${post.id}`)
-            if (res.ok) {
-                const data = await res.json()
-                if (data.source) {
-                    setPosts(prev => {
-                        const newPosts = [...prev]
-                        newPosts[postIndex] = { ...post, serialized: data.source }
-                        return newPosts
-                    })
-                }
-            }
-          } catch (e) {
-            console.error("Failed to fetch post content", e)
-          }
+      const res = await fetch(`/api/posts/${id}`)
+      if (res.ok) {
+        const data = await res.json()
+        if (data.source) {
+          setPosts(prev => prev.map(p => (p.uid === uid ? { ...p, serialized: data.source } : p)))
+        }
       }
-
-    } catch (err) {
-      console.error('Error toggling post:', err)
-      setError('Feila ved utviding av innlegg')
+    } catch (e) {
+      console.error("Failed to fetch post content", e)
+    } finally {
+      inflightRef.current.delete(id)
     }
+  }, [])
+
+  // Prefetch every post's content in the background so expanding is instant and
+  // never shows a spinner. Runs once per list, throttled to spare the Notion API.
+  useEffect(() => {
+    if (prefetchStartedRef.current || posts.length === 0) return
+    prefetchStartedRef.current = true
+    const pending = posts.filter(p => p.id && !p.serialized)
+    if (pending.length === 0) return
+    let cancelled = false
+    let i = 0
+    const worker = async () => {
+      while (!cancelled && i < pending.length) {
+        const p = pending[i++]
+        await ensureSerialized(p.id!, p.uid)
+      }
+    }
+    const t = setTimeout(() => {
+      for (let w = 0; w < 3; w++) worker()
+    }, 200)
+    return () => { cancelled = true; clearTimeout(t) }
+  }, [posts, ensureSerialized])
+
+  const handlePostToggle = (uid: string) => {
+    setExpandedPosts(prev => {
+      const next = new Set(prev)
+      if (next.has(uid)) next.delete(uid)
+      else next.add(uid)
+      return next
+    })
+    const post = posts.find(p => p.uid === uid)
+    if (post && !post.serialized && post.id) ensureSerialized(post.id, post.uid)
   }
 
   return (
