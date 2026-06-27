@@ -315,37 +315,8 @@ export default function MDXBlog({ initialPosts = [], initialType }: MDXBlogProps
           ))}
         </div>
       </div>
-    <div className="flex flex-col lg:flex-row gap-4 p-4 max-w-full overflow-x-hidden">
-      <aside className="w-full lg:w-48 space-y-4 shrink-0">
-        <div className="space-y-2">
-          <div className="flex flex-wrap gap-1.5">
-            {contentTypes.map((type) => (
-              <FilterButton
-                key={type.value}
-                label={type.label}
-                isActive={selectedTypes.includes(type.value)}
-                onClick={() => {
-                  const isSelected = selectedTypes.includes(type.value)
-                  const newTypes = isSelected
-                    ? selectedTypes.filter((t) => t !== type.value)
-                    : [...selectedTypes, type.value]
-                  
-                  setSelectedTypes(newTypes)
-                  
-                  // Naviger til ny rute viss nøyaktig éin type er vald
-                  if (newTypes.length === 1) {
-                    router.push(`/${newTypes[0].toLowerCase()}`)
-                  } else if (newTypes.length === 0) {
-                    router.push('/')
-                  }
-                }}
-                variant="type"
-              />
-            ))}
-          </div>
-        </div>
-      </aside>
-      <main className="flex-1 space-y-4 min-w-0">
+    <div className="p-4 max-w-full overflow-x-hidden">
+      <main className="space-y-4 min-w-0">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-gray-500" />
           <Input
@@ -354,6 +325,32 @@ export default function MDXBlog({ initialPosts = [], initialType }: MDXBlogProps
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
+        </div>
+        {/* Category filters, directly under the search field */}
+        <div className="flex flex-wrap gap-1.5">
+          {contentTypes.map((type) => (
+            <FilterButton
+              key={type.value}
+              label={type.label}
+              isActive={selectedTypes.includes(type.value)}
+              onClick={() => {
+                const isSelected = selectedTypes.includes(type.value)
+                const newTypes = isSelected
+                  ? selectedTypes.filter((t) => t !== type.value)
+                  : [...selectedTypes, type.value]
+
+                setSelectedTypes(newTypes)
+
+                // Naviger til ny rute viss nøyaktig éin type er vald
+                if (newTypes.length === 1) {
+                  router.push(`/${newTypes[0].toLowerCase()}`)
+                } else if (newTypes.length === 0) {
+                  router.push('/')
+                }
+              }}
+              variant="type"
+            />
+          ))}
         </div>
         {/* Tag chips: hidden until the user starts searching (or has tags active) */}
         {(search.trim().length > 0 || selectedTags.length > 0) && uniqueTags.length > 0 && (
