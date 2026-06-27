@@ -277,7 +277,7 @@ export default function MDXBlog({ initialPosts = [], initialType }: MDXBlogProps
   }
 
   return (
-    <div className="flex flex-col lg:flex-row gap-4 p-4 max-w-full overflow-x-hidden">
+    <div className="flex flex-col lg:flex-row gap-4 p-2 sm:p-4 max-w-full overflow-x-hidden">
       <aside className="w-full lg:w-48 space-y-4 shrink-0">
         <div className="space-y-2">
           <div className="flex flex-wrap gap-1.5">
@@ -350,10 +350,10 @@ export default function MDXBlog({ initialPosts = [], initialType }: MDXBlogProps
               return (
                 <div key={post.uid}>
                   {showYear && (
-                    <div className="relative grid grid-cols-1 sm:grid-cols-[auto,1fr] gap-2 sm:gap-4 mb-4 pl-5 sm:pl-0">
+                    <div className="relative grid grid-cols-1 sm:grid-cols-[auto,1fr] gap-2 sm:gap-4 mb-4 pl-4 sm:pl-0">
                       <div className="hidden sm:block w-24 shrink-0" />
                       <div className="relative">
-                        <div className="absolute left-0 w-0.5 top-0 bottom-0 bg-gray-200 dark:bg-gray-700 -translate-x-1/2" />
+                        <div className="absolute left-0 w-px top-0 bottom-0 bg-gray-200 dark:bg-gray-800 -translate-x-1/2" />
                         <div className="py-4">
                           <span className="bg-white dark:bg-gray-900 px-3 py-1 text-sm font-bold text-gray-400 border border-gray-200 dark:border-gray-700 rounded-full relative z-10 -translate-x-1/2 inline-block">
                             {currentYear}
