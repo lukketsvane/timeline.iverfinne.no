@@ -101,7 +101,7 @@ function GalleryFrame({ item, index, onOpen }: { item: GalleryItem; index: numbe
     <button
       type="button"
       onClick={onOpen}
-      className="block w-full mb-3 break-inside-avoid"
+      className="block w-full"
       aria-label={item.post.title}
     >
       <div
@@ -202,17 +202,49 @@ function Lightbox({ items, index, onClose, onNavigate }: {
   )
 }
 
+// Responsive column count, mirroring the Tailwind breakpoints below.
+function useColumnCount(): number {
+  const [n, setN] = useState(2)
+  useEffect(() => {
+    const sm = window.matchMedia('(min-width: 640px)')
+    const lg = window.matchMedia('(min-width: 1024px)')
+    const update = () => setN(lg.matches ? 4 : sm.matches ? 3 : 2)
+    update()
+    sm.addEventListener('change', update)
+    lg.addEventListener('change', update)
+    return () => {
+      sm.removeEventListener('change', update)
+      lg.removeEventListener('change', update)
+    }
+  }, [])
+  return n
+}
+
 export default function GalleryView({ posts }: { posts: GalleryPost[] }) {
   const [active, setActive] = useState<number | null>(null)
   const items = useMemo(() => buildItems(posts), [posts])
+  const cols = useColumnCount()
+
+  // CSS multi-column fills column-by-column, which scrambles the date order when
+  // read left-to-right. Distribute round-robin instead so the newest sits
+  // top-left and reading order (→ then ↓) follows the date, newest first.
+  const columns = useMemo(() => {
+    const buckets: { item: GalleryItem; index: number }[][] = Array.from({ length: cols }, () => [])
+    items.forEach((item, i) => buckets[i % cols].push({ item, index: i }))
+    return buckets
+  }, [items, cols])
 
   if (items.length === 0) return null
 
   return (
     <>
-      <div className="columns-2 sm:columns-3 lg:columns-4 gap-3">
-        {items.map((item, i) => (
-          <GalleryFrame key={item.key} item={item} index={i} onOpen={() => setActive(i)} />
+      <div className="flex items-start gap-3">
+        {columns.map((col, ci) => (
+          <div key={ci} className="flex min-w-0 flex-1 flex-col gap-3">
+            {col.map(({ item, index }) => (
+              <GalleryFrame key={item.key} item={item} index={index} onOpen={() => setActive(index)} />
+            ))}
+          </div>
         ))}
       </div>
       {active !== null && (
