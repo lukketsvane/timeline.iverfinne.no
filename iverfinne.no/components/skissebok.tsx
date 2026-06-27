@@ -28,8 +28,8 @@ const COVER_SRC = '/skissebok/moleskine-cover.jpg'
 // Moleskine Large proportions.
 const PW = 1.3
 const PH = 2.1
-const DEPTH = 0.02
-const GAP = 0.006
+const DEPTH = 0.012
+const GAP = 0.02
 const SPREAD_AR = '26 / 21'
 
 const formatDate = (d: string) => `${d.slice(6, 8)}.${d.slice(4, 6)}.${d.slice(0, 4)}`
@@ -82,11 +82,6 @@ function FlipBook({ drawings }: { drawings: Drawing[] }) {
     renderer.domElement.style.width = '100%'
     renderer.domElement.style.height = '100%'
 
-    scene.add(new THREE.AmbientLight(0xffffff, 0.85))
-    const key = new THREE.DirectionalLight(0xffffff, 0.7)
-    key.position.set(2, 3, 4)
-    scene.add(key)
-
     const loader = new THREE.TextureLoader()
     const loadTex = (src: string, mirror = false) => {
       const tex = loader.load(src)
@@ -99,13 +94,14 @@ function FlipBook({ drawings }: { drawings: Drawing[] }) {
       return tex
     }
 
-    const paperMat = () => new THREE.MeshStandardMaterial({ color: 0xf3eedd, roughness: 0.95, metalness: 0 })
-    const edgeMat = new THREE.MeshStandardMaterial({ color: 0xe7e0cd, roughness: 1 })
-    const coverMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.6, metalness: 0.05 })
+    // Unlit materials so the drawings and cover show at their true brightness.
+    const paperMat = () => new THREE.MeshBasicMaterial({ color: 0xf3eedd })
+    const edgeMat = new THREE.MeshBasicMaterial({ color: 0xddd5c0 })
+    const coverMat = new THREE.MeshBasicMaterial({ color: 0x141414 })
 
     // A drawing sits on a plane in front of the paper, scaled to "contain" it.
     const drawingPlane = (src: string, back: boolean) => {
-      const mat = new THREE.MeshStandardMaterial({ map: loadTex(src, back), roughness: 0.95, transparent: true })
+      const mat = new THREE.MeshBasicMaterial({ map: loadTex(src, back), transparent: true })
       const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mat)
       // Fit to image aspect once the texture has loaded.
       const img = new Image()
@@ -126,7 +122,7 @@ function FlipBook({ drawings }: { drawings: Drawing[] }) {
     }
 
     const coverFace = (back: boolean) => {
-      const mat = new THREE.MeshStandardMaterial({ map: loadTex(COVER_SRC, back), roughness: 0.55, metalness: 0.05 })
+      const mat = new THREE.MeshBasicMaterial({ map: loadTex(COVER_SRC, back) })
       const mesh = new THREE.Mesh(new THREE.PlaneGeometry(PW, PH), mat)
       mesh.position.set(PW / 2, 0, back ? -(DEPTH / 2 + 0.001) : DEPTH / 2 + 0.001)
       if (back) mesh.rotation.y = Math.PI
@@ -161,7 +157,7 @@ function FlipBook({ drawings }: { drawings: Drawing[] }) {
       if (front.kind === 'cover' && front.side === 'front') {
         const band = new THREE.Mesh(
           new THREE.PlaneGeometry(0.045, PH),
-          new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.5 })
+          new THREE.MeshBasicMaterial({ color: 0x000000 })
         )
         band.position.set(PW * 0.9, 0, DEPTH / 2 + 0.002)
         group.add(band)
@@ -193,7 +189,16 @@ function FlipBook({ drawings }: { drawings: Drawing[] }) {
     let raf = 0
     const tick = () => {
       const ls = leavesRef.current
-      for (const l of ls) l.group.rotation.y += (l.target - l.group.rotation.y) * 0.12
+      for (let i = 0; i < ls.length; i++) {
+        const l = ls[i]
+        l.group.rotation.y += (l.target - l.group.rotation.y) * 0.14
+        // Lift the turning leaf in an arc so it clears the stack instead of
+        // clipping through it; settle into left/right order at either end.
+        const prog = Math.min(1, Math.abs(l.group.rotation.y) / Math.PI)
+        const lift = Math.sin(prog * Math.PI) * 0.6
+        const base = (l.target < 0 ? i : leafCount - i) * GAP
+        l.group.position.z = base + lift
+      }
       // Centre the closed cover; centre the spread once open.
       const t = turnedRef.current
       const targetX = t === 0 ? -PW / 2 : t === leafCount ? PW / 2 : 0
