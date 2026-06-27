@@ -319,7 +319,11 @@ export default function MDXBlog({ initialPosts = [], initialType }: MDXBlogProps
     <div
       className={cn(
         'max-w-full overflow-x-hidden',
-        view === 'skissebok' ? 'flex h-[100svh] flex-col overflow-hidden' : 'min-h-screen'
+        // Skissebok is exactly one screen tall. Pull it out of the page's padded
+        // container with `fixed` so the 100svh height never adds page scroll.
+        view === 'skissebok'
+          ? 'fixed inset-x-0 top-0 z-40 flex h-[100svh] flex-col overflow-hidden bg-[#0a0a0a]'
+          : 'min-h-screen'
       )}
     >
       <div className="flex items-center justify-between gap-3 px-2 sm:px-4 pt-4">

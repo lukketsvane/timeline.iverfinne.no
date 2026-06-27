@@ -84,8 +84,8 @@ function FlipBook({ drawings }: { drawings: Drawing[] }) {
 
     const scene = new THREE.Scene()
     const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 100)
-    // Distance is re-derived every frame to frame the visible content; start
-    // near the closed-cover target so there's no zoom jump on load.
+    // The distance is fixed (re-derived only on resize) to frame the full open
+    // spread, so the zoom never changes as pages turn or content varies.
     camera.position.set(0, 0, 4.5)
 
     let renderer: THREE.WebGLRenderer
@@ -244,6 +244,7 @@ function FlipBook({ drawings }: { drawings: Drawing[] }) {
     leavesRef.current = leaves
 
     // ── Resize ────────────────────────────────────────────────────────────
+    const tanHalf = Math.tan((camera.fov * Math.PI) / 360)
     const resize = () => {
       const w = mount.clientWidth
       const h = mount.clientHeight
@@ -251,20 +252,23 @@ function FlipBook({ drawings }: { drawings: Drawing[] }) {
       renderer.setSize(w, h, false)
       camera.aspect = w / h
       camera.updateProjectionMatrix()
+      // Fixed framing: always fit the full open spread (width 2·PW, height PH)
+      // with margin. The book "takes the width" and the zoom stays put — it
+      // never re-derives per page or per turn.
+      const halfW = PW * FRAME_MARGIN
+      const halfH = (PH / 2) * FRAME_MARGIN
+      camera.position.z = Math.max(halfH / tanHalf, halfW / (tanHalf * camera.aspect))
     }
     resize()
     const ro = new ResizeObserver(resize)
     ro.observe(mount)
 
-    // Centre whichever page(s) actually carry content: a full spread centres on
-    // the spine, a lone page centres itself (so it never sits off to one side).
-    const hasContent = (f?: Face) => !!f && (f.kind === 'page' || f.kind === 'cover')
+    // Keep the spine on the screen centre whenever the book is open; only the
+    // closed covers recentre onto the single visible board. No per-page shifting
+    // — once open, the centring stays put.
     const centerOffset = (t: number) => {
-      const left = hasContent(faces[2 * t - 1])
-      const right = hasContent(faces[2 * t])
-      if (left && right) return 0
-      if (right) return -PW / 2
-      if (left) return PW / 2
+      if (t <= 0) return -PW / 2
+      if (t >= leafCount) return PW / 2
       return 0
     }
 
@@ -291,20 +295,6 @@ function FlipBook({ drawings }: { drawings: Drawing[] }) {
 
       const t = turnedRef.current
       book.position.x += (centerOffset(t) - book.position.x) * 0.12
-
-      // Frame the visible content: a lone page fills the height, an open spread
-      // fills the width. While anything is turning, frame for the full spread —
-      // and snap *outward* instantly so the widening view can never clip; only
-      // ease inward (when settling onto a lone page).
-      const turning = ls.some((l) => l.t0 !== null)
-      const wide = turning || (hasContent(faces[2 * t - 1]) && hasContent(faces[2 * t]))
-      const halfW = (wide ? PW : PW / 2) * FRAME_MARGIN
-      const halfH = (PH / 2) * FRAME_MARGIN
-      const tanHalf = Math.tan((camera.fov * Math.PI) / 360)
-      const targetZ = Math.max(halfH / tanHalf, halfW / (tanHalf * camera.aspect))
-      camera.position.z = targetZ > camera.position.z
-        ? targetZ
-        : camera.position.z + (targetZ - camera.position.z) * 0.08
 
       renderer.render(scene, camera)
       raf = requestAnimationFrame(tick)
