@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import { getPublishedPosts, VALID_TYPES } from '@/lib/notion'
-import { generatePostJsonLd } from '@/lib/structured-data'
+import { generatePostJsonLd, generateBreadcrumbJsonLd } from '@/lib/structured-data'
 
 type Props = {
   params: Promise<{ slug: string[] }>
@@ -43,6 +43,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     return {
       title: post.title,
       description,
+      keywords: Array.isArray(post.tags) && post.tags.length > 0 ? post.tags : undefined,
       alternates: {
         canonical,
       },
@@ -53,6 +54,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
         url: canonical,
         publishedTime: post.date,
         authors: ['Iver Finne'],
+        tags: Array.isArray(post.tags) ? post.tags : undefined,
         images: [{ url: image }],
       },
       twitter: {
@@ -80,7 +82,7 @@ export default async function SlugLayout({ params, children }: Props) {
       )
 
       if (post) {
-        const jsonLd = generatePostJsonLd(post)
+        const jsonLd = [generatePostJsonLd(post), generateBreadcrumbJsonLd(post)]
         return (
           <>
             <script
