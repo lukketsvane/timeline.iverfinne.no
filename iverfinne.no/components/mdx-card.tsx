@@ -17,9 +17,10 @@ import {
   Trash2, 
   X, 
   Check, 
-  ChevronRight, 
-  ChevronLeft, 
-  ExternalLink, 
+  ChevronRight,
+  ChevronLeft,
+  ChevronDown,
+  ExternalLink,
   Github, 
   Twitter, 
   Mail, 
@@ -386,7 +387,23 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
                   <time className="block sm:hidden text-sm text-muted-foreground mb-2 lowercase">
                     <span className="font-extrabold">{day}.</span> {month}
                   </time>
-                  <p className="text-muted-foreground text-sm font-serif">{post.description}</p>
+                  {post.description && (
+                    <p className={cn(
+                      "text-muted-foreground text-sm font-serif",
+                      !isExpanded && "line-clamp-3"
+                    )}>
+                      {post.description}
+                    </p>
+                  )}
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); onToggle() }}
+                    className="inline-flex items-center gap-0.5 mt-1 text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
+                    aria-expanded={isExpanded}
+                  >
+                    {isExpanded ? "Les mindre" : "Les meir"}
+                    <ChevronDown className={cn("w-4 h-4 transition-transform", isExpanded && "rotate-180")} />
+                  </button>
                   {renderTags()}
                 </div>
 
