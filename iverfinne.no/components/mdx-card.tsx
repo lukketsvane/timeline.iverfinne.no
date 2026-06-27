@@ -290,45 +290,48 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
             {/* Lenkje Bookmark Preview */}
             {post.type === "Lenkje" && (() => {
               const title = post.ogTitle || post.title
-              const description = post.ogDescription || post.description
               // sosialbilete override takes priority over the link target's og:image
               const image = post.sosialbilete || post.ogImage || post.image
+              const hostRow = linkHostname && (
+                <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide">
+                  <img
+                    src={`https://www.google.com/s2/favicons?domain=${linkHostname}&sz=16`}
+                    alt=""
+                    width={14}
+                    height={14}
+                    className="rounded-sm"
+                  />
+                  <span className="truncate">{linkHostname}</span>
+                </div>
+              )
               return (
-              // Facebook Messenger-style link card: full-width image on top at the
-              // standard Open Graph aspect ratio (1.91:1), with the site/title/
-              // description below. This mirrors how Messenger, Facebook, etc. render
-              // shared links and avoids the previous side-image strip cropping.
-              <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden hover:border-gray-300 dark:hover:border-gray-600 transition-colors">
-                {image && (
-                  <div className="relative w-full aspect-[1.91/1] bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+              // Compact link card: just the image with the site + title overlaid on
+              // a gradient scrim. No separate description section.
+              <div className="relative border border-gray-200 dark:border-gray-800 rounded-xl shadow-sm overflow-hidden hover:border-gray-300 dark:hover:border-gray-700 transition-colors">
+                {image ? (
+                  <div className="relative w-full aspect-[1.91/1] bg-gray-100 dark:bg-gray-800">
                     {/* Use plain <img> — ogImage is an arbitrary external URL not in remotePatterns */}
                     <img
                       src={image}
                       alt=""
                       className="absolute inset-0 w-full h-full object-cover"
                     />
+                    <div className="absolute inset-x-0 bottom-0 p-3 sm:p-4 bg-gradient-to-t from-black/75 via-black/35 to-transparent text-white">
+                      <div className="text-white/80 mb-0.5">{hostRow}</div>
+                      <h2 className="text-base sm:text-lg font-semibold tracking-tight line-clamp-2 drop-shadow-sm">
+                        {title}
+                      </h2>
+                    </div>
+                  </div>
+                ) : (
+                  // Fallback when the link has no image
+                  <div className="p-3 sm:p-4 min-w-0 bg-gray-50 dark:bg-gray-800/40">
+                    <div className="text-muted-foreground mb-1.5">{hostRow}</div>
+                    <h2 className="text-base sm:text-lg font-semibold tracking-tight line-clamp-2">
+                      {title}
+                    </h2>
                   </div>
                 )}
-                <div className="p-3 sm:p-4 min-w-0 bg-gray-50 dark:bg-gray-800/40">
-                  {linkHostname && (
-                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1.5">
-                      <img
-                        src={`https://www.google.com/s2/favicons?domain=${linkHostname}&sz=16`}
-                        alt=""
-                        width={14}
-                        height={14}
-                        className="rounded-sm"
-                      />
-                      <span className="truncate uppercase tracking-wide">{linkHostname}</span>
-                    </div>
-                  )}
-                  <h2 className="text-base sm:text-lg font-semibold tracking-tight line-clamp-2 mb-1">
-                    {title}
-                  </h2>
-                  {description && (
-                    <p className="text-muted-foreground text-xs sm:text-sm line-clamp-2">{description}</p>
-                  )}
-                </div>
               </div>
               )
             })()}
@@ -540,11 +543,7 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
                               } : {})
                             }}
                           />
-                        ) : (
-                          <div className="flex items-center justify-center p-8">
-                            <div className="h-5 w-5 rounded-full border-2 border-muted-foreground/20 border-t-muted-foreground/60 animate-spin" />
-                          </div>
-                        )}
+                        ) : null}
                       </>
                     )}
                   </div>
