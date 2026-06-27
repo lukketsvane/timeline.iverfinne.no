@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
-import { X } from 'lucide-react'
+import { X, ExternalLink, ArrowUpRight, ChevronLeft, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface GalleryPost {
@@ -77,7 +77,7 @@ function buildItems(posts: GalleryPost[]): GalleryItem[] {
   return items
 }
 
-function GalleryFrame({ item, index, onOpen }: { item: GalleryItem; index: number; onOpen: (i: GalleryItem) => void }) {
+function GalleryFrame({ item, index, onOpen }: { item: GalleryItem; index: number; onOpen: () => void }) {
   const [loaded, setLoaded] = useState(false)
   // Start with a hashed ratio for variety; refine to match the real image on load.
   const [ar, setAr] = useState(() => SNAP_ARS[hash(item.key) % SNAP_ARS.length])
@@ -86,7 +86,7 @@ function GalleryFrame({ item, index, onOpen }: { item: GalleryItem; index: numbe
   return (
     <button
       type="button"
-      onClick={() => onOpen(item)}
+      onClick={onOpen}
       className="block w-full mb-3 break-inside-avoid"
       aria-label={item.post.title}
     >
@@ -115,18 +115,30 @@ function GalleryFrame({ item, index, onOpen }: { item: GalleryItem; index: numbe
   )
 }
 
-function Lightbox({ item, onClose }: { item: GalleryItem; onClose: () => void }) {
+function Lightbox({ items, index, onClose, onNavigate }: {
+  items: GalleryItem[]
+  index: number
+  onClose: () => void
+  onNavigate: (i: number) => void
+}) {
+  const go = (dir: number) => onNavigate((index + dir + items.length) % items.length)
+
   useEffect(() => {
     document.body.style.overflow = 'hidden'
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+      else if (e.key === 'ArrowLeft') go(-1)
+      else if (e.key === 'ArrowRight') go(1)
+    }
     window.addEventListener('keydown', onKey)
     return () => { document.body.style.overflow = ''; window.removeEventListener('keydown', onKey) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [index, items.length])
 
+  const item = items[index]
   const post = item.post
   const isLink = post.type === 'Lenkje' && post.url
-  const btnClass = 'inline-flex items-center gap-1.5 rounded-full bg-white px-5 py-2.5 text-sm font-medium text-black shadow-lg hover:bg-gray-100 transition-colors'
+  const iconClass = 'text-white/70 hover:text-white transition-colors'
 
   return (
     <div
@@ -136,27 +148,45 @@ function Lightbox({ item, onClose }: { item: GalleryItem; onClose: () => void })
       <button
         type="button"
         onClick={onClose}
-        className="absolute top-4 right-4 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors"
+        className="absolute top-4 right-4 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors"
         aria-label="Lukk"
       >
         <X className="h-5 w-5" />
       </button>
 
-      <img
-        src={item.src}
-        alt={post.title}
-        className="max-h-[78vh] max-w-full rounded-xl object-contain"
-        onClick={(e) => e.stopPropagation()}
-      />
+      {/* Click the left or right half of the image to step through the gallery */}
+      <div className="relative" onClick={(e) => e.stopPropagation()}>
+        <img src={item.src} alt={post.title} className="max-h-[78vh] max-w-full rounded-xl object-contain" />
+        {items.length > 1 && (
+          <>
+            <button
+              type="button"
+              onClick={() => go(-1)}
+              aria-label="Førre"
+              className="group absolute inset-y-0 left-0 flex w-1/2 cursor-w-resize items-center justify-start p-3"
+            >
+              <ChevronLeft className="h-7 w-7 text-white/0 drop-shadow transition-colors group-hover:text-white/80" />
+            </button>
+            <button
+              type="button"
+              onClick={() => go(1)}
+              aria-label="Neste"
+              className="group absolute inset-y-0 right-0 flex w-1/2 cursor-e-resize items-center justify-end p-3"
+            >
+              <ChevronRight className="h-7 w-7 text-white/0 drop-shadow transition-colors group-hover:text-white/80" />
+            </button>
+          </>
+        )}
+      </div>
 
       <div onClick={(e) => e.stopPropagation()}>
         {isLink ? (
-          <a href={post.url} target="_blank" rel="noopener noreferrer" className={btnClass}>
-            Opne lenkje
+          <a href={post.url} target="_blank" rel="noopener noreferrer" className={iconClass} aria-label="Opne lenkje">
+            <ExternalLink className="h-6 w-6" />
           </a>
         ) : (
-          <Link href={`/${post.type.toLowerCase()}/${post.slug}`} className={btnClass}>
-            Opne innlegg
+          <Link href={`/${post.type.toLowerCase()}/${post.slug}`} className={iconClass} aria-label="Opne innlegg">
+            <ArrowUpRight className="h-6 w-6" />
           </Link>
         )}
       </div>
@@ -165,7 +195,7 @@ function Lightbox({ item, onClose }: { item: GalleryItem; onClose: () => void })
 }
 
 export default function GalleryView({ posts }: { posts: GalleryPost[] }) {
-  const [active, setActive] = useState<GalleryItem | null>(null)
+  const [active, setActive] = useState<number | null>(null)
   const items = useMemo(() => buildItems(posts), [posts])
 
   if (items.length === 0) return null
@@ -174,10 +204,12 @@ export default function GalleryView({ posts }: { posts: GalleryPost[] }) {
     <>
       <div className="columns-2 sm:columns-3 lg:columns-4 gap-3">
         {items.map((item, i) => (
-          <GalleryFrame key={item.key} item={item} index={i} onOpen={setActive} />
+          <GalleryFrame key={item.key} item={item} index={i} onOpen={() => setActive(i)} />
         ))}
       </div>
-      {active && <Lightbox item={active} onClose={() => setActive(null)} />}
+      {active !== null && (
+        <Lightbox items={items} index={active} onClose={() => setActive(null)} onNavigate={setActive} />
+      )}
     </>
   )
 }
