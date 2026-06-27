@@ -155,8 +155,8 @@ function FlipBook({ drawings }: { drawings: Drawing[] }) {
     const coverMat = new THREE.MeshBasicMaterial({ color: 0x141414, alphaMap: cornerMask, transparent: true })
 
     // Each drawing fills its whole page (full-bleed). A spread shows its
-    // left/right half; a single page is centre-cropped to the page aspect so it
-    // fills edge-to-edge without distortion.
+    // left/right half; a single page is contained within the page (whole drawing
+    // visible, never cropped) and centred, filling one dimension.
     const drawingPlane = (src: string, back: boolean, half?: 'left' | 'right') => {
       const geo = new THREE.PlaneGeometry(1, 1)
       const applyUV = (u0: number, u1: number, v0: number, v1: number) => setUV(geo, u0, u1, v0, v1, back)
@@ -176,12 +176,15 @@ function FlipBook({ drawings }: { drawings: Drawing[] }) {
       mesh.scale.set(PW, PH, 1)
 
       if (!half) {
+        // Contain, never crop: fit the whole drawing inside the page, centred,
+        // filling one dimension and leaving a cream margin on the other. No part
+        // of the drawing is ever cut off.
         const target = PW / PH
         const img = new Image()
         img.onload = () => {
           const ar = img.naturalWidth / img.naturalHeight
-          if (ar > target) { const vis = target / ar; applyUV((1 - vis) / 2, (1 + vis) / 2, 0, 1) }
-          else { const vis = ar / target; applyUV(0, 1, (1 - vis) / 2, (1 + vis) / 2) }
+          if (ar > target) mesh.scale.set(PW, PW / ar, 1)
+          else mesh.scale.set(PH * ar, PH, 1)
         }
         img.src = src
       }
