@@ -20,16 +20,14 @@ interface GalleryPost {
 // Random fill colours shown behind each frame while the image loads.
 const FILL_COLORS = ['#EF4444', '#1D4ED8', '#F97316', '#06B6D4']
 
-// Frame shapes = the wooden blocks seen from the side, i.e. rounded
-// rectangles only. `ar` is the CSS aspect-ratio (width / height).
-const SHAPES: { ar: number; radius: string }[] = [
-  { ar: 1, radius: 'rounded-2xl' },
-  { ar: 0.5, radius: 'rounded-2xl' },
-  { ar: 2, radius: 'rounded-2xl' },
-  { ar: 0.4, radius: 'rounded-2xl' },
-  { ar: 2.5, radius: 'rounded-2xl' },
-  { ar: 0.5, radius: 'rounded-2xl' },
-]
+// Block aspect ratios (width / height) — the rounded-rectangle "masks" the
+// image is fitted into. We snap each image to the closest one so a wide image
+// gets a wide mask, a tall image a tall mask, etc.
+const SNAP_ARS = [0.4, 0.5, 1, 2, 2.5]
+
+function closestAr(real: number): number {
+  return SNAP_ARS.reduce((a, b) => (Math.abs(b - real) < Math.abs(a - real) ? b : a))
+}
 
 // Stable hash so each frame keeps the same shape/colour across renders.
 function hash(str: string): number {
@@ -68,7 +66,8 @@ function buildItems(posts: GalleryPost[]): GalleryItem[] {
 
 function GalleryFrame({ item, onOpen }: { item: GalleryItem; onOpen: (i: GalleryItem) => void }) {
   const [loaded, setLoaded] = useState(false)
-  const shape = SHAPES[hash(item.key) % SHAPES.length]
+  // Start with a hashed ratio for variety; refine to match the real image on load.
+  const [ar, setAr] = useState(() => SNAP_ARS[hash(item.key) % SNAP_ARS.length])
   const color = FILL_COLORS[hash('clr' + item.key) % FILL_COLORS.length]
 
   return (
@@ -79,14 +78,18 @@ function GalleryFrame({ item, onOpen }: { item: GalleryItem; onOpen: (i: Gallery
       aria-label={item.post.title}
     >
       <div
-        className={cn('relative w-full overflow-hidden transition-transform hover:scale-[1.02]', shape.radius)}
-        style={{ aspectRatio: String(shape.ar), backgroundColor: color }}
+        className="relative w-full overflow-hidden rounded-2xl transition-transform hover:scale-[1.02]"
+        style={{ aspectRatio: String(ar), backgroundColor: color }}
       >
         <img
           src={item.src}
           alt={item.post.title}
           loading="lazy"
-          onLoad={() => setLoaded(true)}
+          onLoad={(e) => {
+            setLoaded(true)
+            const img = e.currentTarget
+            if (img.naturalWidth && img.naturalHeight) setAr(closestAr(img.naturalWidth / img.naturalHeight))
+          }}
           className={cn(
             'absolute inset-0 h-full w-full object-cover transition-opacity duration-500',
             loaded ? 'opacity-100' : 'opacity-0'
