@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { motion } from 'framer-motion'
 import { cn } from "@/lib/utils"
 import { MDXCard } from "./mdx-card"
+import GalleryView from "./gallery-view"
 import type { MDXRemoteSerializeResult } from 'next-mdx-remote'
 import { getTagColor } from "@/lib/tag-utils"
 import { useRouter } from "next/navigation"
@@ -107,6 +108,7 @@ export default function MDXBlog({ initialPosts = [], initialType }: MDXBlogProps
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [expandedPosts, setExpandedPosts] = useState<Set<string>>(new Set())
   const [error, setError] = useState<string | null>(null)
+  const [view, setView] = useState<'timeline' | 'gallery'>('timeline')
 
   const uniqueTags = useMemo(() => {
     const tagSet = new Set<string>()
@@ -294,6 +296,25 @@ export default function MDXBlog({ initialPosts = [], initialType }: MDXBlogProps
   }
 
   return (
+    <div className="max-w-full overflow-x-hidden">
+      <div className="flex justify-center px-2 sm:px-4 pt-4">
+        <div className="inline-flex items-center rounded-full bg-gray-100 dark:bg-gray-800 p-1 text-sm font-medium">
+          {([['timeline', 'Tidslinje'], ['gallery', 'Bildegalleri']] as const).map(([v, label]) => (
+            <button
+              key={v}
+              onClick={() => setView(v)}
+              className={cn(
+                "px-4 py-1.5 rounded-full transition-colors",
+                view === v
+                  ? "bg-black text-white dark:bg-white dark:text-black shadow-sm"
+                  : "text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100"
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
     <div className="flex flex-col lg:flex-row gap-4 p-4 max-w-full overflow-x-hidden">
       <aside className="w-full lg:w-48 space-y-4 shrink-0">
         <div className="space-y-2">
@@ -353,7 +374,12 @@ export default function MDXBlog({ initialPosts = [], initialType }: MDXBlogProps
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <motion.div 
+        {view === 'gallery' ? (
+          <div className="mt-4">
+            <GalleryView posts={filteredPosts} />
+          </div>
+        ) : (
+        <motion.div
           className="relative mt-4"
           layout
           transition={{ duration: 0.2, ease: "linear" }}
@@ -394,7 +420,9 @@ export default function MDXBlog({ initialPosts = [], initialType }: MDXBlogProps
             </p>
           )}
         </motion.div>
+        )}
       </main>
+    </div>
     </div>
   )
 }
