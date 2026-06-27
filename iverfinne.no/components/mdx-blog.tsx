@@ -328,37 +328,42 @@ export default function MDXBlog({ initialPosts = [], initialType }: MDXBlogProps
       </div>
     <div className="p-4 max-w-full overflow-x-hidden">
       <main className="space-y-4 min-w-0">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-gray-500" />
-          <Input
-            placeholder="Leit i arkivet..."
-            className="pl-10 py-2 text-sm"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-        {/* Category filters, directly under the search field. Empty selection
-            means "all" — so every pill reads as selected by default. */}
-        <div className="flex flex-wrap gap-1.5">
-          {contentTypes.map((type) => (
-            <FilterButton
-              key={type.value}
-              label={type.label}
-              isActive={selectedTypes.length === 0 || selectedTypes.includes(type.value)}
-              onClick={() => {
-                setSelectedTypes((prev) => {
-                  // From "all" (empty), the first click isolates to just this type.
-                  if (prev.length === 0) return [type.value]
-                  // Otherwise toggle it; deselecting the last one returns to "all".
-                  return prev.includes(type.value)
-                    ? prev.filter((t) => t !== type.value)
-                    : [...prev, type.value]
-                })
-              }}
-              variant="type"
-            />
-          ))}
-        </div>
+        {/* Search + category filters only apply to the timeline; the gallery and
+            sketchbook tabs show everything, so hide them there. */}
+        {view === 'timeline' && (
+          <>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-gray-500" />
+              <Input
+                placeholder="Leit i arkivet..."
+                className="pl-10 py-2 text-sm"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+            {/* Empty selection means "all" — so every pill reads as selected by default. */}
+            <div className="flex flex-wrap gap-1.5">
+              {contentTypes.map((type) => (
+                <FilterButton
+                  key={type.value}
+                  label={type.label}
+                  isActive={selectedTypes.length === 0 || selectedTypes.includes(type.value)}
+                  onClick={() => {
+                    setSelectedTypes((prev) => {
+                      // From "all" (empty), the first click isolates to just this type.
+                      if (prev.length === 0) return [type.value]
+                      // Otherwise toggle it; deselecting the last one returns to "all".
+                      return prev.includes(type.value)
+                        ? prev.filter((t) => t !== type.value)
+                        : [...prev, type.value]
+                    })
+                  }}
+                  variant="type"
+                />
+              ))}
+            </div>
+          </>
+        )}
         {view === 'gallery' ? (
           // Pull out to the container edge on mobile (the -mx exactly cancels the
           // p-4 wrapper, so an ancestor's overflow-x-hidden never clips the
