@@ -344,9 +344,21 @@ export default function MDXBlog({ initialPosts = [], initialType }: MDXBlogProps
             ))}
           </div>
         </div>
-        <div className="space-y-2">
+      </aside>
+      <main className="flex-1 space-y-4 min-w-0">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-gray-500" />
+          <Input
+            placeholder="Leit i arkivet..."
+            className="pl-10 py-2 text-sm"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        {/* Tag chips: hidden until the user starts searching (or has tags active) */}
+        {(search.trim().length > 0 || selectedTags.length > 0) && uniqueTags.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
-            {uniqueTags.slice(0, 5).map((tag) => (
+            {uniqueTags.map((tag) => (
               <FilterButton
                 key={tag}
                 label={tag}
@@ -362,18 +374,7 @@ export default function MDXBlog({ initialPosts = [], initialType }: MDXBlogProps
               />
             ))}
           </div>
-        </div>
-      </aside>
-      <main className="flex-1 space-y-4 min-w-0">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-gray-500" />
-          <Input
-            placeholder="Leit i arkivet..."
-            className="pl-10 py-2 text-sm"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
+        )}
         {view === 'gallery' ? (
           <div className="mt-4">
             <GalleryView posts={filteredPosts} />
