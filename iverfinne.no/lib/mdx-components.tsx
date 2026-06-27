@@ -41,7 +41,7 @@ export const baseMdxComponents: Record<string, any> = {
         <input
           {...props}
           disabled
-          className="mr-2 h-4 w-4 rounded border-gray-300 text-blue-600 align-middle cursor-default"
+          className="mr-2 h-4 w-4 rounded border-gray-300 text-gray-900 dark:text-gray-100 align-middle cursor-default"
         />
       )
     }
@@ -96,9 +96,9 @@ export const baseMdxComponents: Record<string, any> = {
     />
   ),
 
-  // Links
+  // Links — inherit the text colour (black/white), set apart by an underline
   a: (props: any) => (
-    <a {...props} className="text-blue-600 dark:text-blue-400 underline underline-offset-2 decoration-blue-300 dark:decoration-blue-700 hover:decoration-blue-500 transition-colors" />
+    <a {...props} className="font-medium underline underline-offset-2 decoration-gray-400 dark:decoration-gray-500 hover:decoration-current transition-colors" />
   ),
 
   // Iframe
