@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
-import { X, ExternalLink, ArrowUpRight, ChevronLeft, ChevronRight } from 'lucide-react'
+import { ExternalLink, ArrowUpRight, ChevronLeft, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface GalleryPost {
@@ -10,6 +10,7 @@ interface GalleryPost {
   title: string
   slug: string
   type: string
+  date?: string
   url?: string
   image?: string
   ogImage?: string
@@ -41,7 +42,8 @@ function pickImage(post: GalleryPost): string | undefined {
   return post.sosialbilete || post.image || post.ogImage || post.thumbnails?.[0]?.src
 }
 
-// Pull image URLs out of the post's markdown body (![alt](url) and <img src>).
+// Pull image URLs out of the post's markdown body: ![alt](url), <img src>,
+// and bare image/proxy URLs.
 function extractContentImages(content?: string): string[] {
   if (!content) return []
   const urls: string[] = []
@@ -50,6 +52,10 @@ function extractContentImages(content?: string): string[] {
   while ((m = md.exec(content)) !== null) urls.push(m[1])
   const html = /<img[^>]+src=["']([^"']+)["']/g
   while ((m = html.exec(content)) !== null) urls.push(m[1])
+  const bare = /(?<!\()\bhttps?:\/\/[^\s)"']+\.(?:png|jpe?g|gif|webp|avif)\b/gi
+  while ((m = bare.exec(content)) !== null) urls.push(m[0])
+  const proxied = /\/api\/notion-image\?[^\s)"']+/g
+  while ((m = proxied.exec(content)) !== null) urls.push(m[0])
   return urls
 }
 
@@ -74,7 +80,15 @@ function buildItems(posts: GalleryPost[]): GalleryItem[] {
     for (const src of extractContentImages(post.content)) add(src)
     srcs.forEach((src, i) => items.push({ key: `${post.uid}-${i}`, src, post }))
   }
-  return items
+  // Newest first (stable, so a post's images stay grouped in body order).
+  return items.sort((a, b) => (b.post.date || '').localeCompare(a.post.date || ''))
+}
+
+// 2024-10-20 → "20.10.2024"
+function fmtDate(d?: string): string {
+  if (!d) return ''
+  const [y, mo, day] = d.slice(0, 10).split('-')
+  return day && mo && y ? `${day}.${mo}.${y}` : d
 }
 
 function GalleryFrame({ item, index, onOpen }: { item: GalleryItem; index: number; onOpen: () => void }) {
@@ -142,53 +156,47 @@ function Lightbox({ items, index, onClose, onNavigate }: {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-5 bg-black/90 p-4"
+      className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/90 p-4"
       onClick={onClose}
     >
-      <button
-        type="button"
-        onClick={onClose}
-        className="absolute top-4 right-4 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors"
-        aria-label="Lukk"
-      >
-        <X className="h-5 w-5" />
-      </button>
+      {/* Click outside to close; click the left/right half of the image to step */}
+      <div className="inline-flex flex-col gap-3" onClick={(e) => e.stopPropagation()}>
+        <div className="relative">
+          <img src={item.src} alt={post.title} className="max-h-[78vh] max-w-full rounded-xl object-contain" />
+          {items.length > 1 && (
+            <>
+              <button
+                type="button"
+                onClick={() => go(-1)}
+                aria-label="Førre"
+                className="group absolute inset-y-0 left-0 flex w-1/2 cursor-w-resize items-center justify-start p-3"
+              >
+                <ChevronLeft className="h-7 w-7 text-white/0 drop-shadow transition-colors group-hover:text-white/80" />
+              </button>
+              <button
+                type="button"
+                onClick={() => go(1)}
+                aria-label="Neste"
+                className="group absolute inset-y-0 right-0 flex w-1/2 cursor-e-resize items-center justify-end p-3"
+              >
+                <ChevronRight className="h-7 w-7 text-white/0 drop-shadow transition-colors group-hover:text-white/80" />
+              </button>
+            </>
+          )}
+        </div>
 
-      {/* Click the left or right half of the image to step through the gallery */}
-      <div className="relative" onClick={(e) => e.stopPropagation()}>
-        <img src={item.src} alt={post.title} className="max-h-[78vh] max-w-full rounded-xl object-contain" />
-        {items.length > 1 && (
-          <>
-            <button
-              type="button"
-              onClick={() => go(-1)}
-              aria-label="Førre"
-              className="group absolute inset-y-0 left-0 flex w-1/2 cursor-w-resize items-center justify-start p-3"
-            >
-              <ChevronLeft className="h-7 w-7 text-white/0 drop-shadow transition-colors group-hover:text-white/80" />
-            </button>
-            <button
-              type="button"
-              onClick={() => go(1)}
-              aria-label="Neste"
-              className="group absolute inset-y-0 right-0 flex w-1/2 cursor-e-resize items-center justify-end p-3"
-            >
-              <ChevronRight className="h-7 w-7 text-white/0 drop-shadow transition-colors group-hover:text-white/80" />
-            </button>
-          </>
-        )}
-      </div>
-
-      <div onClick={(e) => e.stopPropagation()}>
-        {isLink ? (
-          <a href={post.url} target="_blank" rel="noopener noreferrer" className={iconClass} aria-label="Opne lenkje">
-            <ExternalLink className="h-6 w-6" />
-          </a>
-        ) : (
-          <Link href={`/${post.type.toLowerCase()}/${post.slug}`} className={iconClass} aria-label="Opne innlegg">
-            <ArrowUpRight className="h-6 w-6" />
-          </Link>
-        )}
+        <div className="flex items-center justify-between gap-4">
+          <span className="text-sm tabular-nums text-white/60">{fmtDate(post.date)}</span>
+          {isLink ? (
+            <a href={post.url} target="_blank" rel="noopener noreferrer" className={iconClass} aria-label="Opne lenkje">
+              <ExternalLink className="h-6 w-6" />
+            </a>
+          ) : (
+            <Link href={`/${post.type.toLowerCase()}/${post.slug}`} className={iconClass} aria-label="Opne innlegg">
+              <ArrowUpRight className="h-6 w-6" />
+            </Link>
+          )}
+        </div>
       </div>
     </div>
   )
