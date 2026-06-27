@@ -129,7 +129,7 @@ const TimelineNode = ({ type, onToggle, url }: { type: string, onToggle: () => v
     <button 
       onClick={handleClick}
       className={cn(
-        "absolute left-0 sm:left-0 top-[1.125rem] w-3 h-3 sm:w-4 sm:h-4 rounded-full -translate-x-1/2 border-2 border-white dark:border-gray-900 z-10 transition-transform hover:scale-125 cursor-pointer",
+        "absolute left-0 sm:left-0 top-4 w-4 h-4 sm:w-5 sm:h-5 rounded-full -translate-x-1/2 border-2 border-white dark:border-gray-900 z-10 transition-transform hover:scale-125 cursor-pointer",
         typeColors[type as keyof typeof typeColors] || "bg-gray-500"
       )} 
       aria-label={type === "Lenkje" ? "Opna lenkje" : "Utvid eller skjul innhald"}
@@ -356,7 +356,7 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
                 <div className="flex-1 group/title min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <Link href={`/${post.type.toLowerCase()}/${post.slug}`} onClick={(e) => e.stopPropagation()}>
-                      <h2 className="text-2xl font-semibold tracking-tight mb-2 group-hover/title:text-blue-600 transition-colors">
+                      <h2 className="text-2xl font-semibold tracking-tight mb-2 group-hover/title:underline decoration-2 underline-offset-2 transition-colors">
                         {post.title}
                       </h2>
                     </Link>
@@ -401,7 +401,7 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
                   <button
                     type="button"
                     onClick={(e) => { e.stopPropagation(); onToggle() }}
-                    className="inline-flex items-center gap-0.5 mt-1 text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
+                    className="inline-flex items-center gap-0.5 mt-1 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
                     aria-expanded={isExpanded}
                   >
                     {isExpanded ? "Les mindre" : "Les meir"}
