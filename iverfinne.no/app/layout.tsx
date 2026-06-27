@@ -40,6 +40,21 @@ export const metadata: Metadata = {
     template: APP_TITLE_TEMPLATE,
   },
   description: APP_DESCRIPTION,
+  authors: [{ name: 'Iver Finne', url: 'https://iverfinne.no' }],
+  creator: 'Iver Finne',
+  publisher: 'Iver Finne',
+  keywords: ['Iver Finne', 'iverfinne', 'design', 'kunstig intelligens', 'generativ kunst', 'portefølje', 'blogg'],
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+      'max-video-preview': -1,
+    },
+  },
   icons: {
     icon: [
       { url: '/icon.svg', type: 'image/svg+xml' },
@@ -58,6 +73,7 @@ export const metadata: Metadata = {
   },
   alternates: {
     canonical: '/',
+    types: { 'application/rss+xml': '/feed.xml' },
   },
   openGraph: {
     type: 'website',
