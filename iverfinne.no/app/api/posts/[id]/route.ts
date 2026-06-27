@@ -16,7 +16,8 @@ export async function GET(
     const rawContent = await getPostContent(id)
     const serialized = await serializeMarkdown(rawContent)
 
-    return NextResponse.json({ source: serialized }, { headers: { 'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=86400' } })
+    // Return the raw markdown too so the gallery can pull out in-content images.
+    return NextResponse.json({ source: serialized, content: rawContent }, { headers: { 'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=86400' } })
   } catch (error) {
     console.error('Error fetching/serializing post content:', error)
     return NextResponse.json({ error: 'Failed to process content' }, { status: 500 })

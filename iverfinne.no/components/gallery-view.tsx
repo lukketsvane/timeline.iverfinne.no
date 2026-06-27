@@ -14,6 +14,7 @@ interface GalleryPost {
   image?: string
   ogImage?: string
   sosialbilete?: string
+  content?: string
   thumbnails?: { src: string; alt: string }[]
 }
 
@@ -40,6 +41,18 @@ function pickImage(post: GalleryPost): string | undefined {
   return post.sosialbilete || post.image || post.ogImage || post.thumbnails?.[0]?.src
 }
 
+// Pull image URLs out of the post's markdown body (![alt](url) and <img src>).
+function extractContentImages(content?: string): string[] {
+  if (!content) return []
+  const urls: string[] = []
+  let m: RegExpExecArray | null
+  const md = /!\[[^\]]*\]\(([^)\s]+)\)/g
+  while ((m = md.exec(content)) !== null) urls.push(m[1])
+  const html = /<img[^>]+src=["']([^"']+)["']/g
+  while ((m = html.exec(content)) !== null) urls.push(m[1])
+  return urls
+}
+
 interface GalleryItem {
   key: string
   src: string
@@ -52,13 +65,13 @@ function buildItems(posts: GalleryPost[]): GalleryItem[] {
   const items: GalleryItem[] = []
   for (const post of posts) {
     const srcs: string[] = []
-    for (const t of post.thumbnails || []) {
-      if (t.src && !t.src.endsWith('.glb') && !srcs.includes(t.src)) srcs.push(t.src)
+    const add = (src?: string) => {
+      if (src && !src.endsWith('.glb') && !srcs.includes(src)) srcs.push(src)
     }
-    if (srcs.length === 0) {
-      const img = pickImage(post)
-      if (img && !img.endsWith('.glb')) srcs.push(img)
-    }
+    for (const t of post.thumbnails || []) add(t.src)
+    if (srcs.length === 0) add(pickImage(post))
+    // Also pull every image embedded in the post body.
+    for (const src of extractContentImages(post.content)) add(src)
     srcs.forEach((src, i) => items.push({ key: `${post.uid}-${i}`, src, post }))
   }
   return items
