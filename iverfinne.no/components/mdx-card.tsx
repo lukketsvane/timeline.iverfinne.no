@@ -86,6 +86,7 @@ interface Post {
   url?: string
   lyd?: string
   icon?: string
+  sosialbilete?: string
   thumbnails?: { src: string; alt: string }[]
   ogTitle?: string
   ogDescription?: string
@@ -289,7 +290,8 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
             {post.type === "Lenkje" && (() => {
               const title = post.ogTitle || post.title
               const description = post.ogDescription || post.description
-              const image = post.ogImage || post.image
+              // sosialbilete override takes priority over the link target's og:image
+              const image = post.sosialbilete || post.ogImage || post.image
               return (
               // Facebook Messenger-style link card: full-width image on top at the
               // standard Open Graph aspect ratio (1.91:1), with the site/title/
