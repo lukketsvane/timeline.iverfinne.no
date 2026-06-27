@@ -1,8 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { motion } from 'framer-motion'
-import { BookOpen, Layers } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 // Digital sketchbook. Each drawing is named skb_YYYYMMDD_FORMAT_NR.png where
@@ -25,8 +23,7 @@ const DRAWINGS: Drawing[] = [
   file('20241020', 'page', 3),
 ]
 
-// Moleskine Large: single page 13×21 cm, open spread 26×21 cm.
-const PAGE_AR = '13 / 21'
+// Moleskine Large: open spread 26×21 cm.
 const SPREAD_AR = '26 / 21'
 const PAPER = 'bg-[#f6f2e7] dark:bg-[#ece6d6]'
 
@@ -138,78 +135,10 @@ function FlipBook() {
   )
 }
 
-// ── Loose-sheet stack: drag the top sheet away to cycle ─────────────────────
-function SheetStack() {
-  const [deck, setDeck] = useState(() => DRAWINGS.map((_, i) => i))
-  const top = deck.slice(0, 3)
-  const current = DRAWINGS[deck[0]]
-
-  return (
-    <div className="flex flex-col items-center gap-4">
-      <div className="relative w-full max-w-[280px]" style={{ aspectRatio: PAGE_AR }}>
-        {top
-          .map((p, pos) => ({ p, pos }))
-          .reverse()
-          .map(({ p, pos }) => {
-            const isTop = pos === 0
-            const d = DRAWINGS[p]
-            return (
-              <motion.div
-                key={p}
-                className={cn('absolute inset-0 overflow-hidden rounded-lg shadow-xl', PAPER, isTop ? 'cursor-grab active:cursor-grabbing' : '')}
-                style={{ zIndex: top.length - pos }}
-                animate={{ scale: 1 - pos * 0.05, y: pos * 14, rotate: isTop ? 0 : (pos % 2 ? 1.5 : -1.5) }}
-                transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-                drag={isTop}
-                dragSnapToOrigin
-                onDragEnd={(_, info) => {
-                  if (Math.abs(info.offset.x) > 90 || Math.abs(info.offset.y) > 90) {
-                    setDeck((deck) => [...deck.slice(1), deck[0]])
-                  }
-                }}
-              >
-                <img
-                  src={d.src}
-                  alt=""
-                  draggable={false}
-                  className="pointer-events-none h-full w-full object-cover"
-                />
-              </motion.div>
-            )
-          })}
-      </div>
-      <div className="w-full max-w-[280px]">
-        <span className="text-sm tabular-nums text-muted-foreground">{formatDate(current.date)}</span>
-      </div>
-    </div>
-  )
-}
-
 export default function Skissebok() {
-  const [mode, setMode] = useState<'bok' | 'ark'>('bok')
-
   return (
     <div className="mt-6 flex flex-col items-center gap-6">
-      <div className="flex items-center gap-5">
-        {([['bok', BookOpen, 'Bok'], ['ark', Layers, 'Laus ark']] as const).map(([m, Icon, label]) => (
-          <button
-            key={m}
-            onClick={() => setMode(m)}
-            aria-label={label}
-            aria-pressed={mode === m}
-            className={cn(
-              'transition-colors',
-              mode === m
-                ? 'text-foreground'
-                : 'text-muted-foreground/40 hover:text-muted-foreground'
-            )}
-          >
-            <Icon className="h-5 w-5" strokeWidth={mode === m ? 2.25 : 1.75} />
-          </button>
-        ))}
-      </div>
-
-      {mode === 'bok' ? <FlipBook /> : <SheetStack />}
+      <FlipBook />
     </div>
   )
 }
