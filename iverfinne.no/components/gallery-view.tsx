@@ -77,7 +77,7 @@ function buildItems(posts: GalleryPost[]): GalleryItem[] {
   return items
 }
 
-function GalleryFrame({ item, onOpen }: { item: GalleryItem; onOpen: (i: GalleryItem) => void }) {
+function GalleryFrame({ item, index, onOpen }: { item: GalleryItem; index: number; onOpen: (i: GalleryItem) => void }) {
   const [loaded, setLoaded] = useState(false)
   // Start with a hashed ratio for variety; refine to match the real image on load.
   const [ar, setAr] = useState(() => SNAP_ARS[hash(item.key) % SNAP_ARS.length])
@@ -97,7 +97,9 @@ function GalleryFrame({ item, onOpen }: { item: GalleryItem; onOpen: (i: Gallery
         <img
           src={item.src}
           alt={item.post.title}
-          loading="lazy"
+          // Eagerly load the first frames (near the top) so they appear first.
+          loading={index < 6 ? 'eager' : 'lazy'}
+          fetchPriority={index < 6 ? 'high' : 'auto'}
           onLoad={(e) => {
             setLoaded(true)
             const img = e.currentTarget
@@ -171,8 +173,8 @@ export default function GalleryView({ posts }: { posts: GalleryPost[] }) {
   return (
     <>
       <div className="columns-2 sm:columns-3 lg:columns-4 gap-3">
-        {items.map((item) => (
-          <GalleryFrame key={item.key} item={item} onOpen={setActive} />
+        {items.map((item, i) => (
+          <GalleryFrame key={item.key} item={item} index={i} onOpen={setActive} />
         ))}
       </div>
       {active && <Lightbox item={active} onClose={() => setActive(null)} />}
