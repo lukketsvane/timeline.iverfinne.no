@@ -61,7 +61,11 @@ function buildFaces(drawings: Drawing[]): Face[] {
 const faceDate = (f?: Face): string | null => (f && f.kind === 'page' ? f.drawing.date : null)
 
 // A leaf = front face (+z) and back face (−z), hinged at the spine (local x=0).
-type Leaf = { group: THREE.Group; target: number }
+// Each turn is an eased time-based tween rather than a snappy per-frame lerp.
+type Leaf = { group: THREE.Group; target: number; from: number; t0: number | null }
+
+const FLIP_MS = 1150
+const easeInOut = (p: number) => (p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2)
 
 function FlipBook({ drawings }: { drawings: Drawing[] }) {
   const mountRef = useRef<HTMLDivElement>(null)
@@ -118,7 +122,10 @@ function FlipBook({ drawings }: { drawings: Drawing[] }) {
     }
 
     // Unlit materials so the drawings and cover show at their true brightness.
-    const paperMat = () => new THREE.MeshBasicMaterial({ color: 0xf3eedd })
+    // PAPER is the Moleskine cream — drawings multiply over it, so a scan's white
+    // background becomes this colour while the ink stays dark.
+    const PAPER = 0xf2eee0
+    const paperMat = () => new THREE.MeshBasicMaterial({ color: PAPER })
     const edgeMat = new THREE.MeshBasicMaterial({ color: 0xddd5c0 })
     const coverMat = new THREE.MeshBasicMaterial({ color: 0x141414 })
 
@@ -132,8 +139,15 @@ function FlipBook({ drawings }: { drawings: Drawing[] }) {
       else if (half === 'right') applyUV(0.5, 1, 0, 1)
       else applyUV(0, 1, 0, 1)
 
-      const mat = new THREE.MeshBasicMaterial({ map: loadTex(src), transparent: true })
+      // Multiply over the cream page board behind it: white → cream, ink → dark.
+      const mat = new THREE.MeshBasicMaterial({
+        map: loadTex(src),
+        transparent: true,
+        blending: THREE.MultiplyBlending,
+        depthWrite: false,
+      })
       const mesh = new THREE.Mesh(geo, mat)
+      mesh.renderOrder = 1
       mesh.scale.set(PW, PH, 1)
 
       if (!half) {
@@ -197,7 +211,7 @@ function FlipBook({ drawings }: { drawings: Drawing[] }) {
 
       group.position.z = (leafCount - i) * GAP
       book.add(group)
-      leaves.push({ group, target: 0 })
+      leaves.push({ group, target: 0, from: 0, t0: null })
     }
 
     scene.add(book)
@@ -233,9 +247,15 @@ function FlipBook({ drawings }: { drawings: Drawing[] }) {
     let raf = 0
     const tick = () => {
       const ls = leavesRef.current
+      const now = performance.now()
       for (let i = 0; i < ls.length; i++) {
         const l = ls[i]
-        l.group.rotation.y += (l.target - l.group.rotation.y) * 0.14
+        // Eased, time-based turn so the page flips smoothly rather than snapping.
+        if (l.t0 !== null) {
+          const p = Math.min(1, (now - l.t0) / FLIP_MS)
+          l.group.rotation.y = l.from + (l.target - l.from) * easeInOut(p)
+          if (p >= 1) l.t0 = null
+        }
         // Lift the turning leaf in an arc so it clears the stack instead of
         // clipping through it; settle into left/right order at either end.
         const prog = Math.min(1, Math.abs(l.group.rotation.y) / Math.PI)
@@ -273,7 +293,15 @@ function FlipBook({ drawings }: { drawings: Drawing[] }) {
   // ── Apply page turns imperatively ────────────────────────────────────────
   useEffect(() => {
     turnedRef.current = turned
-    leavesRef.current.forEach((l, i) => { l.target = turned > i ? -Math.PI : 0 })
+    const now = performance.now()
+    leavesRef.current.forEach((l, i) => {
+      const target = turned > i ? -Math.PI : 0
+      if (target !== l.target) {
+        l.from = l.group.rotation.y
+        l.target = target
+        l.t0 = now
+      }
+    })
   }, [turned])
 
   const currentDate =
