@@ -115,6 +115,21 @@ export default function MDXBlog({ initialPosts = [], initialType }: MDXBlogProps
   const [view, setView] = useState<'timeline' | 'gallery' | 'skissebok'>('timeline')
   const [filtersOpen, setFiltersOpen] = useState(false)
 
+  // The Skissebok tab turns the whole page dark — paint html + body so the
+  // colour reaches the safe-area / overscroll edges, not just the container.
+  useEffect(() => {
+    const dark = view === 'skissebok'
+    const html = document.documentElement
+    html.style.transition = 'background-color 0.7s ease'
+    document.body.style.transition = 'background-color 0.7s ease'
+    html.style.backgroundColor = dark ? '#0a0a0a' : ''
+    document.body.style.backgroundColor = dark ? '#0a0a0a' : ''
+    return () => {
+      html.style.backgroundColor = ''
+      document.body.style.backgroundColor = ''
+    }
+  }, [view])
+
   const uniqueTags = useMemo(() => {
     const tagSet = new Set<string>()
     posts.forEach(post => {
