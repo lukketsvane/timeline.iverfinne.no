@@ -202,6 +202,9 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
   const projectLinks = post.type === "Prosjekt" ? extractOutgoingLinks(post.content, post.url) : []
   const readTime = post.type === "Skriving" ? estimateReadTime(post.content) : 0
   const figmaUrl = post.type === "Presentasjon" ? getFigmaEmbedUrl(post.content, post.url) : null
+  // Reading-text posts get justified body text by default (with hyphenation so
+  // the ragged-right gaps stay tight).
+  const isProse = post.type === "Skriving" || post.type === "Bok"
   const linkHostname = post.type === "Lenkje" && post.url ? (() => { try { return new URL(post.url).hostname.replace('www.', '') } catch { return '' } })() : ''
 
   // Build list of navigable (non-.glb) images from thumbnails
@@ -354,12 +357,20 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
                 )}
 
                 <div className="flex-1 group/title min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
+                  <div className="flex items-start gap-2 flex-wrap">
                     <Link href={`/${post.type.toLowerCase()}/${post.slug}`} onClick={(e) => e.stopPropagation()}>
                       <h2 className="text-2xl font-semibold tracking-tight mb-2 group-hover/title:underline decoration-2 underline-offset-2 transition-colors">
                         {post.title}
                       </h2>
                     </Link>
+                    {/* Read time sits top-right of the title row so the body text
+                        below can use the card's full width. */}
+                    {post.type === "Skriving" && readTime > 0 && !post.lyd && (
+                      <div className="ml-auto shrink-0 flex items-center text-xs text-muted-foreground whitespace-nowrap pt-1.5">
+                        <Clock className="w-3.5 h-3.5 mr-1" />
+                        {readTime} min
+                      </div>
+                    )}
                     {/* Social/outgoing link icons for Prosjekt */}
                     {post.type === "Prosjekt" && projectLinks.length > 0 && (
                       <div className="flex items-center gap-1.5 mb-2">
@@ -391,10 +402,14 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
                     <span className="font-extrabold">{day}.</span> {month}
                   </time>
                   {post.description && (
-                    <p className={cn(
-                      "text-muted-foreground text-sm font-serif",
-                      !isExpanded && "line-clamp-3"
-                    )}>
+                    <p
+                      lang="nn"
+                      className={cn(
+                        "text-muted-foreground text-sm font-serif",
+                        isProse && "text-justify hyphens-auto",
+                        !isExpanded && "line-clamp-3"
+                      )}
+                    >
                       {post.description}
                     </p>
                   )}
@@ -421,14 +436,6 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
                       sizes="80px"
                       unoptimized={projectThumb.startsWith('/api/')}
                     />
-                  </div>
-                )}
-
-                {/* Read time for Skriving */}
-                {post.type === "Skriving" && readTime > 0 && !post.lyd && (
-                  <div className="shrink-0 flex items-center text-xs text-muted-foreground whitespace-nowrap pt-1">
-                    <Clock className="w-3.5 h-3.5 mr-1" />
-                    {readTime} min
                   </div>
                 )}
               </div>
@@ -513,8 +520,12 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
                   }}
                   className="overflow-hidden mt-4 border-t border-gray-100 dark:border-gray-800 pt-6"
                 >
-                  <div 
-                    className="prose dark:prose-invert max-w-none text-base leading-relaxed overflow-hidden break-words"
+                  <div
+                    lang="nn"
+                    className={cn(
+                      "prose dark:prose-invert max-w-none text-base leading-relaxed overflow-hidden break-words",
+                      isProse && "text-justify hyphens-auto prose-p:text-justify"
+                    )}
                     onClick={(e) => e.stopPropagation()}
                   >
                     {post.type === "Presentasjon" && figmaUrl ? (
