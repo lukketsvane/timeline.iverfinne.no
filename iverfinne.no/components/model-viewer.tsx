@@ -50,6 +50,9 @@ export function ModelViewer({ src, alt, poster, className }: ModelViewerProps) {
   useEffect(() => {
     let raf = 0
     let lastY = window.scrollY
+    // Randomize the starting yaw a little (±30°) so multiple models on the
+    // page don't stand perfectly aligned.
+    theta.current += (Math.random() - 0.5) * 60
     const onScroll = () => {
       cancelAnimationFrame(raf)
       raf = requestAnimationFrame(() => {
@@ -99,7 +102,6 @@ export function ModelViewer({ src, alt, poster, className }: ModelViewerProps) {
         min-camera-orbit={`-Infinity ${PITCH} ${RADIUS}`}
         max-camera-orbit={`Infinity ${PITCH} ${RADIUS}`}
         shadow-intensity="0"
-        environment-image="neutral"
         tone-mapping="neutral"
         exposure="1"
         style={{
