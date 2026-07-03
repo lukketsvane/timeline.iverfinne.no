@@ -44,20 +44,22 @@ export function ModelViewer({ src, alt, poster, className }: ModelViewerProps) {
     el.setAttribute('camera-orbit', `${theta.current.toFixed(1)}deg ${PITCH} ${RADIUS}`)
   }
 
-  // Scroll-driven rotation: each scrolled pixel nudges the yaw a little
-  // (~30° per 600px), starting from the model's front view. Delta-based, so
-  // scrolling away and back never resets what the user has rotated.
+  // Scroll-driven rotation: each scrolled pixel nudges the yaw a little,
+  // starting from the face-on view. Delta-based, so scrolling away and back
+  // never resets what the user has rotated.
   useEffect(() => {
     let raf = 0
     let lastY = window.scrollY
     // Baseline yaw 90° puts the models face-on to the camera, with a little
-    // random spread (±30°) so multiple models don't stand perfectly aligned.
-    theta.current += 90 + (Math.random() - 0.5) * 60
+    // random spread (±12°) so multiple models don't stand perfectly aligned.
+    theta.current += 90 + (Math.random() - 0.5) * 24
     const onScroll = () => {
       cancelAnimationFrame(raf)
       raf = requestAnimationFrame(() => {
         const y = window.scrollY
-        theta.current += (y - lastY) * 0.05
+        // Keep the scroll influence gentle so long scrolls don't turn the
+        // models far away from face-on (~9° per 600px).
+        theta.current += (y - lastY) * 0.015
         lastY = y
         applyOrbit()
       })
