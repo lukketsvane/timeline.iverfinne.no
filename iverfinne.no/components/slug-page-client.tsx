@@ -70,6 +70,17 @@ export default function SlugPageClient({ post }: SlugPageClientProps) {
         transition={{ duration: 0.25, ease: [0.25, 0.1, 0.25, 1] }}
         className="max-w-4xl mx-auto px-4 py-12 min-h-screen"
       >
+        {/* sosialbilete hero: flush with the top and side edges (the negative
+            margins cancel the container's px-4/py-12). */}
+        {post.sosialbilete && (
+          <div className="-mx-4 -mt-12 mb-8">
+            <img
+              src={post.sosialbilete}
+              alt=""
+              className="w-full h-auto object-cover"
+            />
+          </div>
+        )}
         <Link
           href="/"
           className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground transition-colors mb-8"

@@ -385,15 +385,45 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
                 )}
 
                 <div className="flex-1 group/title min-w-0">
+                  {/* sosialbilete hero: the image carries the title and date on a
+                      gradient scrim (same pattern as the Lenkje bookmark card). */}
+                  {post.sosialbilete && (
+                    <div className="relative mb-3 overflow-hidden rounded-lg">
+                      <img
+                        src={post.sosialbilete}
+                        alt=""
+                        loading="lazy"
+                        className="w-full h-auto object-cover"
+                      />
+                      <div className="absolute inset-x-0 bottom-0 p-3 sm:p-4 bg-gradient-to-t from-black/75 via-black/35 to-transparent text-white">
+                        <Link href={`/${post.type.toLowerCase()}/${post.slug}`} onClick={(e) => e.stopPropagation()}>
+                          <h2 className="text-2xl font-semibold tracking-tight drop-shadow-sm group-hover/title:underline decoration-2 underline-offset-2">
+                            {post.title}
+                          </h2>
+                        </Link>
+                        <time className="text-sm text-white/85 lowercase">
+                          <span className="font-extrabold">{day}.</span> {month}
+                        </time>
+                      </div>
+                      {post.type === "Skriving" && readTime > 0 && !post.lyd && (
+                        <div className="absolute top-2.5 right-2.5 flex items-center text-xs text-white/90 drop-shadow">
+                          <Clock className="w-3.5 h-3.5 mr-1" />
+                          {readTime} min
+                        </div>
+                      )}
+                    </div>
+                  )}
                   <div className="flex items-start gap-2 flex-wrap">
+                    {!post.sosialbilete && (
                     <Link href={`/${post.type.toLowerCase()}/${post.slug}`} onClick={(e) => e.stopPropagation()}>
                       <h2 className="text-2xl font-semibold tracking-tight mb-2 group-hover/title:underline decoration-2 underline-offset-2 transition-colors">
                         {post.title}
                       </h2>
                     </Link>
+                    )}
                     {/* Read time sits top-right of the title row so the body text
                         below can use the card's full width. */}
-                    {post.type === "Skriving" && readTime > 0 && !post.lyd && (
+                    {!post.sosialbilete && post.type === "Skriving" && readTime > 0 && !post.lyd && (
                       <div className="ml-auto shrink-0 flex items-center text-xs text-muted-foreground whitespace-nowrap pt-1.5">
                         <Clock className="w-3.5 h-3.5 mr-1" />
                         {readTime} min
@@ -426,20 +456,10 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
                       </div>
                     )}
                   </div>
+                  {!post.sosialbilete && (
                   <time className="block sm:hidden text-sm text-muted-foreground mb-2 lowercase">
                     <span className="font-extrabold">{day}.</span> {month}
                   </time>
-                  {/* sosialbilete: full-width banner when the entry has one
-                      (Lenkje uses it in its bookmark preview instead). */}
-                  {post.sosialbilete && (
-                    <div className="mb-3 overflow-hidden rounded-lg border border-gray-100 dark:border-gray-800">
-                      <img
-                        src={post.sosialbilete}
-                        alt=""
-                        loading="lazy"
-                        className="w-full h-auto object-cover"
-                      />
-                    </div>
                   )}
                   {post.description && (
                     <p
