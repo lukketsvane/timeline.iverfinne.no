@@ -29,6 +29,9 @@ export function ModelViewer({ src, alt, poster, disableZoom, disablePan, classNa
       className={`w-full bg-white rounded-lg overflow-hidden ${className || 'aspect-square'}`}
       onClick={(e) => e.stopPropagation()}
     >
+      {/* Orbit around the vertical axis only: pitch is pinned at the default
+          75° while yaw stays free. Horizontal drags spin the model; vertical
+          gestures fall through (touch-action pan-y) so the page can scroll. */}
       <model-viewer
         src={src}
         alt={alt || 'A 3D model'}
@@ -36,6 +39,9 @@ export function ModelViewer({ src, alt, poster, disableZoom, disablePan, classNa
         camera-controls
         disable-zoom={disableZoom ? '' : undefined}
         disable-pan={disablePan ? '' : undefined}
+        min-camera-orbit="-Infinity 75deg auto"
+        max-camera-orbit="Infinity 75deg auto"
+        touch-action="pan-y"
         shadow-intensity="1"
         shadow-softness="0.8"
         environment-image="neutral"
