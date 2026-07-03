@@ -98,6 +98,7 @@ export function ModelViewer({ src, alt, poster, className }: ModelViewerProps) {
         ref={viewerRef}
         src={src}
         alt={alt || 'A 3D model'}
+        autoplay
         camera-orbit={`0deg ${PITCH} ${RADIUS}`}
         min-camera-orbit={`-Infinity ${PITCH} ${RADIUS}`}
         max-camera-orbit={`Infinity ${PITCH} ${RADIUS}`}
