@@ -7,9 +7,9 @@ const W = 128, H = 64
 // Light directions (azimuth rad, elevation rad), radiance, colour
 const LIGHTS = [
   // Key: upper front-left, warm-ish white, hard
-  { az: 0.9, el: 0.7, sigma: 0.12, L: 45, col: [1.0, 0.98, 0.92] },
+  { az: 0.9, el: 0.7, sigma: 0.14, L: 135, col: [1.0, 0.98, 0.92] },
   // Fill: opposite side, lower, cool, soft and dim
-  { az: 0.9 + Math.PI, el: 0.25, sigma: 0.2, L: 6, col: [0.85, 0.9, 1.0] },
+  { az: 0.9 + Math.PI, el: 0.25, sigma: 0.25, L: 20, col: [0.85, 0.9, 1.0] },
 ]
 
 function dirFromAzEl(az, el) {
