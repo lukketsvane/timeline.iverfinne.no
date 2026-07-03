@@ -71,16 +71,24 @@ export default function SlugPageClient({ post }: SlugPageClientProps) {
         className="max-w-4xl mx-auto px-4 py-12 min-h-screen"
       >
         {/* sosialbilete hero: flush with the top and side edges (the negative
-            margins cancel the container's px-4/py-12). */}
-        {post.sosialbilete && (
-          <div className="-mx-4 -mt-12 mb-8">
+            margins cancel the container's px-4/py-12). The back link floats
+            on top of the image. */}
+        {post.sosialbilete ? (
+          <div className="relative -mx-4 -mt-12 mb-8">
             <img
               src={post.sosialbilete}
               alt=""
               className="w-full h-auto object-cover"
             />
+            <Link
+              href="/"
+              className="absolute left-4 top-4 inline-flex items-center text-sm text-white/90 hover:text-white drop-shadow-md transition-colors"
+            >
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Tilbake til forsida
+            </Link>
           </div>
-        )}
+        ) : (
         <Link
           href="/"
           className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground transition-colors mb-8"
@@ -88,6 +96,7 @@ export default function SlugPageClient({ post }: SlugPageClientProps) {
           <ArrowLeft className="w-4 h-4 mr-2" />
           Tilbake til forsida
         </Link>
+        )}
 
         <header className="mb-12">
           <div className="mb-8">
