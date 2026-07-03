@@ -477,7 +477,7 @@ export default function MDXBlog({ initialPosts = [], initialType }: MDXBlogProps
                             }
                             aria-expanded={!yearCollapsed}
                             aria-label={`${yearCollapsed ? 'Vis' : 'Skjul'} innlegg frå ${currentYear}`}
-                            className="bg-white dark:bg-gray-900 pl-3 pr-2 py-1 text-sm font-bold text-gray-400 border border-gray-200 dark:border-gray-700 rounded-full relative z-10 -translate-x-1/2 inline-flex items-center gap-1 transition-colors hover:text-gray-600 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600"
+                            className="bg-white dark:bg-gray-900 pl-3 pr-2 py-1 text-sm font-bold text-gray-400 border border-gray-200 dark:border-gray-700 rounded-full relative z-10 -translate-x-2 sm:-translate-x-1/2 inline-flex items-center gap-1 transition-colors hover:text-gray-600 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600"
                           >
                             {currentYear}
                             <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', yearCollapsed && '-rotate-90')} />
