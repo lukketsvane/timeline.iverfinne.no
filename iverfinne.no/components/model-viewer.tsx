@@ -98,8 +98,7 @@ export function ModelViewer({ src, alt, poster, className }: ModelViewerProps) {
         camera-orbit={`0deg ${PITCH} ${RADIUS}`}
         min-camera-orbit={`-Infinity ${PITCH} ${RADIUS}`}
         max-camera-orbit={`Infinity ${PITCH} ${RADIUS}`}
-        shadow-intensity="1"
-        shadow-softness="0.8"
+        shadow-intensity="0"
         environment-image="neutral"
         tone-mapping="neutral"
         exposure="1"
