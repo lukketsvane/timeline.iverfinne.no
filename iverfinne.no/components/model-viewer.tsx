@@ -26,9 +26,10 @@ const PITCH = '75deg'
 
 export function ModelViewer({ src, alt, poster, className }: ModelViewerProps) {
   const viewerRef = useRef<any>(null)
-  // Yaw = scroll-derived angle + accumulated horizontal-drag offset.
-  const scrollTheta = useRef(0)
-  const dragTheta = useRef(0)
+  // Single yaw accumulator. Scroll deltas and horizontal drags both nudge it,
+  // so the rotation is always relative — it never snaps to an absolute value
+  // and user rotation is never overridden.
+  const theta = useRef(0)
   const drag = useRef({ active: false, lastX: 0 })
 
   useEffect(() => {
@@ -38,36 +39,30 @@ export function ModelViewer({ src, alt, poster, className }: ModelViewerProps) {
   const applyOrbit = () => {
     const el = viewerRef.current
     if (!el) return
-    const theta = scrollTheta.current + dragTheta.current
     // Attribute (not property) so it works whether or not the custom element
     // has upgraded yet.
-    el.setAttribute('camera-orbit', `${theta.toFixed(1)}deg ${PITCH} ${RADIUS}`)
+    el.setAttribute('camera-orbit', `${theta.current.toFixed(1)}deg ${PITCH} ${RADIUS}`)
   }
 
-  // Scroll-driven rotation: the model faces front when the frame is centred
-  // in the viewport and turns gently (±30°) as it moves up or down, so
-  // scrolling itself is what spins the object.
+  // Scroll-driven rotation: each scrolled pixel nudges the yaw a little
+  // (~30° per 600px), starting from the model's front view. Delta-based, so
+  // scrolling away and back never resets what the user has rotated.
   useEffect(() => {
-    const el = viewerRef.current
-    if (!el) return
     let raf = 0
-    const update = () => {
-      const rect = el.getBoundingClientRect()
-      if (rect.height === 0) return
-      const offset = (rect.top + rect.height / 2 - window.innerHeight / 2) / window.innerHeight
-      scrollTheta.current = -offset * 60
-      applyOrbit()
-    }
+    let lastY = window.scrollY
     const onScroll = () => {
       cancelAnimationFrame(raf)
-      raf = requestAnimationFrame(update)
+      raf = requestAnimationFrame(() => {
+        const y = window.scrollY
+        theta.current += (y - lastY) * 0.05
+        lastY = y
+        applyOrbit()
+      })
     }
-    update()
+    applyOrbit()
     window.addEventListener('scroll', onScroll, { passive: true })
-    window.addEventListener('resize', onScroll, { passive: true })
     return () => {
       window.removeEventListener('scroll', onScroll)
-      window.removeEventListener('resize', onScroll)
       cancelAnimationFrame(raf)
     }
   }, [])
@@ -89,7 +84,7 @@ export function ModelViewer({ src, alt, poster, className }: ModelViewerProps) {
       }}
       onPointerMove={(e) => {
         if (!drag.current.active) return
-        dragTheta.current += (e.clientX - drag.current.lastX) * 0.4
+        theta.current += (e.clientX - drag.current.lastX) * 0.4
         drag.current.lastX = e.clientX
         applyOrbit()
       }}
