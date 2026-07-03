@@ -8,7 +8,7 @@ export default function OmMeg() {
       />
       <div className="space-y-4 font-serif text-gray-700 dark:text-gray-300 leading-relaxed">
         <p>
-          Hei! Eg er Iver. Eg likar å lage ting — nokre gonger med kode, andre
+          Hei! Eg er Iver. Eg likar å lage ting: nokre gonger med kode, andre
           gonger med papir, blyant eller ein 3D-printar.
         </p>
         <p>
