@@ -19,16 +19,34 @@ declare global {
   }
 }
 
-export function ModelViewer({ src, alt, poster, disableZoom, disablePan, className }: ModelViewerProps) {
+// Camera distance: 100% = model-viewer's auto framing. >100% zooms out so the
+// object gets breathing room instead of filling the frame edge to edge.
+const RADIUS = '130%'
+const PITCH = '75deg'
+
+export function ModelViewer({ src, alt, poster, className }: ModelViewerProps) {
   const viewerRef = useRef<any>(null)
+  // Yaw = scroll-derived angle + accumulated horizontal-drag offset.
+  const scrollTheta = useRef(0)
+  const dragTheta = useRef(0)
+  const drag = useRef({ active: false, lastX: 0 })
 
   useEffect(() => {
     import('@google/model-viewer')
   }, [])
 
-  // Scroll-driven rotation instead of auto-rotate: the model faces front when
-  // the frame is centred in the viewport and turns gently (±30°) as it moves
-  // up or down, so scrolling itself is what spins the object.
+  const applyOrbit = () => {
+    const el = viewerRef.current
+    if (!el) return
+    const theta = scrollTheta.current + dragTheta.current
+    // Attribute (not property) so it works whether or not the custom element
+    // has upgraded yet.
+    el.setAttribute('camera-orbit', `${theta.toFixed(1)}deg ${PITCH} ${RADIUS}`)
+  }
+
+  // Scroll-driven rotation: the model faces front when the frame is centred
+  // in the viewport and turns gently (±30°) as it moves up or down, so
+  // scrolling itself is what spins the object.
   useEffect(() => {
     const el = viewerRef.current
     if (!el) return
@@ -37,10 +55,8 @@ export function ModelViewer({ src, alt, poster, disableZoom, disablePan, classNa
       const rect = el.getBoundingClientRect()
       if (rect.height === 0) return
       const offset = (rect.top + rect.height / 2 - window.innerHeight / 2) / window.innerHeight
-      const theta = -offset * 60
-      // Attribute (not property) so it works whether or not the custom
-      // element has upgraded yet.
-      el.setAttribute('camera-orbit', `${theta.toFixed(1)}deg 75deg auto`)
+      scrollTheta.current = -offset * 60
+      applyOrbit()
     }
     const onScroll = () => {
       cancelAnimationFrame(raf)
@@ -57,25 +73,36 @@ export function ModelViewer({ src, alt, poster, disableZoom, disablePan, classNa
   }, [])
 
   return (
+    // The viewer must NEVER block vertical scrolling, so model-viewer's own
+    // camera-controls are off (it never touches pointer events). We rotate the
+    // model ourselves: touch-action pan-y hands every vertical gesture to the
+    // browser's native scroll, while horizontal drags adjust the yaw. When a
+    // vertical scroll takes over, the browser fires pointercancel and the
+    // drag simply ends.
     <div
-      className={`w-full bg-white rounded-lg overflow-hidden ${className || 'aspect-square'}`}
+      className={`w-full bg-white rounded-lg overflow-hidden cursor-grab active:cursor-grabbing select-none ${className || 'aspect-square'}`}
+      style={{ touchAction: 'pan-y' }}
       onClick={(e) => e.stopPropagation()}
+      onPointerDown={(e) => {
+        drag.current = { active: true, lastX: e.clientX }
+        ;(e.currentTarget as Element).setPointerCapture?.(e.pointerId)
+      }}
+      onPointerMove={(e) => {
+        if (!drag.current.active) return
+        dragTheta.current += (e.clientX - drag.current.lastX) * 0.4
+        drag.current.lastX = e.clientX
+        applyOrbit()
+      }}
+      onPointerUp={() => { drag.current.active = false }}
+      onPointerCancel={() => { drag.current.active = false }}
     >
-      {/* Orbit around the vertical axis only: pitch is pinned at the default
-          75° while yaw stays free. Horizontal drags spin the model; vertical
-          gestures fall through (touch-action pan-y) so the page can scroll.
-          The --progress-bar vars hide model-viewer's built-in loading bar. */}
       <model-viewer
         ref={viewerRef}
         src={src}
         alt={alt || 'A 3D model'}
-        camera-controls
-        camera-orbit="0deg 75deg auto"
-        disable-zoom={disableZoom ? '' : undefined}
-        disable-pan={disablePan ? '' : undefined}
-        min-camera-orbit="-Infinity 75deg auto"
-        max-camera-orbit="Infinity 75deg auto"
-        touch-action="pan-y"
+        camera-orbit={`0deg ${PITCH} ${RADIUS}`}
+        min-camera-orbit={`-Infinity ${PITCH} ${RADIUS}`}
+        max-camera-orbit={`Infinity ${PITCH} ${RADIUS}`}
         shadow-intensity="1"
         shadow-softness="0.8"
         environment-image="neutral"
@@ -85,17 +112,14 @@ export function ModelViewer({ src, alt, poster, disableZoom, disablePan, classNa
           width: '100%',
           height: '100%',
           backgroundColor: '#ffffff',
+          pointerEvents: 'none',
           '--progress-bar-color': 'transparent',
           '--progress-bar-height': '0px',
           '--poster-color': 'transparent',
         } as React.CSSProperties}
         poster={poster}
         interaction-prompt="none"
-      >
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-
-        </div>
-      </model-viewer>
+      />
     </div>
   )
 }
