@@ -131,6 +131,21 @@ n2m.setCustomTransformer("bookmark", async (block: any) => {
   return `[${caption}](${bookmark.url})`;
 });
 
+// File attachments: 3D models (.glb/.gltf) become an inline viewer; other
+// files render as a plain link. Notion file URLs expire after ~1h, so models
+// go through the stable block-based proxy instead of the raw S3 URL.
+n2m.setCustomTransformer("file", async (block: any) => {
+  const f = block.file;
+  const rawUrl = f?.type === "external" ? f.external?.url : f?.file?.url;
+  const name: string =
+    f?.name || rawUrl?.split("/").pop()?.split("?")[0] || "fil";
+  if (/\.(glb|gltf)$/i.test(name)) {
+    return `<ModelViewer src="/api/notion-image?block=${block.id}" alt="${name.replace(/"/g, "")}" disableZoom disablePan />`;
+  }
+  if (!rawUrl) return "";
+  return `[${name}](${rawUrl})`;
+});
+
 // Equation: render as displayable math block
 n2m.setCustomTransformer("equation", async (block: any) => {
   const equation = block.equation;
@@ -431,11 +446,20 @@ export const getPublishedPosts = cache(async (): Promise<Post[]> => {
             ogData = await fetchOgMetadataCached(props.url);
           }
 
+          // Model-only pages (body = a single .glb attachment) render as a
+          // bare 3D frame. Only descriptionless pages can qualify, so the
+          // extra blocks call stays rare.
+          let modelSrc: string | undefined;
+          if (!props.description && props.type !== "Bilete" && props.type !== "Lenkje") {
+            modelSrc = await detectModelOnlyPage(page.id);
+          }
+
           return {
             ...props,
             content: "",
             thumbnails,
             ...ogData,
+            modelSrc,
           };
         } catch (e) {
           console.error(`Error processing Notion page ${page.id}:`, e);
@@ -540,6 +564,36 @@ export async function serializePostContent(post: Post): Promise<Post & { seriali
   } catch (e) {
     console.error(`Error serializing post ${post.id}:`, e);
     return post;
+  }
+}
+
+// Detect pages whose body is nothing but an attached 3D model (.glb/.gltf).
+// Returns a stable proxied URL for the model, or undefined. Empty paragraphs
+// (blank lines in Notion) are ignored; any other content disqualifies.
+async function detectModelOnlyPage(pageId: string): Promise<string | undefined> {
+  try {
+    const blocks = await withRetry(() =>
+      notion.blocks.children.list({ block_id: pageId, page_size: 10 })
+    );
+    let modelBlockId: string | undefined;
+    for (const b of blocks.results as any[]) {
+      if (b.type === "paragraph" && (b.paragraph?.rich_text?.length ?? 0) === 0) continue;
+      if (b.type === "file") {
+        const f = b.file;
+        const name: string =
+          f?.name ||
+          (f?.type === "external" ? f.external?.url : f?.file?.url)?.split("/").pop()?.split("?")[0] ||
+          "";
+        if (/\.(glb|gltf)$/i.test(name) && !modelBlockId) {
+          modelBlockId = b.id;
+          continue;
+        }
+      }
+      return undefined; // any other content → normal post
+    }
+    return modelBlockId ? `/api/notion-image?block=${modelBlockId}` : undefined;
+  } catch {
+    return undefined;
   }
 }
 

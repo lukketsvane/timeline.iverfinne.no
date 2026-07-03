@@ -31,6 +31,7 @@ interface Post {
   url?: string
   icon?: string
   thumbnails?: { src: string; alt: string }[]
+  modelSrc?: string
 }
 
 const contentTypes = [

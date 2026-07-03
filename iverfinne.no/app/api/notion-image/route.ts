@@ -55,15 +55,17 @@ export async function GET(request: NextRequest) {
   const url = request.nextUrl.searchParams.get('url')
 
   try {
-    // Block-based: fetch fresh image URL from Notion block
+    // Block-based: fetch fresh file URL from Notion block. Covers image
+    // blocks and file blocks (e.g. attached .glb models for <ModelViewer>).
     if (blockId) {
       const block = await notion.blocks.retrieve({ block_id: blockId }) as any
-      if (block.type !== 'image') {
-        return new Response('Block is not an image', { status: 400 })
+      if (block.type !== 'image' && block.type !== 'file') {
+        return new Response('Block is not an image or file', { status: 400 })
       }
-      const imageUrl = block.image.type === 'external'
-        ? block.image.external.url
-        : block.image.file.url
+      const data = block[block.type]
+      const imageUrl = data.type === 'external'
+        ? data.external.url
+        : data.file.url
       return fetchAndReturn(imageUrl)
     }
 

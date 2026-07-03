@@ -25,8 +25,8 @@ export function ModelViewer({ src, alt, poster, disableZoom, disablePan, classNa
   }, [])
 
   return (
-    <div 
-      className={`w-full bg-gray-100 dark:bg-gray-900 rounded-lg overflow-hidden ${className || 'aspect-square'}`}
+    <div
+      className={`w-full bg-white rounded-lg overflow-hidden ${className || 'aspect-square'}`}
       onClick={(e) => e.stopPropagation()}
     >
       <model-viewer
@@ -37,9 +37,11 @@ export function ModelViewer({ src, alt, poster, disableZoom, disablePan, classNa
         disable-zoom={disableZoom ? '' : undefined}
         disable-pan={disablePan ? '' : undefined}
         shadow-intensity="1"
+        shadow-softness="0.8"
         environment-image="neutral"
+        tone-mapping="neutral"
         exposure="1"
-        style={{ width: '100%', height: '100%' }}
+        style={{ width: '100%', height: '100%', backgroundColor: '#ffffff' }}
         poster={poster}
         interaction-prompt="none"
       >
