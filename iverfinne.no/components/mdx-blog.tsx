@@ -340,7 +340,8 @@ export default function MDXBlog({ initialPosts = [], initialType }: MDXBlogProps
           {([
             ['timeline', 'Tidslinje', 'bg-blue-600'],
             ['gallery', 'Galleri', 'bg-orange-500'],
-            ['skissebok', 'Skissebok', 'bg-red-500'],
+            // Skissebok is hidden for now — restore the tuple below to bring the tab back.
+            // ['skissebok', 'Skissebok', 'bg-red-500'],
           ] as const).map(([v, label, activeColor]) => (
             <button
               key={v}
