@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import { ExternalLink, ArrowUpRight, ChevronLeft, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { ModelViewer } from '@/components/model-viewer'
 
 interface GalleryPost {
   uid: string
@@ -17,6 +18,7 @@ interface GalleryPost {
   sosialbilete?: string
   content?: string
   thumbnails?: { src: string; alt: string }[]
+  modelSrc?: string
 }
 
 // Random fill colours shown behind each frame while the image loads.
@@ -63,6 +65,7 @@ interface GalleryItem {
   key: string
   src: string
   post: GalleryPost
+  model?: boolean
 }
 
 // Flatten posts into individual image frames — a Bilete post with several
@@ -70,6 +73,11 @@ interface GalleryItem {
 function buildItems(posts: GalleryPost[]): GalleryItem[] {
   const items: GalleryItem[] = []
   for (const post of posts) {
+    // Model-only posts contribute an interactive 3D frame instead of an image.
+    if (post.modelSrc) {
+      items.push({ key: `${post.uid}-model`, src: post.modelSrc, post, model: true })
+      continue
+    }
     const srcs: string[] = []
     const add = (src?: string) => {
       if (src && !src.endsWith('.glb') && !srcs.includes(src)) srcs.push(src)
@@ -96,6 +104,15 @@ function GalleryFrame({ item, index, onOpen }: { item: GalleryItem; index: numbe
   // Start with a hashed ratio for variety; refine to match the real image on load.
   const [ar, setAr] = useState(() => SNAP_ARS[hash(item.key) % SNAP_ARS.length])
   const color = FILL_COLORS[hash('clr' + item.key) % FILL_COLORS.length]
+
+  // 3D models render live in the grid (rotatable in place, no lightbox).
+  if (item.model) {
+    return (
+      <div className="overflow-hidden rounded-2xl">
+        <ModelViewer src={item.src} alt={item.post.title} />
+      </div>
+    )
+  }
 
   return (
     <button
@@ -162,7 +179,13 @@ function Lightbox({ items, index, onClose, onNavigate }: {
       {/* Click outside to close; click the left/right half of the image to step */}
       <div className="inline-flex flex-col gap-3" onClick={(e) => e.stopPropagation()}>
         <div className="relative">
-          <img src={item.src} alt={post.title} className="max-h-[78vh] max-w-full rounded-xl object-contain" />
+          {item.model ? (
+            <div className="h-[70vh] w-[70vh] max-w-[85vw]">
+              <ModelViewer src={item.src} alt={post.title} className="h-full" />
+            </div>
+          ) : (
+            <img src={item.src} alt={post.title} className="max-h-[78vh] max-w-full rounded-xl object-contain" />
+          )}
           {items.length > 1 && (
             <>
               <button
