@@ -50,9 +50,9 @@ export function ModelViewer({ src, alt, poster, className }: ModelViewerProps) {
   useEffect(() => {
     let raf = 0
     let lastY = window.scrollY
-    // Randomize the starting yaw a little (±30°) so multiple models on the
-    // page don't stand perfectly aligned.
-    theta.current += (Math.random() - 0.5) * 60
+    // Baseline yaw 90° puts the models face-on to the camera, with a little
+    // random spread (±30°) so multiple models don't stand perfectly aligned.
+    theta.current += 90 + (Math.random() - 0.5) * 60
     const onScroll = () => {
       cancelAnimationFrame(raf)
       raf = requestAnimationFrame(() => {
