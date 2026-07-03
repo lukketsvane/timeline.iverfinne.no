@@ -429,6 +429,18 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
                   <time className="block sm:hidden text-sm text-muted-foreground mb-2 lowercase">
                     <span className="font-extrabold">{day}.</span> {month}
                   </time>
+                  {/* sosialbilete: full-width banner when the entry has one
+                      (Lenkje uses it in its bookmark preview instead). */}
+                  {post.sosialbilete && (
+                    <div className="mb-3 overflow-hidden rounded-lg border border-gray-100 dark:border-gray-800">
+                      <img
+                        src={post.sosialbilete}
+                        alt=""
+                        loading="lazy"
+                        className="w-full h-auto object-cover"
+                      />
+                    </div>
+                  )}
                   {post.description && (
                     <p
                       lang="nn"
