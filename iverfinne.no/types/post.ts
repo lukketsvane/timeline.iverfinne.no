@@ -17,5 +17,8 @@ export interface Post {
   ogTitle?: string
   ogDescription?: string
   ogImage?: string
+  // Set when the page body is nothing but an attached 3D model (.glb/.gltf):
+  // the timeline then renders a bare square viewer instead of a card.
+  modelSrc?: string
 }
 

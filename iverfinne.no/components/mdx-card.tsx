@@ -92,6 +92,7 @@ interface Post {
   ogTitle?: string
   ogDescription?: string
   ogImage?: string
+  modelSrc?: string
 }
 
 interface MDXCardProps {
@@ -264,6 +265,33 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
     } else {
       onToggle()
     }
+  }
+
+  // A post whose whole body is a single attached 3D model renders as a bare
+  // square viewer — no title, date or tags, just the frame (orbit-only).
+  const modelOnlySrc =
+    post.modelSrc ||
+    post.content?.trim().match(/^<ModelViewer\s[^>]*src="([^"]+)"[^>]*\/>$/)?.[1]
+  if (modelOnlySrc) {
+    return (
+      <div className="relative grid grid-cols-1 sm:grid-cols-[auto,1fr] gap-2 sm:gap-4 max-w-full pl-5 sm:pl-0">
+        <div className="hidden sm:block w-24 shrink-0" />
+        <div className="relative min-w-0">
+          <div className="block">
+            <TimelineNode type={post.type} onToggle={() => {}} />
+            <TimelineConnector />
+          </div>
+          <div className="pb-8 pt-0">
+            <ModelViewer
+              src={modelOnlySrc}
+              alt={post.title}
+              disableZoom
+              disablePan
+            />
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
