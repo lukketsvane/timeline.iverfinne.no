@@ -518,12 +518,12 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
                     height: { type: 'spring', stiffness: 400, damping: 40, mass: 0.8 },
                     opacity: { duration: 0.2, ease: [0.25, 0.1, 0.25, 1] }
                   }}
-                  className="overflow-hidden mt-4 border-t border-gray-100 dark:border-gray-800 pt-6"
+                  className="overflow-hidden mt-3 border-t border-gray-100 dark:border-gray-800 pt-4"
                 >
                   <div
                     lang="nn"
                     className={cn(
-                      "prose dark:prose-invert max-w-none text-base leading-relaxed overflow-hidden break-words",
+                      "prose dark:prose-invert max-w-none text-base leading-normal overflow-hidden break-words",
                       isProse && "text-justify hyphens-auto prose-p:text-justify"
                     )}
                     onClick={(e) => e.stopPropagation()}

@@ -26,13 +26,14 @@ export const baseMdxComponents: Record<string, any> = {
   h5: (props: any) => <h5 {...props} className="text-sm font-medium mt-3 mb-1 break-words" />,
   h6: (props: any) => <h6 {...props} className="text-xs font-medium mt-2 mb-1 break-words" />,
 
-  // Text
-  p: (props: any) => <p {...props} className="break-words font-serif text-base leading-relaxed" />,
+  // Text — explicit my-3 overrides the roomier prose default (1.25em) and
+  // leading-normal keeps the reading text compact.
+  p: (props: any) => <p {...props} className="break-words font-serif text-base leading-normal my-3" />,
 
   // Lists — let prose handle base styles, add Notion-like spacing
   ul: (props: any) => <ul {...props} className="list-disc pl-6 my-2 space-y-1 [&_ul]:my-1 [&_ul]:list-[circle] [&_ul_ul]:list-[square]" />,
   ol: (props: any) => <ol {...props} className="list-decimal pl-6 my-2 space-y-1 [&_ol]:my-1" />,
-  li: (props: any) => <li {...props} className="font-serif text-base leading-relaxed" />,
+  li: (props: any) => <li {...props} className="font-serif text-base leading-normal" />,
 
   // To-do checkbox styling (from remark-gfm: - [ ] and - [x])
   input: (props: any) => {
@@ -73,7 +74,7 @@ export const baseMdxComponents: Record<string, any> = {
   ),
 
   // Divider
-  hr: () => <hr className="my-8 border-gray-200 dark:border-gray-700" />,
+  hr: () => <hr className="my-5 border-gray-200 dark:border-gray-700" />,
 
   // Tables — responsive wrapper
   table: (props: any) => (
@@ -123,7 +124,7 @@ export const fullPageMdxComponents: Record<string, any> = {
   h1: (props: any) => <h1 {...props} className="text-3xl font-bold mt-8 mb-4 break-words" />,
   h2: (props: any) => <h2 {...props} className="text-2xl font-semibold mt-6 mb-3 break-words" />,
   h3: (props: any) => <h3 {...props} className="text-xl font-medium mt-4 mb-2 break-words" />,
-  p: (props: any) => <p {...props} className="mb-4 leading-relaxed break-words font-serif text-lg" />,
-  li: (props: any) => <li {...props} className="font-serif text-lg leading-relaxed" />,
+  p: (props: any) => <p {...props} className="my-3 leading-normal break-words font-serif text-lg" />,
+  li: (props: any) => <li {...props} className="font-serif text-lg leading-normal" />,
   img: (props: any) => <img {...props} className="max-w-full h-auto rounded-lg my-6" />,
 }

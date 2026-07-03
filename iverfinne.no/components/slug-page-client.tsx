@@ -143,7 +143,16 @@ export default function SlugPageClient({ post }: SlugPageClientProps) {
           </div>
         )}
 
-        <div className="prose prose-lg dark:prose-invert max-w-none">
+        <div
+          lang="nn"
+          className={cn(
+            "prose prose-lg dark:prose-invert max-w-none",
+            // Same reading-text convention as the timeline cards: justified body
+            // text with hyphenation so the inter-word gaps stay tight.
+            (post.type === "Skriving" || post.type === "Bok") &&
+              "text-justify hyphens-auto prose-p:text-justify"
+          )}
+        >
           {post.serialized && (
             <MDXRemote
               {...post.serialized}
