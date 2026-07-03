@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils"
 import { MDXCard } from "./mdx-card"
 import GalleryView from "./gallery-view"
 import Skissebok from "./skissebok"
+import OmMeg from "./om-meg"
 import type { MDXRemoteSerializeResult } from 'next-mdx-remote'
 import { getTagColor } from "@/lib/tag-utils"
 import { useRouter } from "next/navigation"
@@ -111,8 +112,10 @@ export default function MDXBlog({ initialPosts = [], initialType }: MDXBlogProps
   )
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [expandedPosts, setExpandedPosts] = useState<Set<string>>(new Set())
+  // Years collapsed via their timeline pill — posts from these years are hidden.
+  const [collapsedYears, setCollapsedYears] = useState<Set<number>>(new Set())
   const [error, setError] = useState<string | null>(null)
-  const [view, setView] = useState<'timeline' | 'gallery' | 'skissebok'>('timeline')
+  const [view, setView] = useState<'timeline' | 'gallery' | 'skissebok' | 'om'>('timeline')
   const [filtersOpen, setFiltersOpen] = useState(false)
 
   // The Skissebok tab turns the whole page dark — paint html + body so the
@@ -331,6 +334,23 @@ export default function MDXBlog({ initialPosts = [], initialType }: MDXBlogProps
         <Link href="/" aria-label="iverfinne.no" className="flex items-center">
           <img src={view === 'skissebok' ? '/icon-white.png' : '/icon.svg'} alt="" width={28} height={28} className="h-7 w-7" />
         </Link>
+        <div className="flex items-center gap-3">
+        <a
+          href="https://github.com/lukketsvane"
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="GitHub"
+          className={cn(
+            'transition-colors',
+            view === 'skissebok'
+              ? 'text-gray-300 hover:text-white'
+              : 'text-gray-400 hover:text-gray-900 dark:text-gray-500 dark:hover:text-gray-100'
+          )}
+        >
+          <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" className="h-6 w-6">
+            <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z" />
+          </svg>
+        </a>
         <div
           className={cn(
             'inline-flex items-center rounded-full p-1 text-sm font-medium transition-colors',
@@ -340,6 +360,7 @@ export default function MDXBlog({ initialPosts = [], initialType }: MDXBlogProps
           {([
             ['timeline', 'Tidslinje', 'bg-blue-600'],
             ['gallery', 'Galleri', 'bg-orange-500'],
+            ['om', 'Om meg', 'bg-green-600'],
             // Skissebok is hidden for now — restore the tuple below to bring the tab back.
             // ['skissebok', 'Skissebok', 'bg-red-500'],
           ] as const).map(([v, label, activeColor]) => (
@@ -358,6 +379,7 @@ export default function MDXBlog({ initialPosts = [], initialType }: MDXBlogProps
               {label}
             </button>
           ))}
+        </div>
         </div>
       </div>
     <div className={cn('max-w-full overflow-x-hidden', view === 'skissebok' ? 'flex min-h-0 flex-1 flex-col' : 'p-4')}>
@@ -418,6 +440,8 @@ export default function MDXBlog({ initialPosts = [], initialType }: MDXBlogProps
           </div>
         ) : view === 'skissebok' ? (
           <Skissebok />
+        ) : view === 'om' ? (
+          <OmMeg />
         ) : (
         <motion.div
           className="relative mt-4"
@@ -429,6 +453,7 @@ export default function MDXBlog({ initialPosts = [], initialType }: MDXBlogProps
               const currentYear = new Date(post.date).getFullYear()
               const prevYear = index > 0 ? new Date(filteredPosts[index - 1].date).getFullYear() : null
               const showYear = currentYear !== prevYear
+              const yearCollapsed = collapsedYears.has(currentYear)
 
               return (
                 <div key={post.uid}>
@@ -438,19 +463,36 @@ export default function MDXBlog({ initialPosts = [], initialType }: MDXBlogProps
                       <div className="relative">
                         <div className="absolute left-0 w-0.5 -top-4 bottom-0 bg-gray-200 dark:bg-gray-700 -translate-x-1/2" />
                         <div className="py-4">
-                          <span className="bg-white dark:bg-gray-900 px-3 py-1 text-sm font-bold text-gray-400 border border-gray-200 dark:border-gray-700 rounded-full relative z-10 -translate-x-1/2 inline-block">
+                          {/* Tapping the year pill collapses/expands every post from that year. */}
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setCollapsedYears(prev => {
+                                const next = new Set(prev)
+                                if (next.has(currentYear)) next.delete(currentYear)
+                                else next.add(currentYear)
+                                return next
+                              })
+                            }
+                            aria-expanded={!yearCollapsed}
+                            aria-label={`${yearCollapsed ? 'Vis' : 'Skjul'} innlegg frå ${currentYear}`}
+                            className="bg-white dark:bg-gray-900 pl-3 pr-2 py-1 text-sm font-bold text-gray-400 border border-gray-200 dark:border-gray-700 rounded-full relative z-10 -translate-x-1/2 inline-flex items-center gap-1 transition-colors hover:text-gray-600 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600"
+                          >
                             {currentYear}
-                          </span>
+                            <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', yearCollapsed && '-rotate-90')} />
+                          </button>
                         </div>
                       </div>
                     </div>
                   )}
-                  <MDXCard
-                    post={post}
-                    isExpanded={expandedPosts.has(post.uid)}
-                    onToggle={() => handlePostToggle(post.uid)}
-                    serializedContent={post.serialized || null}
-                  />
+                  {!yearCollapsed && (
+                    <MDXCard
+                      post={post}
+                      isExpanded={expandedPosts.has(post.uid)}
+                      onToggle={() => handlePostToggle(post.uid)}
+                      serializedContent={post.serialized || null}
+                    />
+                  )}
                 </div>
               )
             })
