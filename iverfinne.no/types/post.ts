@@ -20,5 +20,10 @@ export interface Post {
   // Set when the page body is nothing but an attached 3D model (.glb/.gltf):
   // the timeline then renders a bare square viewer instead of a card.
   modelSrc?: string
+  // Every image in the post body (server-extracted from Notion blocks), in
+  // document order — the gallery shows these without fetching post content.
+  bodyImages?: { src: string; alt: string }[]
+  // Stable proxied URLs for .glb/.gltf files attached in the post body.
+  bodyModels?: string[]
 }
 

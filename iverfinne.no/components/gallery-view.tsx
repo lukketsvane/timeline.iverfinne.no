@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import Link from 'next/link'
-import { ExternalLink, ArrowUpRight, ChevronLeft, ChevronRight } from 'lucide-react'
+import { ExternalLink, ArrowUpRight, ChevronLeft, ChevronRight, X } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { cn } from '@/lib/utils'
 import { ModelViewer } from '@/components/model-viewer'
 
@@ -19,6 +20,8 @@ interface GalleryPost {
   content?: string
   thumbnails?: { src: string; alt: string }[]
   modelSrc?: string
+  bodyImages?: { src: string; alt: string }[]
+  bodyModels?: string[]
 }
 
 // Random fill colours shown behind each frame while the image loads.
@@ -45,7 +48,8 @@ function pickImage(post: GalleryPost): string | undefined {
 }
 
 // Pull image URLs out of the post's markdown body: ![alt](url), <img src>,
-// and bare image/proxy URLs.
+// and bare image/proxy URLs. Fallback for posts without server-extracted
+// bodyImages (e.g. bare external URLs pasted in text).
 function extractContentImages(content?: string): string[] {
   if (!content) return []
   const urls: string[] = []
@@ -64,12 +68,13 @@ function extractContentImages(content?: string): string[] {
 interface GalleryItem {
   key: string
   src: string
+  alt?: string
   post: GalleryPost
   model?: boolean
 }
 
-// Flatten posts into individual image frames — a Bilete post with several
-// thumbnails contributes several frames, not just one.
+// Flatten posts into individual frames: the hero image (cover/sosialbilete),
+// every image in the post body, and any 3D models attached in the body.
 function buildItems(posts: GalleryPost[]): GalleryItem[] {
   const items: GalleryItem[] = []
   for (const post of posts) {
@@ -79,14 +84,28 @@ function buildItems(posts: GalleryPost[]): GalleryItem[] {
       continue
     }
     const srcs: string[] = []
-    const add = (src?: string) => {
-      if (src && !src.endsWith('.glb') && !srcs.includes(src)) srcs.push(src)
+    const alts = new Map<string, string>()
+    const add = (src?: string, alt?: string) => {
+      if (!src || src.endsWith('.glb') || srcs.includes(src)) return
+      srcs.push(src)
+      if (alt) alts.set(src, alt)
     }
-    for (const t of post.thumbnails || []) add(t.src)
-    if (srcs.length === 0) add(pickImage(post))
-    // Also pull every image embedded in the post body.
-    for (const src of extractContentImages(post.content)) add(src)
-    srcs.forEach((src, i) => items.push({ key: `${post.uid}-${i}`, src, post }))
+    // Hero first (sosialbilete/cover/og-image). Bilete posts skip it — their
+    // cover usually repeats one of the body images under a different URL.
+    if (post.type !== 'Bilete') add(pickImage(post))
+    for (const t of post.thumbnails || []) add(t.src, t.alt)
+    // Every image in the post body, server-extracted in document order; fall
+    // back to scanning the markdown when that list isn't available.
+    if (post.bodyImages?.length) {
+      for (const im of post.bodyImages) add(im.src, im.alt)
+    } else {
+      for (const src of extractContentImages(post.content)) add(src)
+    }
+    srcs.forEach((src, i) => items.push({ key: `${post.uid}-${i}`, src, alt: alts.get(src), post }))
+    // Models attached inside the body get their own interactive frames.
+    for (const [i, m] of (post.bodyModels || []).entries()) {
+      items.push({ key: `${post.uid}-bodymodel-${i}`, src: m, post, model: true })
+    }
   }
   // Newest first (stable, so a post's images stay grouped in body order).
   return items.sort((a, b) => (b.post.date || '').localeCompare(a.post.date || ''))
@@ -109,7 +128,7 @@ function GalleryFrame({ item, index, onOpen }: { item: GalleryItem; index: numbe
   if (item.model) {
     return (
       <div className="overflow-hidden rounded-2xl">
-        <ModelViewer src={item.src} alt={item.post.title} />
+        <ModelViewer src={item.src} alt={item.alt || item.post.title} />
       </div>
     )
   }
@@ -118,16 +137,16 @@ function GalleryFrame({ item, index, onOpen }: { item: GalleryItem; index: numbe
     <button
       type="button"
       onClick={onOpen}
-      className="block w-full"
-      aria-label={item.post.title}
+      className="block w-full rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400 dark:focus-visible:ring-gray-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900"
+      aria-label={item.alt || item.post.title}
     >
       <div
-        className="relative w-full overflow-hidden rounded-2xl transition-transform hover:scale-[1.02]"
+        className="relative w-full overflow-hidden rounded-2xl transition-transform duration-300 ease-out hover:scale-[1.02]"
         style={{ aspectRatio: String(ar), backgroundColor: color }}
       >
         <img
           src={item.src}
-          alt={item.post.title}
+          alt={item.alt || item.post.title}
           // Eagerly load the first frames (near the top) so they appear first.
           loading={index < 6 ? 'eager' : 'lazy'}
           fetchPriority={index < 6 ? 'high' : 'auto'}
@@ -166,25 +185,116 @@ function Lightbox({ items, index, onClose, onNavigate }: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [index, items.length])
 
+  // Preload the neighbours so stepping never shows a blank frame.
+  useEffect(() => {
+    for (const d of [-1, 1]) {
+      const it = items[(index + d + items.length) % items.length]
+      if (it && !it.model) {
+        const img = new Image()
+        img.src = it.src
+      }
+    }
+  }, [index, items])
+
+  // Pointer-based swipe (mirrors image-gallery.tsx): horizontal flicks step,
+  // a firm vertical flick closes. Deliberately NOT framer-motion drag — motion
+  // components that mount/unmount inside an open AnimatePresence subtree (the
+  // img remounts on every step) break its exit bookkeeping and the overlay
+  // never unmounts.
+  const startRef = useRef<{ x: number; y: number; t: number } | null>(null)
+  const [offset, setOffset] = useState({ x: 0, y: 0 })
+  const draggingRef = useRef(false)
+  const axisRef = useRef<'none' | 'x' | 'y'>('none')
+
+  const onDown = (e: React.PointerEvent) => {
+    startRef.current = { x: e.clientX, y: e.clientY, t: Date.now() }
+    draggingRef.current = false
+    axisRef.current = 'none'
+    setOffset({ x: 0, y: 0 })
+    ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
+  }
+  const onMove = (e: React.PointerEvent) => {
+    if (!startRef.current) return
+    const dx = e.clientX - startRef.current.x
+    const dy = e.clientY - startRef.current.y
+    if (axisRef.current === 'none' && (Math.abs(dx) > 6 || Math.abs(dy) > 6)) {
+      axisRef.current = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y'
+      draggingRef.current = true
+    }
+    if (axisRef.current === 'x') setOffset({ x: dx, y: 0 })
+    else if (axisRef.current === 'y') setOffset({ x: 0, y: dy })
+  }
+  const onUp = () => {
+    if (!startRef.current) return
+    const dt = Math.max(Date.now() - startRef.current.t, 1)
+    if (axisRef.current === 'y' && (Math.abs(offset.y) > 80 || (Math.abs(offset.y) / dt) * 1000 > 500)) {
+      onClose()
+    } else if (axisRef.current === 'x' && (Math.abs(offset.x) > 50 || (Math.abs(offset.x) / dt) * 1000 > 400)) {
+      go(offset.x > 0 ? -1 : 1)
+    }
+    startRef.current = null
+    draggingRef.current = false
+    axisRef.current = 'none'
+    setOffset({ x: 0, y: 0 })
+  }
+
   const item = items[index]
   const post = item.post
   const isLink = post.type === 'Lenkje' && post.url
   const iconClass = 'text-white/70 hover:text-white transition-colors'
+  const swipeScale = 1 - Math.min(Math.abs(offset.y) / 500, 0.15)
 
   return (
-    <div
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.2, ease: [0.25, 0.1, 0.25, 1] }}
+      role="dialog"
+      aria-modal="true"
+      aria-label={item.alt || post.title}
       className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/90 p-4"
       onClick={onClose}
     >
+      <span
+        className="absolute left-4 top-4 text-xs tabular-nums text-white/50"
+        style={{ marginTop: 'max(0px, env(safe-area-inset-top))' }}
+      >
+        {index + 1} / {items.length}
+      </span>
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); onClose() }}
+        aria-label="Lukk"
+        className="absolute right-3 top-3 z-10 p-3 text-white/60 transition-colors hover:text-white"
+        style={{ marginTop: 'max(0px, env(safe-area-inset-top))' }}
+      >
+        <X className="h-6 w-6" />
+      </button>
+
       {/* Click outside to close; click the left/right half of the image to step */}
-      <div className="inline-flex flex-col gap-3" onClick={(e) => e.stopPropagation()}>
+      <div className="inline-flex max-w-full flex-col gap-3" onClick={(e) => e.stopPropagation()}>
         <div className="relative">
           {item.model ? (
             <div className="h-[70vh] w-[70vh] max-w-[85vw]">
               <ModelViewer src={item.src} alt={post.title} className="h-full" />
             </div>
           ) : (
-            <img src={item.src} alt={post.title} className="max-h-[78vh] max-w-full rounded-xl object-contain" />
+            <img
+              src={item.src}
+              alt={item.alt || post.title}
+              onPointerDown={onDown}
+              onPointerMove={onMove}
+              onPointerUp={onUp}
+              onPointerCancel={onUp}
+              className="max-h-[78vh] max-w-full select-none rounded-xl object-contain"
+              style={{
+                transform: `translate(${offset.x}px, ${offset.y}px) scale(${swipeScale})`,
+                transition: draggingRef.current ? 'none' : 'transform 0.25s cubic-bezier(0.25, 0.1, 0.25, 1)',
+                touchAction: 'none',
+              }}
+              draggable={false}
+            />
           )}
           {items.length > 1 && (
             <>
@@ -192,7 +302,7 @@ function Lightbox({ items, index, onClose, onNavigate }: {
                 type="button"
                 onClick={() => go(-1)}
                 aria-label="Førre"
-                className="group absolute inset-y-0 left-0 flex w-1/2 cursor-w-resize items-center justify-start p-3"
+                className="group absolute inset-y-0 left-0 hidden w-1/2 cursor-w-resize items-center justify-start p-3 sm:flex"
               >
                 <ChevronLeft className="h-7 w-7 text-white/0 drop-shadow transition-colors group-hover:text-white/80" />
               </button>
@@ -200,7 +310,7 @@ function Lightbox({ items, index, onClose, onNavigate }: {
                 type="button"
                 onClick={() => go(1)}
                 aria-label="Neste"
-                className="group absolute inset-y-0 right-0 flex w-1/2 cursor-e-resize items-center justify-end p-3"
+                className="group absolute inset-y-0 right-0 hidden w-1/2 cursor-e-resize items-center justify-end p-3 sm:flex"
               >
                 <ChevronRight className="h-7 w-7 text-white/0 drop-shadow transition-colors group-hover:text-white/80" />
               </button>
@@ -209,7 +319,10 @@ function Lightbox({ items, index, onClose, onNavigate }: {
         </div>
 
         <div className="flex items-center justify-between gap-4">
-          <span className="text-sm tabular-nums text-white/60">{fmtDate(post.date)}</span>
+          <div className="min-w-0">
+            <p className="truncate font-sans text-sm leading-snug text-white/90">{post.title}</p>
+            <span className="text-xs tabular-nums text-white/50">{fmtDate(post.date)}</span>
+          </div>
           {isLink ? (
             <a href={post.url} target="_blank" rel="noopener noreferrer" className={iconClass} aria-label="Opne lenkje">
               <ExternalLink className="h-6 w-6" />
@@ -221,7 +334,7 @@ function Lightbox({ items, index, onClose, onNavigate }: {
           )}
         </div>
       </div>
-    </div>
+    </motion.div>
   )
 }
 
@@ -270,9 +383,11 @@ export default function GalleryView({ posts }: { posts: GalleryPost[] }) {
           </div>
         ))}
       </div>
-      {active !== null && (
-        <Lightbox items={items} index={active} onClose={() => setActive(null)} onNavigate={setActive} />
-      )}
+      <AnimatePresence>
+        {active !== null && (
+          <Lightbox items={items} index={active} onClose={() => setActive(null)} onNavigate={setActive} />
+        )}
+      </AnimatePresence>
     </>
   )
 }

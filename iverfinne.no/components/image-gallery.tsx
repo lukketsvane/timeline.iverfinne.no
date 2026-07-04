@@ -237,6 +237,8 @@ export function ImageGallery({ images = [], className, initialIndex = null, onIn
                   <button
                     key={i}
                     onClick={(e) => { e.stopPropagation(); goTo(i) }}
+                    aria-label={`Bilete ${i + 1} av ${images.length}`}
+                    aria-current={i === selectedImage}
                     className={cn(
                       "rounded-full transition-all duration-200",
                       i === selectedImage ? "w-2 h-2 bg-white" : "w-1.5 h-1.5 bg-white/30"

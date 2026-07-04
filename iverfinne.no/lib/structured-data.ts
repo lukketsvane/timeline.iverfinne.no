@@ -97,7 +97,7 @@ export function generateWebsiteJsonLd() {
     name: 'iverfinne.no',
     url: SITE_URL,
     author,
-    description: 'Personleg nettside og blogg',
+    description: 'Arkivet til Iver Finne — små prosjekt, skisser og tekstar, samla på ein stad.',
     inLanguage: 'nn',
   }
 }

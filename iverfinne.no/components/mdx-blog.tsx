@@ -134,6 +134,12 @@ export default function MDXBlog({ initialPosts = [], initialType }: MDXBlogProps
     }
   }, [view])
 
+  // Each tab starts at the top — carrying a deep timeline scroll offset into
+  // the gallery (or back) is disorienting.
+  useEffect(() => {
+    window.scrollTo(0, 0)
+  }, [view])
+
   const uniqueTags = useMemo(() => {
     const tagSet = new Set<string>()
     posts.forEach(post => {
@@ -368,23 +374,44 @@ export default function MDXBlog({ initialPosts = [], initialType }: MDXBlogProps
             <button
               key={v}
               onClick={() => setView(v)}
+              aria-pressed={view === v}
               className={cn(
-                "px-3 py-1.5 rounded-full transition-colors",
+                "relative px-3 py-1.5 rounded-full transition-colors",
                 view === v
-                  ? `${activeColor} text-white shadow-sm`
+                  ? "text-white"
                   : view === 'skissebok'
                     ? "text-gray-300 hover:text-white"
                     : "text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100"
               )}
             >
-              {label}
+              {/* Shared-layout pill: slides (and recolours) between tabs. */}
+              {view === v && (
+                <motion.span
+                  layoutId="view-tab-pill"
+                  aria-hidden
+                  className={cn('absolute inset-0 rounded-full shadow-sm', activeColor)}
+                  transition={{ type: 'spring', stiffness: 500, damping: 38 }}
+                />
+              )}
+              <span className="relative">{label}</span>
             </button>
           ))}
         </div>
         </div>
       </div>
     <div className={cn('max-w-full overflow-x-hidden', view === 'skissebok' ? 'flex min-h-0 flex-1 flex-col' : 'p-4')}>
-      <main className={cn('min-w-0', view === 'skissebok' ? 'flex min-h-0 flex-1 flex-col' : 'space-y-4')}>
+      <main className={cn('min-w-0', view === 'skissebok' && 'flex min-h-0 flex-1 flex-col')}>
+        {/* Gentle fade-in when switching tabs. Deliberately no AnimatePresence:
+            the views unmount inner motion components at will (year collapse,
+            card expansion), which corrupts presence exit bookkeeping. A keyed
+            fade-in-only div gets the smoothness without that hazard. */}
+        <motion.div
+          key={view}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.15, ease: 'easeOut' }}
+          className={view === 'skissebok' ? 'flex min-h-0 flex-1 flex-col' : 'space-y-4'}
+        >
         {/* Search + category filters only apply to the timeline; the gallery and
             sketchbook tabs show everything, so hide them there. */}
         {view === 'timeline' && (
@@ -392,7 +419,7 @@ export default function MDXBlog({ initialPosts = [], initialType }: MDXBlogProps
             <div className="relative">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-gray-500" />
               <Input
-                placeholder="Leit i arkivet..."
+                placeholder="Leit i arkivet…"
                 className="pl-10 pr-10 py-2 text-sm focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-gray-300 dark:focus-visible:border-gray-600"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -435,9 +462,10 @@ export default function MDXBlog({ initialPosts = [], initialType }: MDXBlogProps
         {view === 'gallery' ? (
           // Pull out to the container edge on mobile (the -mx exactly cancels the
           // p-4 wrapper, so an ancestor's overflow-x-hidden never clips the
-          // frames). Normal containment from sm: up.
+          // frames). Normal containment from sm: up. The gallery deliberately
+          // shows every post — the timeline's search/filters don't apply here.
           <div className="mt-4 -mx-4 sm:mx-0">
-            <GalleryView posts={filteredPosts} />
+            <GalleryView posts={posts} />
           </div>
         ) : view === 'skissebok' ? (
           <Skissebok />
@@ -499,9 +527,25 @@ export default function MDXBlog({ initialPosts = [], initialType }: MDXBlogProps
             })
           ) : error ? (
             <p className="text-gray-500 dark:text-gray-400 text-sm">Feil ved lasting av innlegg</p>
+          ) : posts.length > 0 ? (
+            // Posts exist but none survive the search/filters — say so instead
+            // of showing a silently blank page.
+            <div className="px-2 py-16 text-center">
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                Ingen treff{search ? <> for «{search}»</> : null}.
+              </p>
+              <button
+                type="button"
+                onClick={() => { setSearch(''); setSelectedTypes([]); setSelectedTags([]) }}
+                className="mt-3 text-sm font-medium text-gray-700 dark:text-gray-200 underline underline-offset-4 hover:text-gray-900 dark:hover:text-white transition-colors"
+              >
+                Nullstill søk og filter
+              </button>
+            </div>
           ) : null}
         </motion.div>
         )}
+        </motion.div>
       </main>
     </div>
     </div>
