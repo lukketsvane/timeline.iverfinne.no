@@ -64,6 +64,13 @@ function proxyPageImage(pageId: string, type: 'cover' | 'icon'): string {
   return `/api/notion-image?page=${pageId}&type=${type}`;
 }
 
+// Stable proxy for file properties (e.g. sosialbilete). The raw Notion S3 URL
+// expires after ~1h, so embedding it (even URL-encoded) breaks images and
+// busts the edge cache on every regeneration; this URL never changes.
+function proxyPageProp(pageId: string, prop: string): string {
+  return `/api/notion-image?page=${pageId}&prop=${prop}`;
+}
+
 function proxyImageUrl(url: string | undefined): string | undefined {
   if (!url) return url;
   // Proxy all external URLs through our API so NextImage can serve them
@@ -351,7 +358,8 @@ function getPageProperties(page: any) {
 
   // Sosialbilete (social image override) — optional file property. When set,
   // Lenkje cards use this instead of the link target's og:image. Empty = no
-  // change, so only rows with an uploaded image are overridden.
+  // change, so only rows with an uploaded image are overridden. Served via
+  // the stable prop proxy so the URL survives S3 signature expiry.
   const getFileUrl = (name: string): string | undefined => {
     const prop = findProp(name);
     if (!prop || !prop.files || !Array.isArray(prop.files) || prop.files.length === 0) return undefined;
@@ -360,7 +368,7 @@ function getPageProperties(page: any) {
     if (file.type === "external") return file.external?.url;
     return undefined;
   };
-  const sosialbilete = proxyImageUrl(getFileUrl("sosialbilete"));
+  const sosialbilete = getFileUrl("sosialbilete") ? proxyPageProp(page.id, "sosialbilete") : undefined;
 
   const uid = `${type}-${slug}`;
 
@@ -488,6 +496,7 @@ export const getPublishedPosts = cache(async (): Promise<Post[]> => {
             thumbnails,
             bodyImages: bodyMedia.images,
             bodyModels: bodyMedia.models,
+            imageDims: bodyMedia.dims,
             ...ogData,
             modelSrc,
           };
@@ -600,7 +609,8 @@ export async function serializePostContent(post: Post): Promise<Post & { seriali
 // ── Body media ──────────────────────────────────────────────────────────────
 // One pass over a page's blocks collecting every image and attached 3D model,
 // so the gallery can show in-post images without the client having to fetch
-// and parse each post's markdown first.
+// and parse each post's markdown first. Also probes image dimensions (a few
+// header bytes per image) so frames can use real aspect ratios immediately.
 
 export type BodyMedia = {
   images: { src: string; alt: string }[];
@@ -608,7 +618,27 @@ export type BodyMedia = {
   // Set when the body is nothing but (blank paragraphs and) one .glb file —
   // such pages render as a bare 3D frame instead of a card.
   modelOnlySrc?: string;
+  // Pixel dimensions keyed by the stable proxy src (body images, page cover,
+  // sosialbilete). Best-effort — absent entries just fall back to on-load
+  // measurement in the client.
+  dims: Record<string, { w: number; h: number }>;
 };
+
+// Read just enough bytes of an image to learn its pixel size.
+async function probeDims(url: string | undefined): Promise<{ w: number; h: number } | undefined> {
+  if (!url) return undefined;
+  try {
+    const probe = (await import("probe-image-size")).default;
+    const r = await probe(url, { timeout: 2500 });
+    if (r?.width && r?.height) return { w: r.width, h: r.height };
+  } catch { /* dimension stays unknown */ }
+  return undefined;
+}
+
+function fileUrlOf(f: any): string | undefined {
+  if (!f) return undefined;
+  return f.type === "external" ? f.external?.url : f.file?.url;
+}
 
 // Container blocks whose children can hold images (columns, toggles, …).
 const CONTAINER_BLOCK_TYPES = new Set([
@@ -642,6 +672,8 @@ async function listAllChildren(blockId: string, maxPages = 3): Promise<any[]> {
 async function fetchBodyMedia(pageId: string, fallbackAlt: string): Promise<BodyMedia> {
   const images: { src: string; alt: string }[] = [];
   const models: string[] = [];
+  // Raw (short-lived) file URLs per proxy src, used only for probing below.
+  const rawUrls = new Map<string, string | undefined>();
   // Recursion budget: a handful of extra child-list calls per post, so deeply
   // nested pages can't fan the API out.
   let budget = 6;
@@ -650,10 +682,9 @@ async function fetchBodyMedia(pageId: string, fallbackAlt: string): Promise<Body
     const blocks = await listAllChildren(parentId);
     for (const b of blocks) {
       if (b.type === "image") {
-        images.push({
-          src: proxyBlockImage(b.id),
-          alt: b.image?.caption?.[0]?.plain_text || fallbackAlt,
-        });
+        const src = proxyBlockImage(b.id);
+        images.push({ src, alt: b.image?.caption?.[0]?.plain_text || fallbackAlt });
+        rawUrls.set(src, fileUrlOf(b.image));
       } else if (b.type === "file" && /\.(glb|gltf)$/i.test(glbFileBlockName(b))) {
         models.push(proxyBlockImage(b.id));
       }
@@ -671,8 +702,32 @@ async function fetchBodyMedia(pageId: string, fallbackAlt: string): Promise<Body
   try {
     rootBlocks = await collect(pageId, 0);
   } catch {
-    return { images: [], models: [] };
+    return { images: [], models: [], dims: {} };
   }
+
+  // The page cover and sosialbilete also show in the gallery — fetch the page
+  // once so their dimensions can be probed alongside the body images.
+  try {
+    const page: any = await withRetry(() => notion.pages.retrieve({ page_id: pageId }));
+    if (page?.cover) rawUrls.set(proxyPageImage(pageId, "cover"), fileUrlOf(page.cover));
+    const sosialProp = Object.entries(page?.properties || {}).find(
+      ([k]) => k.toLowerCase() === "sosialbilete"
+    )?.[1] as any;
+    const sosialFile = sosialProp?.files?.[0];
+    if (sosialFile) rawUrls.set(proxyPageProp(pageId, "sosialbilete"), fileUrlOf(sosialFile));
+  } catch { /* covers just miss their dims */ }
+
+  // Probe dimensions a few at a time (each reads only the image header).
+  const dims: Record<string, { w: number; h: number }> = {};
+  const limitProbe = createLimiter(4);
+  await Promise.all(
+    Array.from(rawUrls.entries()).map(([src, raw]) =>
+      limitProbe(async () => {
+        const d = await probeDims(raw);
+        if (d) dims[src] = d;
+      })
+    )
+  );
 
   // Model-only detection: blank paragraphs are ignored; one .glb file block
   // qualifies; any other content disqualifies.
@@ -687,7 +742,7 @@ async function fetchBodyMedia(pageId: string, fallbackAlt: string): Promise<Body
     break;
   }
 
-  return { images, models, modelOnlySrc };
+  return { images, models, modelOnlySrc, dims };
 }
 
 // Cache keyed by page id + last_edited_time: a page that hasn't changed reuses

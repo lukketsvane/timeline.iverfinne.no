@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { MDXRemote } from 'next-mdx-remote'
 import type { MDXRemoteSerializeResult } from 'next-mdx-remote'
 import { motion, AnimatePresence } from 'framer-motion'
-import { cn } from "@/lib/utils"
+import { cn, notionImgSrc, notionImgSrcSet } from "@/lib/utils"
 import { ImageGallery } from "@/components/image-gallery"
 import { 
   Link2, 
@@ -101,6 +101,12 @@ interface MDXCardProps {
   onToggle: () => void
   serializedContent: MDXRemoteSerializeResult | null
 }
+
+// Route NextImage widths through the resizing proxy for /api/notion-image
+// sources; external images keep the default (remotePatterns) pipeline.
+const notionImageLoader = ({ src, width }: { src: string; width: number }) => `${src}&w=${width}`
+const loaderFor = (src: string) =>
+  src.startsWith('/api/notion-image?') ? notionImageLoader : undefined
 
 const TimelineConnector = () => (
   <div className="absolute left-0 sm:left-0 w-0.5 top-0 bottom-0 bg-gray-200 dark:bg-gray-700 -translate-x-1/2" />
@@ -213,6 +219,13 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
     if (!post.thumbnails) return []
     return post.thumbnails.filter(img => !img.src.endsWith('.glb'))
   }, [post.thumbnails])
+
+  // A Bilete post with exactly one photo shows it as a full-width square
+  // frame — same presentation as the 3D viewer — instead of a small grid cell.
+  const singlePhoto =
+    post.type === "Bilete" && post.thumbnails?.length === 1 && galleryImages.length === 1
+      ? galleryImages[0]
+      : null
 
   const renderTags = () => {
     return (
@@ -343,7 +356,9 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
                   <div className="relative w-full aspect-[1.91/1] bg-gray-100 dark:bg-gray-800">
                     {/* Use plain <img> — ogImage is an arbitrary external URL not in remotePatterns */}
                     <img
-                      src={image}
+                      src={notionImgSrc(image, 960)}
+                      srcSet={notionImgSrcSet(image, [640, 960, 1280])}
+                      sizes="(min-width: 1152px) 990px, 100vw"
                       alt=""
                       className="absolute inset-0 w-full h-full object-cover"
                     />
@@ -379,7 +394,7 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
                       fill
                       className="object-cover"
                       sizes="(max-width: 640px) 80px, 96px"
-                      unoptimized={bookCover.startsWith('/api/')}
+                      loader={loaderFor(bookCover)}
                     />
                   </div>
                 )}
@@ -390,7 +405,9 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
                   {post.sosialbilete && (
                     <div className="relative mb-3 overflow-hidden rounded-lg">
                       <img
-                        src={post.sosialbilete}
+                        src={notionImgSrc(post.sosialbilete, 960)}
+                        srcSet={notionImgSrcSet(post.sosialbilete, [640, 960, 1280])}
+                        sizes="(min-width: 1152px) 990px, 100vw"
                         alt=""
                         loading="lazy"
                         className="w-full h-auto object-cover"
@@ -494,15 +511,35 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
                       fill
                       className="object-cover"
                       sizes="80px"
-                      unoptimized={projectThumb.startsWith('/api/')}
+                      loader={loaderFor(projectThumb)}
                     />
                   </div>
                 )}
               </div>
             )}
 
+            {/* Single-photo Bilete: one big square frame, like the 3D viewer */}
+            {singlePhoto && (
+              <div
+                className="relative mb-4 aspect-square w-full cursor-pointer overflow-hidden rounded-lg bg-gray-50 dark:bg-gray-900"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setEnlargedImageIndex(0)
+                }}
+              >
+                <NextImage
+                  src={singlePhoto.src}
+                  alt={singlePhoto.alt}
+                  fill
+                  className="object-cover"
+                  sizes="(min-width: 1152px) 990px, 100vw"
+                  loader={loaderFor(singlePhoto.src)}
+                />
+              </div>
+            )}
+
             {/* Image Grid for "Bilete" or Thumbnails for others */}
-            {post.type !== "Skriving" && post.type !== "Bok" && post.thumbnails && post.thumbnails.length > 0 && (
+            {!singlePhoto && post.type !== "Skriving" && post.type !== "Bok" && post.thumbnails && post.thumbnails.length > 0 && (
               <div className={cn(
                 "grid gap-1 mb-4 max-w-[620px]",
                 post.type === "Bilete" ? "grid-cols-4" : "grid-cols-3"
@@ -541,7 +578,7 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
                           className="object-contain"
                           sizes="(max-width: 640px) 25vw, 155px"
                           loading="lazy"
-                          unoptimized={img.src.startsWith('/api/')}
+                          loader={loaderFor(img.src)}
                         />
                       )}
                       

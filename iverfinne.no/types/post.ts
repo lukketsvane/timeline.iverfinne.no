@@ -25,5 +25,8 @@ export interface Post {
   bodyImages?: { src: string; alt: string }[]
   // Stable proxied URLs for .glb/.gltf files attached in the post body.
   bodyModels?: string[]
+  // Pixel dimensions keyed by proxy src (body images, cover, sosialbilete),
+  // so frames can render at the real aspect ratio before the image loads.
+  imageDims?: Record<string, { w: number; h: number }>
 }
 

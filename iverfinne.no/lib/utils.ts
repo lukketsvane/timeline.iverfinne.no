@@ -70,3 +70,16 @@ export function isValidEmail(email: string): boolean {
 export function generateUniqueId(): string {
   return Math.random().toString(36).substr(2, 9)
 }
+
+// ── Notion image proxy sizing ────────────────────────────────────────────────
+// The proxy (/api/notion-image) resizes on demand via ?w=. These helpers keep
+// non-proxy URLs untouched so external images never gain bogus params.
+
+export function notionImgSrc(src: string, w: number): string {
+  return src.startsWith('/api/notion-image?') ? `${src}&w=${w}` : src
+}
+
+export function notionImgSrcSet(src: string, widths: number[] = [320, 640, 960, 1280]): string | undefined {
+  if (!src.startsWith('/api/notion-image?')) return undefined
+  return widths.map((w) => `${src}&w=${w} ${w}w`).join(', ')
+}

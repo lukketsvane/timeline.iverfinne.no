@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import Link from 'next/link'
 import { ExternalLink, ArrowUpRight, ChevronLeft, ChevronRight, X } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { cn } from '@/lib/utils'
+import { cn, notionImgSrc, notionImgSrcSet } from '@/lib/utils'
 import { ModelViewer } from '@/components/model-viewer'
 
 interface GalleryPost {
@@ -22,7 +22,11 @@ interface GalleryPost {
   modelSrc?: string
   bodyImages?: { src: string; alt: string }[]
   bodyModels?: string[]
+  imageDims?: Record<string, { w: number; h: number }>
 }
+
+// Column widths in the masonry (2 → 3 → 4 columns).
+const FRAME_SIZES = '(min-width: 1024px) 270px, (min-width: 640px) 33vw, 50vw'
 
 // Random fill colours shown behind each frame while the image loads.
 const FILL_COLORS = ['#EF4444', '#1D4ED8', '#F97316', '#06B6D4']
@@ -71,6 +75,7 @@ interface GalleryItem {
   alt?: string
   post: GalleryPost
   model?: boolean
+  dims?: { w: number; h: number }
 }
 
 // Flatten posts into individual frames: the hero image (cover/sosialbilete),
@@ -101,7 +106,9 @@ function buildItems(posts: GalleryPost[]): GalleryItem[] {
     } else {
       for (const src of extractContentImages(post.content)) add(src)
     }
-    srcs.forEach((src, i) => items.push({ key: `${post.uid}-${i}`, src, alt: alts.get(src), post }))
+    srcs.forEach((src, i) =>
+      items.push({ key: `${post.uid}-${i}`, src, alt: alts.get(src), post, dims: post.imageDims?.[src] })
+    )
     // Models attached inside the body get their own interactive frames.
     for (const [i, m] of (post.bodyModels || []).entries()) {
       items.push({ key: `${post.uid}-bodymodel-${i}`, src: m, post, model: true })
@@ -120,8 +127,11 @@ function fmtDate(d?: string): string {
 
 function GalleryFrame({ item, index, onOpen }: { item: GalleryItem; index: number; onOpen: () => void }) {
   const [loaded, setLoaded] = useState(false)
-  // Start with a hashed ratio for variety; refine to match the real image on load.
-  const [ar, setAr] = useState(() => SNAP_ARS[hash(item.key) % SNAP_ARS.length])
+  // Real ratio when the server probed it (no layout shift); otherwise start
+  // with a hashed guess and refine once the image loads.
+  const [ar, setAr] = useState(() =>
+    item.dims ? closestAr(item.dims.w / item.dims.h) : SNAP_ARS[hash(item.key) % SNAP_ARS.length]
+  )
   const color = FILL_COLORS[hash('clr' + item.key) % FILL_COLORS.length]
 
   // 3D models render live in the grid (rotatable in place, no lightbox).
@@ -145,7 +155,9 @@ function GalleryFrame({ item, index, onOpen }: { item: GalleryItem; index: numbe
         style={{ aspectRatio: String(ar), backgroundColor: color }}
       >
         <img
-          src={item.src}
+          src={notionImgSrc(item.src, 640)}
+          srcSet={notionImgSrcSet(item.src)}
+          sizes={FRAME_SIZES}
           alt={item.alt || item.post.title}
           // Eagerly load the first frames (near the top) so they appear first.
           loading={index < 6 ? 'eager' : 'lazy'}
@@ -191,7 +203,7 @@ function Lightbox({ items, index, onClose, onNavigate }: {
       const it = items[(index + d + items.length) % items.length]
       if (it && !it.model) {
         const img = new Image()
-        img.src = it.src
+        img.src = notionImgSrc(it.src, 1600)
       }
     }
   }, [index, items])
@@ -281,8 +293,10 @@ function Lightbox({ items, index, onClose, onNavigate }: {
             </div>
           ) : (
             <img
-              src={item.src}
+              src={notionImgSrc(item.src, 1600)}
               alt={item.alt || post.title}
+              width={item.dims?.w}
+              height={item.dims?.h}
               onPointerDown={onDown}
               onPointerMove={onMove}
               onPointerUp={onUp}
@@ -292,6 +306,8 @@ function Lightbox({ items, index, onClose, onNavigate }: {
                 transform: `translate(${offset.x}px, ${offset.y}px) scale(${swipeScale})`,
                 transition: draggingRef.current ? 'none' : 'transform 0.25s cubic-bezier(0.25, 0.1, 0.25, 1)',
                 touchAction: 'none',
+                width: 'auto',
+                height: 'auto',
               }}
               draggable={false}
             />
