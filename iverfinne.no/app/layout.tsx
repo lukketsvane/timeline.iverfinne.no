@@ -14,7 +14,7 @@ const newsreader = Newsreader({
 const APP_NAME = 'iverfinne.no'
 const APP_DEFAULT_TITLE = 'iverfinne.no'
 const APP_TITLE_TEMPLATE = '%s - iverfinne.no'
-const APP_DESCRIPTION = 'Personleg nettside og blogg'
+const APP_DESCRIPTION = 'Arkivet til Iver Finne — små prosjekt, skisser og tekstar, samla på ein stad.'
 
 // Global default social sharing image (1200x630, the size expected by
 // Facebook, Messenger, Discord, Slack, LinkedIn, Twitter/X, etc.)
@@ -25,10 +25,11 @@ const OG_IMAGE = {
   alt: APP_DEFAULT_TITLE,
 }
 
+// No maximumScale: pinch-zoom must stay available (a11y). iOS input zoom is
+// already prevented by the 16px input font-size rule in globals.css.
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
   viewportFit: 'cover',
 }
 

@@ -33,6 +33,24 @@ async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> {
   throw new Error("Unreachable");
 }
 
+// Caps how many of a given async call run at once — getPublishedPosts fans out
+// one block-listing per post, and an uncapped Promise.all would burst-fire the
+// Notion API into 429s.
+function createLimiter(max: number) {
+  let active = 0;
+  const queue: (() => void)[] = [];
+  return async function limit<T>(fn: () => Promise<T>): Promise<T> {
+    if (active >= max) await new Promise<void>((resolve) => queue.push(resolve));
+    active++;
+    try {
+      return await fn();
+    } finally {
+      active--;
+      queue.shift()?.();
+    }
+  };
+}
+
 // Proxy Notion images through our API using stable identifiers
 // Block images: /api/notion-image?block=<block-id>
 // Page covers:  /api/notion-image?page=<page-id>&type=cover
@@ -432,14 +450,25 @@ export const getPublishedPosts = cache(async (): Promise<Post[]> => {
       (page: any) => (page.properties?.Type?.select?.name || "").toLowerCase() !== "skissebok"
     );
 
+    // One body scan per post, a few at a time (see createLimiter).
+    const limitBodyMedia = createLimiter(4);
+
     const posts = await Promise.all(visible
-      .map(async (page): Promise<Post | null> => {
+      .map(async (page: any): Promise<Post | null> => {
         try {
           const props = getPageProperties(page);
+
+          // Every post gets its body images/models collected, so the gallery
+          // can show in-post media immediately. Cached per last_edited_time.
+          const bodyMedia = await limitBodyMedia(() =>
+            fetchBodyMediaCached(page.id, props.title, page.last_edited_time || "")
+          );
+
           let thumbnails = props.image ? [{ src: props.image, alt: props.title }] : [];
-          if (props.type === "Bilete") {
-            thumbnails = await fetchBileteThumbnails(page.id, props.title, props.image);
+          if (props.type === "Bilete" && bodyMedia.images.length > 0) {
+            thumbnails = bodyMedia.images;
           }
+
           // Fetch OG metadata for Lenkje posts
           let ogData: { ogTitle?: string; ogDescription?: string; ogImage?: string } = {};
           if (props.type === "Lenkje" && props.url) {
@@ -447,17 +476,18 @@ export const getPublishedPosts = cache(async (): Promise<Post[]> => {
           }
 
           // Model-only pages (body = a single .glb attachment) render as a
-          // bare 3D frame. Only descriptionless pages can qualify, so the
-          // extra blocks call stays rare.
-          let modelSrc: string | undefined;
-          if (!props.description && props.type !== "Bilete" && props.type !== "Lenkje") {
-            modelSrc = await detectModelOnlyPage(page.id);
-          }
+          // bare 3D frame. Only descriptionless pages qualify.
+          const modelSrc =
+            !props.description && props.type !== "Bilete" && props.type !== "Lenkje"
+              ? bodyMedia.modelOnlySrc
+              : undefined;
 
           return {
             ...props,
             content: "",
             thumbnails,
+            bodyImages: bodyMedia.images,
+            bodyModels: bodyMedia.models,
             ...ogData,
             modelSrc,
           };
@@ -567,35 +597,108 @@ export async function serializePostContent(post: Post): Promise<Post & { seriali
   }
 }
 
-// Detect pages whose body is nothing but an attached 3D model (.glb/.gltf).
-// Returns a stable proxied URL for the model, or undefined. Empty paragraphs
-// (blank lines in Notion) are ignored; any other content disqualifies.
-async function detectModelOnlyPage(pageId: string): Promise<string | undefined> {
-  try {
-    const blocks = await withRetry(() =>
-      notion.blocks.children.list({ block_id: pageId, page_size: 10 })
-    );
-    let modelBlockId: string | undefined;
-    for (const b of blocks.results as any[]) {
-      if (b.type === "paragraph" && (b.paragraph?.rich_text?.length ?? 0) === 0) continue;
-      if (b.type === "file") {
-        const f = b.file;
-        const name: string =
-          f?.name ||
-          (f?.type === "external" ? f.external?.url : f?.file?.url)?.split("/").pop()?.split("?")[0] ||
-          "";
-        if (/\.(glb|gltf)$/i.test(name) && !modelBlockId) {
-          modelBlockId = b.id;
-          continue;
-        }
-      }
-      return undefined; // any other content → normal post
-    }
-    return modelBlockId ? `/api/notion-image?block=${modelBlockId}` : undefined;
-  } catch {
-    return undefined;
-  }
+// ── Body media ──────────────────────────────────────────────────────────────
+// One pass over a page's blocks collecting every image and attached 3D model,
+// so the gallery can show in-post images without the client having to fetch
+// and parse each post's markdown first.
+
+export type BodyMedia = {
+  images: { src: string; alt: string }[];
+  models: string[];
+  // Set when the body is nothing but (blank paragraphs and) one .glb file —
+  // such pages render as a bare 3D frame instead of a card.
+  modelOnlySrc?: string;
+};
+
+// Container blocks whose children can hold images (columns, toggles, …).
+const CONTAINER_BLOCK_TYPES = new Set([
+  "column_list", "column", "toggle", "callout", "quote", "synced_block",
+  "bulleted_list_item", "numbered_list_item", "to_do",
+]);
+
+function glbFileBlockName(b: any): string {
+  const f = b.file;
+  return (
+    f?.name ||
+    (f?.type === "external" ? f.external?.url : f?.file?.url)?.split("/").pop()?.split("?")[0] ||
+    ""
+  );
 }
+
+async function listAllChildren(blockId: string, maxPages = 3): Promise<any[]> {
+  const results: any[] = [];
+  let cursor: string | undefined;
+  for (let i = 0; i < maxPages; i++) {
+    const res: any = await withRetry(() =>
+      notion.blocks.children.list({ block_id: blockId, page_size: 100, start_cursor: cursor })
+    );
+    results.push(...res.results);
+    if (!res.has_more || !res.next_cursor) break;
+    cursor = res.next_cursor;
+  }
+  return results;
+}
+
+async function fetchBodyMedia(pageId: string, fallbackAlt: string): Promise<BodyMedia> {
+  const images: { src: string; alt: string }[] = [];
+  const models: string[] = [];
+  // Recursion budget: a handful of extra child-list calls per post, so deeply
+  // nested pages can't fan the API out.
+  let budget = 6;
+
+  const collect = async (parentId: string, depth: number): Promise<any[]> => {
+    const blocks = await listAllChildren(parentId);
+    for (const b of blocks) {
+      if (b.type === "image") {
+        images.push({
+          src: proxyBlockImage(b.id),
+          alt: b.image?.caption?.[0]?.plain_text || fallbackAlt,
+        });
+      } else if (b.type === "file" && /\.(glb|gltf)$/i.test(glbFileBlockName(b))) {
+        models.push(proxyBlockImage(b.id));
+      }
+      if (b.has_children && depth < 2 && CONTAINER_BLOCK_TYPES.has(b.type) && budget > 0) {
+        budget--;
+        try {
+          await collect(b.id, depth + 1);
+        } catch { /* nested fetch errors just mean fewer images */ }
+      }
+    }
+    return blocks;
+  };
+
+  let rootBlocks: any[] = [];
+  try {
+    rootBlocks = await collect(pageId, 0);
+  } catch {
+    return { images: [], models: [] };
+  }
+
+  // Model-only detection: blank paragraphs are ignored; one .glb file block
+  // qualifies; any other content disqualifies.
+  let modelOnlySrc: string | undefined;
+  for (const b of rootBlocks) {
+    if (b.type === "paragraph" && (b.paragraph?.rich_text?.length ?? 0) === 0) continue;
+    if (b.type === "file" && /\.(glb|gltf)$/i.test(glbFileBlockName(b)) && !modelOnlySrc) {
+      modelOnlySrc = proxyBlockImage(b.id);
+      continue;
+    }
+    modelOnlySrc = undefined;
+    break;
+  }
+
+  return { images, models, modelOnlySrc };
+}
+
+// Cache keyed by page id + last_edited_time: a page that hasn't changed reuses
+// its cached media for an hour, so steady-state regenerations barely touch the
+// Notion API. The extra parameter exists purely to vary the cache key.
+const fetchBodyMediaCached = unstable_cache(
+  async (pageId: string, fallbackAlt: string, _lastEdited: string) =>
+    fetchBodyMedia(pageId, fallbackAlt),
+  ["body-media"],
+  { revalidate: 3600 }
+);
 
 // Shared Bilete thumbnail extraction
 async function fetchBileteThumbnails(

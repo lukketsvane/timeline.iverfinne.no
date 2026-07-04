@@ -11,13 +11,7 @@ interface ModelViewerProps {
   className?: string
 }
 
-declare global {
-  namespace JSX {
-    interface IntrinsicElements {
-      'model-viewer': any
-    }
-  }
-}
+// The <model-viewer> element type lives in types/custom-elements.d.ts.
 
 // Camera distance: 100% = model-viewer's auto framing. >100% zooms out so the
 // object gets breathing room instead of filling the frame edge to edge.

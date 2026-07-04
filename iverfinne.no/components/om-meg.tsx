@@ -3,8 +3,11 @@ export default function OmMeg() {
     <div className="mx-auto mt-8 max-w-md space-y-6 pb-16">
       <img
         src="/images/om-meg.jpg"
-        alt="Iver Finne"
-        className="w-full rounded-lg"
+        alt="Portrett av Iver Finne"
+        width={843}
+        height={843}
+        decoding="async"
+        className="w-full rounded-xl"
       />
       <div className="space-y-4 font-serif text-gray-700 dark:text-gray-300 leading-relaxed">
         <p>
