@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge"
 import { ArrowLeft, Calendar } from 'lucide-react'
 import Link from 'next/link'
 import { getTagColor } from "@/lib/tag-utils"
-import { cn } from "@/lib/utils"
+import { cn, notionImgSrc, notionImgSrcSet } from "@/lib/utils"
 import { HtmlIframe } from "@/components/html-iframe"
 import { motion, AnimatePresence } from 'framer-motion'
 import { useEffect, useState } from 'react'
@@ -76,7 +76,9 @@ export default function SlugPageClient({ post }: SlugPageClientProps) {
         {post.sosialbilete ? (
           <div className="relative -mx-4 -mt-12 mb-8">
             <img
-              src={post.sosialbilete}
+              src={notionImgSrc(post.sosialbilete, 1280)}
+              srcSet={notionImgSrcSet(post.sosialbilete, [640, 960, 1280, 1600])}
+              sizes="(min-width: 896px) 896px, 100vw"
               alt=""
               className="w-full h-auto object-cover"
             />
@@ -154,8 +156,11 @@ export default function SlugPageClient({ post }: SlugPageClientProps) {
             {post.thumbnails.map((img: { src: string; alt: string }, i: number) => (
               <img
                 key={i}
-                src={img.src}
+                src={notionImgSrc(img.src, 1280)}
+                srcSet={notionImgSrcSet(img.src, [640, 960, 1280, 1600])}
+                sizes="(min-width: 896px) 896px, 100vw"
                 alt={img.alt}
+                loading={i > 1 ? 'lazy' : 'eager'}
                 className="max-w-full h-auto rounded-lg cursor-pointer hover:brightness-95 transition-[filter] duration-150"
                 onClick={() => setEnlargedImage(img.src)}
               />
@@ -203,7 +208,7 @@ export default function SlugPageClient({ post }: SlugPageClientProps) {
           >
             <div className="absolute inset-0 bg-white/80 dark:bg-black/80" />
             <motion.img
-              src={enlargedImage}
+              src={notionImgSrc(enlargedImage, 2048)}
               alt=""
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}

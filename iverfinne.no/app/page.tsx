@@ -1,4 +1,7 @@
 export const revalidate = 60
+// Cold-cache regenerations fan out per-post Notion calls + dimension probes;
+// give them room beyond the 10s default so ISR never times out.
+export const maxDuration = 60
 
 import HomePage from '@/components/home-page'
 import { getPublishedPosts } from '@/lib/notion'

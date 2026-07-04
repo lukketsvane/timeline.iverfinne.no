@@ -1,4 +1,5 @@
 export const revalidate = 60
+export const maxDuration = 60
 
 import { getPublishedPosts, getPostBySlug, serializeMarkdown, VALID_TYPES } from '@/lib/notion'
 import { notFound, redirect } from 'next/navigation'
