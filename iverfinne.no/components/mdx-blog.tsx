@@ -1,12 +1,12 @@
 'use client'
 
 import { useState, useEffect, useMemo, useRef, useCallback } from "react"
-import { Search, ChevronDown } from 'lucide-react'
+import { Search, ChevronDown, SlidersHorizontal, Lightbulb } from 'lucide-react'
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { motion } from 'framer-motion'
 import { cn } from "@/lib/utils"
-import { MDXCard } from "./mdx-card"
+import { MDXCard, TIMELINE_GRID } from "./mdx-card"
 import GalleryView from "./gallery-view"
 import Skissebok from "./skissebok"
 import OmMeg from "./om-meg"
@@ -30,6 +30,7 @@ interface Post {
   serialized?: MDXRemoteSerializeResult
   url?: string
   icon?: string
+  lesMeir?: boolean
   thumbnails?: { src: string; alt: string }[]
   modelSrc?: string
 }
@@ -358,45 +359,40 @@ export default function MDXBlog({ initialPosts = [], initialType }: MDXBlogProps
             <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z" />
           </svg>
         </a>
-        <div
-          className={cn(
-            'inline-flex items-center rounded-full p-1 text-sm font-medium transition-colors',
-            view === 'skissebok' ? 'bg-white/10' : 'bg-gray-100 dark:bg-gray-800'
-          )}
-        >
+        <nav className="flex items-center gap-1 text-sm font-medium sm:gap-2">
           {([
-            ['timeline', 'Tidslinje', 'bg-blue-600'],
-            ['gallery', 'Galleri', 'bg-orange-500'],
-            ['om', 'Om meg', 'bg-green-600'],
+            ['timeline', 'Tidslinje'],
+            ['gallery', 'Galleri'],
+            ['om', 'Om meg'],
             // Skissebok is hidden for now — restore the tuple below to bring the tab back.
-            // ['skissebok', 'Skissebok', 'bg-red-500'],
-          ] as const).map(([v, label, activeColor]) => (
+            // ['skissebok', 'Skissebok'],
+          ] as const).map(([v, label]) => (
             <button
               key={v}
               onClick={() => setView(v)}
               aria-pressed={view === v}
               className={cn(
-                "relative px-3 py-1.5 rounded-full transition-colors",
+                "relative px-3.5 py-1.5 rounded-full transition-colors",
                 view === v
-                  ? "text-white"
+                  ? "text-background"
                   : view === 'skissebok'
                     ? "text-gray-300 hover:text-white"
-                    : "text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100"
+                    : "text-foreground/70 hover:text-foreground"
               )}
             >
-              {/* Shared-layout pill: slides (and recolours) between tabs. */}
+              {/* Shared-layout pill: slides between tabs. */}
               {view === v && (
                 <motion.span
                   layoutId="view-tab-pill"
                   aria-hidden
-                  className={cn('absolute inset-0 rounded-full shadow-sm', activeColor)}
+                  className="absolute inset-0 rounded-full bg-foreground shadow-sm"
                   transition={{ type: 'spring', stiffness: 500, damping: 38 }}
                 />
               )}
               <span className="relative">{label}</span>
             </button>
           ))}
-        </div>
+        </nav>
         </div>
       </div>
     <div className={cn('max-w-full overflow-x-hidden', view === 'skissebok' ? 'flex min-h-0 flex-1 flex-col' : 'p-4')}>
@@ -410,17 +406,21 @@ export default function MDXBlog({ initialPosts = [], initialType }: MDXBlogProps
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.15, ease: 'easeOut' }}
-          className={view === 'skissebok' ? 'flex min-h-0 flex-1 flex-col' : 'space-y-4'}
+          className={cn(
+            view === 'skissebok' ? 'flex min-h-0 flex-1 flex-col' : 'space-y-4',
+            // The timeline reads best as a centered column; gallery & co stay wide.
+            view === 'timeline' && 'mx-auto w-full max-w-2xl'
+          )}
         >
         {/* Search + category filters only apply to the timeline; the gallery and
             sketchbook tabs show everything, so hide them there. */}
         {view === 'timeline' && (
           <>
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-gray-500" />
+              <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-gray-500" />
               <Input
                 placeholder="Leit i arkivet…"
-                className="pl-10 pr-10 py-2 text-sm focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-gray-300 dark:focus-visible:border-gray-600"
+                className="h-11 rounded-xl pl-10 pr-11 text-sm focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-gray-300 dark:focus-visible:border-gray-600"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
@@ -429,9 +429,14 @@ export default function MDXBlog({ initialPosts = [], initialType }: MDXBlogProps
                 onClick={() => setFiltersOpen((o) => !o)}
                 aria-label="Vis/skjul filter"
                 aria-expanded={filtersOpen}
-                className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                className={cn(
+                  'absolute right-2.5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full transition-colors',
+                  filtersOpen
+                    ? 'text-foreground'
+                    : 'text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                )}
               >
-                <ChevronDown className={cn('h-4 w-4 transition-transform', filtersOpen && 'rotate-180')} />
+                <SlidersHorizontal className="h-4 w-4" />
               </button>
             </div>
             {/* Empty selection means "all" — so every pill reads as selected by default. */}
@@ -478,7 +483,8 @@ export default function MDXBlog({ initialPosts = [], initialType }: MDXBlogProps
           transition={{ duration: 0.2, ease: "linear" }}
         >
           {filteredPosts.length > 0 ? (
-            filteredPosts.map((post, index) => {
+            <>
+            {filteredPosts.map((post, index) => {
               const currentYear = new Date(post.date).getFullYear()
               const prevYear = index > 0 ? new Date(filteredPosts[index - 1].date).getFullYear() : null
               const showYear = currentYear !== prevYear
@@ -487,30 +493,50 @@ export default function MDXBlog({ initialPosts = [], initialType }: MDXBlogProps
               return (
                 <div key={post.uid}>
                   {showYear && (
-                    <div className="relative grid grid-cols-1 sm:grid-cols-[auto,1fr] gap-2 sm:gap-4 pl-5 sm:pl-0">
-                      <div className="hidden sm:block w-24 shrink-0" />
+                    <div className={cn('relative', TIMELINE_GRID)}>
+                      <div className="flex items-center justify-end py-5 pr-2 sm:pr-4">
+                        {/* Tapping the year collapses/expands every post from that year. */}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setCollapsedYears(prev => {
+                              const next = new Set(prev)
+                              if (next.has(currentYear)) next.delete(currentYear)
+                              else next.add(currentYear)
+                              return next
+                            })
+                          }
+                          aria-expanded={!yearCollapsed}
+                          aria-label={`${yearCollapsed ? 'Vis' : 'Skjul'} innlegg frå ${currentYear}`}
+                          className={cn(
+                            'inline-flex items-center gap-0.5 text-base font-bold tracking-tight transition-colors sm:text-lg',
+                            yearCollapsed
+                              ? 'text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300'
+                              : 'text-foreground'
+                          )}
+                        >
+                          {currentYear}
+                          <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', yearCollapsed && '-rotate-90')} />
+                        </button>
+                      </div>
                       <div className="relative">
-                        <div className="absolute left-0 w-0.5 -top-4 bottom-0 bg-gray-200 dark:bg-gray-700 -translate-x-1/2" />
-                        <div className="py-4">
-                          {/* Tapping the year pill collapses/expands every post from that year. */}
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setCollapsedYears(prev => {
-                                const next = new Set(prev)
-                                if (next.has(currentYear)) next.delete(currentYear)
-                                else next.add(currentYear)
-                                return next
-                              })
-                            }
-                            aria-expanded={!yearCollapsed}
-                            aria-label={`${yearCollapsed ? 'Vis' : 'Skjul'} innlegg frå ${currentYear}`}
-                            className="bg-white dark:bg-gray-900 pl-3 pr-1.5 py-1 text-sm font-bold text-gray-400 border border-gray-200 dark:border-gray-700 rounded-full relative z-10 -translate-x-1/2 inline-flex items-center gap-0.5 transition-colors hover:text-gray-600 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600"
-                          >
-                            {currentYear}
-                            <ChevronDown className={cn('h-3 w-3 transition-transform', yearCollapsed && '-rotate-90')} />
-                          </button>
-                        </div>
+                        {/* The first year's line starts at its node instead of the top edge. */}
+                        <div
+                          className={cn(
+                            'absolute left-0 bottom-0 w-px bg-gray-200 dark:bg-gray-800 -translate-x-1/2',
+                            index === 0 ? 'top-1/2' : 'top-0'
+                          )}
+                        />
+                        {/* Year node: filled when expanded, hollow ring when collapsed. */}
+                        <span
+                          aria-hidden
+                          className={cn(
+                            'absolute left-0 top-1/2 z-10 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full',
+                            yearCollapsed
+                              ? 'border-2 border-gray-300 bg-background dark:border-gray-600'
+                              : 'bg-foreground ring-4 ring-background'
+                          )}
+                        />
                       </div>
                     </div>
                   )}
@@ -524,7 +550,12 @@ export default function MDXBlog({ initialPosts = [], initialType }: MDXBlogProps
                   )}
                 </div>
               )
-            })
+            })}
+            <div className="flex items-center justify-center gap-1.5 pb-4 pt-2 text-xs text-muted-foreground">
+              <Lightbulb className="h-3.5 w-3.5" />
+              <span>Tidslinja viser artiklar frå nyast til eldst.</span>
+            </div>
+            </>
           ) : error ? (
             <p className="text-gray-500 dark:text-gray-400 text-sm">Feil ved lasting av innlegg</p>
           ) : posts.length > 0 ? (

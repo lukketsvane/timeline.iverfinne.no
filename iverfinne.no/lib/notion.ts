@@ -370,6 +370,11 @@ function getPageProperties(page: any) {
   };
   const sosialbilete = getFileUrl("sosialbilete") ? proxyPageProp(page.id, "sosialbilete") : undefined;
 
+  // "Les meir" checkbox — gates the inline card expander per post. A missing
+  // property or unchecked box (the default for every row) means off.
+  const getCheckbox = (name: string): boolean => findProp(name)?.checkbox === true;
+  const lesMeir = getCheckbox("Les meir") || getCheckbox("lesmeir");
+
   const uid = `${type}-${slug}`;
 
   return {
@@ -385,7 +390,8 @@ function getPageProperties(page: any) {
     url,
     lyd,
     icon,
-    sosialbilete
+    sosialbilete,
+    lesMeir
   };
 }
 

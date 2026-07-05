@@ -19,7 +19,6 @@ import {
   Check, 
   ChevronRight,
   ChevronLeft,
-  ChevronDown,
   ExternalLink,
   Github, 
   Twitter, 
@@ -48,7 +47,7 @@ import {
 } from 'lucide-react'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
-import { getTagColor } from "@/lib/tag-utils"
+import { useRouter } from 'next/navigation'
 import { HtmlIframe } from "@/components/html-iframe"
 import { ModelViewer } from "@/components/model-viewer"
 import { AudioPlayer } from "@/components/audio-player"
@@ -88,6 +87,7 @@ interface Post {
   lyd?: string
   icon?: string
   sosialbilete?: string
+  lesMeir?: boolean
   thumbnails?: { src: string; alt: string }[]
   ogTitle?: string
   ogDescription?: string
@@ -108,40 +108,30 @@ const notionImageLoader = ({ src, width }: { src: string; width: number }) => `$
 const loaderFor = (src: string) =>
   src.startsWith('/api/notion-image?') ? notionImageLoader : undefined
 
+// Shared timeline gutter — must stay in sync with the year rows in mdx-blog.tsx.
+export const TIMELINE_GRID = "grid grid-cols-[4.25rem,1fr] sm:grid-cols-[5.5rem,1fr]"
+
 const TimelineConnector = () => (
-  <div className="absolute left-0 sm:left-0 w-0.5 top-0 bottom-0 bg-gray-200 dark:bg-gray-700 -translate-x-1/2" />
+  <div className="absolute left-0 top-0 bottom-0 w-px bg-gray-200 dark:bg-gray-800 -translate-x-1/2" />
 )
 
-const TimelineNode = ({ type, onToggle, url }: { type: string, onToggle: () => void, url?: string }) => {
-  const typeColors = {
-    Skriving: "bg-blue-500",
-    Bok: "bg-green-500",
-    Prosjekt: "bg-purple-500",
-    Lenkje: "bg-orange-500",
-    Interaktiv: "bg-pink-500",
-    Bilete: "bg-teal-500",
-    Presentasjon: "bg-indigo-500"
-  }
-  
-  const handleClick = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    if (type === "Lenkje" && url) {
-      window.open(url, '_blank')
-    } else {
-      onToggle()
-    }
-  }
-  
-  return (
-    <button 
-      onClick={handleClick}
-      className={cn(
-        "absolute left-0 sm:left-0 top-4 w-4 h-4 sm:w-5 sm:h-5 rounded-full -translate-x-1/2 border-2 border-white dark:border-gray-900 z-10 transition-transform hover:scale-125 cursor-pointer",
-        typeColors[type as keyof typeof typeColors] || "bg-gray-500"
-      )} 
-      aria-label={type === "Lenkje" ? "Opna lenkje" : "Utvid eller skjul innhald"}
-    />
-  )
+const TimelineNode = ({ onActivate, label }: { onActivate: () => void; label: string }) => (
+  <button
+    onClick={(e) => { e.stopPropagation(); onActivate() }}
+    className="absolute left-0 top-6 z-10 h-2.5 w-2.5 -translate-x-1/2 cursor-pointer rounded-full bg-foreground ring-4 ring-background transition-transform hover:scale-125"
+    aria-label={label}
+  />
+)
+
+// Coloured small-caps category label at the top of each card.
+const typeLabelColors: Record<string, string> = {
+  Skriving: "text-blue-600 dark:text-blue-400",
+  Bok: "text-emerald-600 dark:text-emerald-400",
+  Prosjekt: "text-violet-600 dark:text-violet-400",
+  Lenkje: "text-orange-600 dark:text-orange-400",
+  Interaktiv: "text-pink-600 dark:text-pink-400",
+  Bilete: "text-teal-600 dark:text-teal-400",
+  Presentasjon: "text-indigo-600 dark:text-indigo-400",
 }
 
 function getFigmaEmbedUrl(content: string, url?: string): string | null {
@@ -203,6 +193,7 @@ function extractOutgoingLinks(content: string, postUrl?: string): SocialLink[] {
 }
 
 export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCardProps) {
+  const router = useRouter()
   const [enlargedImageIndex, setEnlargedImageIndex] = useState<number | null>(null)
   const bookCover = post.type === "Bok" ? (post.image || post.icon || getFirstImageFromContent(post.content)) : null
   const projectThumb = post.type === "Prosjekt" ? (post.image || getFirstImageFromContent(post.content)) : null
@@ -227,30 +218,28 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
       ? galleryImages[0]
       : null
 
-  const renderTags = () => {
+  const hasTags = Array.isArray(post.tags) && post.tags.length > 0
+
+  // Meta row: neutral tag chips when the post has tags, otherwise the read
+  // time — mirrors the mockup where a card shows one or the other.
+  const renderMeta = () => {
+    if (!hasTags && readTime <= 0) return null
     return (
-      <div className="flex gap-1.5 flex-wrap mt-2 items-center">
-        <Badge
-          className={cn(
-            "text-xs px-2 py-0.5 rounded-full font-medium transition-colors border",
-            getTagColor(post.type)
-          )}
-        >
-          {post.type}
-        </Badge>
-        {Array.isArray(post.tags) && post.tags.map((tag) => (
-          <Badge
-            key={`${post.uid}-tag-${tag}`}
-            className={cn(
-              "text-xs px-2 py-0.5 rounded-sm font-medium transition-colors border",
-              getTagColor(tag)
-            )}
-          >
-            {tag}
-          </Badge>
-        ))}
-        {post.lyd && post.type !== "Lenkje" && (
-          <AudioPlayer src={post.lyd} title={post.title} />
+      <div className="mt-3 flex flex-wrap items-center gap-1.5">
+        {hasTags ? (
+          (post.tags as string[]).map((tag) => (
+            <span
+              key={`${post.uid}-tag-${tag}`}
+              className="rounded-md border border-gray-200 bg-transparent px-2 py-0.5 text-xs font-medium text-muted-foreground dark:border-gray-700"
+            >
+              {tag}
+            </span>
+          ))
+        ) : (
+          <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+            <Clock className="h-3.5 w-3.5" />
+            {readTime} min
+          </span>
         )}
       </div>
     )
@@ -272,13 +261,37 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
   const monthName = monthsFull[monthIdx]
   const month = monthName.length > 4 ? monthsShort[monthIdx] : monthName
 
+  const postHref = `/${post.type.toLowerCase()}/${post.slug}`
+
+  // Lenkje opens its target; posts with "Les meir" on expand inline; every
+  // other card navigates straight to its own page.
   const handleCardClick = () => {
     if (post.type === "Lenkje" && post.url) {
       window.open(post.url, '_blank')
-    } else {
+    } else if (post.lesMeir) {
       onToggle()
+    } else {
+      router.push(postHref)
     }
   }
+
+  // Right-hand illustration in the card (mockup 2). Book covers keep their
+  // portrait format; everything else prefers the social image, then the cover.
+  const sideImage =
+    post.type === "Bok"
+      ? bookCover
+      : post.type === "Prosjekt"
+        ? (projectThumb || post.sosialbilete)
+        : (post.sosialbilete || post.image)
+
+  const dateGutter = (
+    <div className="pt-5 pr-3 text-right sm:pr-5">
+      <time className="block leading-tight">
+        <span className="block text-sm font-bold text-gray-500 dark:text-gray-400">{day}.</span>
+        <span className="block text-[11px] font-medium uppercase tracking-wider text-gray-400 dark:text-gray-500">{month}</span>
+      </time>
+    </div>
+  )
 
   // A post whose whole body is a single attached 3D model renders as a bare
   // square viewer — no title, date or tags, just the frame (orbit-only).
@@ -287,14 +300,12 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
     post.content?.trim().match(/^<ModelViewer\s[^>]*src="([^"]+)"[^>]*\/>$/)?.[1]
   if (modelOnlySrc) {
     return (
-      <div className="relative grid grid-cols-1 sm:grid-cols-[auto,1fr] gap-2 sm:gap-4 max-w-full pl-5 sm:pl-0">
-        <div className="hidden sm:block w-24 shrink-0" />
-        <div className="relative min-w-0">
-          <div className="block">
-            <TimelineNode type={post.type} onToggle={() => {}} />
-            <TimelineConnector />
-          </div>
-          <div className="pb-8 pt-0">
+      <div className={cn("relative max-w-full", TIMELINE_GRID)}>
+        {dateGutter}
+        <div className="relative min-w-0 pl-4 sm:pl-6">
+          <TimelineConnector />
+          <TimelineNode onActivate={() => {}} label={post.title} />
+          <div className="pb-6">
             <ModelViewer
               src={modelOnlySrc}
               alt={post.title}
@@ -308,25 +319,21 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
   }
 
   return (
-    <div className="relative grid grid-cols-1 sm:grid-cols-[auto,1fr] gap-2 sm:gap-4 max-w-full pl-5 sm:pl-0">
-      <div className="hidden sm:block text-right pt-5 pr-6 w-24 shrink-0">
-        <time className="text-lg font-semibold text-muted-foreground whitespace-nowrap lowercase">
-          <span className="font-extrabold">{day}.</span> {month}
-        </time>
-      </div>
-      <div className="relative min-w-0">
-        <div className="block">
-          <TimelineNode type={post.type} onToggle={handleCardClick} url={post.url} />
-          <TimelineConnector />
-        </div>
-        <div className="pb-8 pt-0">
+    <div className={cn("relative max-w-full", TIMELINE_GRID)}>
+      {dateGutter}
+      <div className="relative min-w-0 pl-4 sm:pl-6">
+        <TimelineConnector />
+        <TimelineNode
+          onActivate={handleCardClick}
+          label={post.type === "Lenkje" ? "Opna lenkje" : post.lesMeir ? "Utvid eller skjul innhald" : `Opna ${post.title}`}
+        />
+        <div className="pb-6">
           <motion.article
             className={cn(
-              "relative rounded-lg p-4 transition-colors",
+              "relative overflow-hidden rounded-2xl transition-colors",
               post.type === "Lenkje"
-                ? "hover:bg-blue-50/30 dark:hover:bg-blue-900/10 cursor-alias"
-                : (isExpanded ? "dark:bg-gray-800" : "hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer"),
-              "ml-0"
+                ? "cursor-alias"
+                : "cursor-pointer border border-gray-200/80 bg-white shadow-sm hover:border-gray-300 dark:border-gray-800 dark:bg-gray-900 dark:hover:border-gray-700"
             )}
             onClick={handleCardClick}
             initial={false}
@@ -351,7 +358,7 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
               return (
               // Compact link card: just the image with the site + title overlaid on
               // a gradient scrim. No separate description section.
-              <div className="relative border border-gray-200 dark:border-gray-800 rounded-xl shadow-sm overflow-hidden hover:border-gray-300 dark:hover:border-gray-700 transition-colors">
+              <div className="relative border border-gray-200 dark:border-gray-800 rounded-2xl shadow-sm overflow-hidden hover:border-gray-300 dark:hover:border-gray-700 transition-colors">
                 {image ? (
                   <div className="relative w-full aspect-[1.91/1] bg-gray-100 dark:bg-gray-800">
                     {/* Use plain <img> — ogImage is an arbitrary external URL not in remotePatterns */}
@@ -382,231 +389,179 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
               )
             })()}
 
-            {/* Main Content Section */}
+            {/* Main Content Section — text column left, illustration right */}
             {post.type !== "Bilete" && post.type !== "Lenkje" && (
-              <div className="flex items-start gap-4 mb-4">
-                {/* Book Cover - Left Aligned */}
-                {post.type === "Bok" && bookCover && (
-                  <div className="relative w-20 sm:w-24 aspect-[2/3] shrink-0 shadow-md rounded-sm overflow-hidden border border-gray-100 dark:border-gray-800">
-                    <NextImage
-                      src={bookCover}
-                      alt={`Omslag for ${post.title}`}
-                      fill
-                      className="object-cover"
-                      sizes="(max-width: 640px) 80px, 96px"
-                      loader={loaderFor(bookCover)}
-                    />
-                  </div>
-                )}
-
-                <div className="flex-1 group/title min-w-0">
-                  {/* sosialbilete hero: the image carries the title and date on a
-                      gradient scrim (same pattern as the Lenkje bookmark card). */}
-                  {post.sosialbilete && (
-                    <div className="relative mb-3 overflow-hidden rounded-lg">
-                      <img
-                        src={notionImgSrc(post.sosialbilete, 960)}
-                        srcSet={notionImgSrcSet(post.sosialbilete, [640, 960, 1280])}
-                        sizes="(min-width: 1152px) 990px, 100vw"
-                        alt=""
-                        loading="lazy"
-                        className="w-full h-auto object-cover"
-                      />
-                      <div className="absolute inset-x-0 bottom-0 p-3 sm:p-4 bg-gradient-to-t from-black/75 via-black/35 to-transparent text-white">
-                        <Link href={`/${post.type.toLowerCase()}/${post.slug}`} onClick={(e) => e.stopPropagation()}>
-                          <h2 className="text-2xl font-semibold tracking-tight drop-shadow-sm group-hover/title:underline decoration-2 underline-offset-2">
-                            {post.title}
-                          </h2>
-                        </Link>
-                        <time className="text-sm text-white/85 lowercase">
-                          <span className="font-extrabold">{day}.</span> {month}
-                        </time>
-                      </div>
-                      {post.type === "Skriving" && readTime > 0 && !post.lyd && (
-                        <div className="absolute top-2.5 right-2.5 flex items-center text-xs text-white/90 drop-shadow">
-                          <Clock className="w-3.5 h-3.5 mr-1" />
-                          {readTime} min
-                        </div>
-                      )}
-                    </div>
-                  )}
-                  <div className="flex items-start gap-2 flex-wrap">
-                    {!post.sosialbilete && (
-                    <Link href={`/${post.type.toLowerCase()}/${post.slug}`} onClick={(e) => e.stopPropagation()}>
-                      <h2 className="text-2xl font-semibold tracking-tight mb-2 group-hover/title:underline decoration-2 underline-offset-2 transition-colors">
-                        {post.title}
-                      </h2>
-                    </Link>
-                    )}
-                    {/* Read time sits top-right of the title row so the body text
-                        below can use the card's full width. */}
-                    {!post.sosialbilete && post.type === "Skriving" && readTime > 0 && !post.lyd && (
-                      <div className="ml-auto shrink-0 flex items-center text-xs text-muted-foreground whitespace-nowrap pt-1.5">
-                        <Clock className="w-3.5 h-3.5 mr-1" />
-                        {readTime} min
-                      </div>
-                    )}
-                    {/* Social/outgoing link icons for Prosjekt */}
-                    {post.type === "Prosjekt" && projectLinks.length > 0 && (
-                      <div className="flex items-center gap-1.5 mb-2">
-                        {projectLinks.map((link) => (
-                          <a
-                            key={link.type}
-                            href={link.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            onClick={(e) => e.stopPropagation()}
-                            className="text-muted-foreground hover:text-foreground transition-colors"
-                            aria-label={link.type}
-                          >
-                            {link.type === 'github' && <Github className="w-4 h-4" />}
-                            {link.type === 'instagram' && (
-                              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="20" x="2" y="2" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" x2="17.51" y1="6.5" y2="6.5"/></svg>
-                            )}
-                            {link.type === 'linkedin' && (
-                              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect width="4" height="12" x="2" y="9"/><circle cx="4" cy="4" r="2"/></svg>
-                            )}
-                            {link.type === 'twitter' && <Twitter className="w-4 h-4" />}
-                            {link.type === 'external' && <ExternalLink className="w-4 h-4" />}
-                          </a>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  {!post.sosialbilete && (
-                  <time className="block sm:hidden text-sm text-muted-foreground mb-2 lowercase">
-                    <span className="font-extrabold">{day}.</span> {month}
-                  </time>
-                  )}
+              <div className="flex items-start gap-4 p-4 sm:gap-5 sm:p-5">
+                <div className="group/title min-w-0 flex-1">
+                  <p className={cn("text-[11px] font-bold uppercase tracking-[0.1em]", typeLabelColors[post.type] || "text-gray-500")}>
+                    {post.type}
+                  </p>
+                  <Link href={postHref} onClick={(e) => e.stopPropagation()}>
+                    <h2 className="mt-1 text-lg font-bold leading-snug tracking-tight group-hover/title:underline decoration-2 underline-offset-2 sm:text-xl">
+                      {post.title}
+                    </h2>
+                  </Link>
                   {post.description && (
                     <p
                       lang="nn"
                       className={cn(
-                        "text-muted-foreground text-sm font-serif",
-                        isProse && "text-justify hyphens-auto",
+                        "mt-1.5 text-sm leading-relaxed text-muted-foreground",
                         !isExpanded && "line-clamp-3"
                       )}
                     >
                       {post.description}
                     </p>
                   )}
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); onToggle() }}
-                    className="inline-flex items-center gap-0.5 mt-1 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-                    aria-expanded={isExpanded}
-                  >
-                    {isExpanded ? "Les mindre" : "Les meir"}
-                    <ChevronDown className={cn("w-4 h-4 transition-transform", isExpanded && "rotate-180")} />
-                  </button>
-                  {renderTags()}
+                  {post.lesMeir && (
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); onToggle() }}
+                      className="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-foreground transition-colors hover:text-muted-foreground"
+                      aria-expanded={isExpanded}
+                    >
+                      {isExpanded ? "Les mindre" : "Les meir"}
+                      <ArrowRight className={cn("h-4 w-4 transition-transform", isExpanded && "rotate-90")} />
+                    </button>
+                  )}
+                  {/* Social/outgoing link icons for Prosjekt */}
+                  {post.type === "Prosjekt" && projectLinks.length > 0 && (
+                    <div className="mt-2 flex items-center gap-1.5">
+                      {projectLinks.map((link) => (
+                        <a
+                          key={link.type}
+                          href={link.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="text-muted-foreground hover:text-foreground transition-colors"
+                          aria-label={link.type}
+                        >
+                          {link.type === 'github' && <Github className="w-4 h-4" />}
+                          {link.type === 'instagram' && (
+                            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="20" x="2" y="2" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" x2="17.51" y1="6.5" y2="6.5"/></svg>
+                          )}
+                          {link.type === 'linkedin' && (
+                            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect width="4" height="12" x="2" y="9"/><circle cx="4" cy="4" r="2"/></svg>
+                          )}
+                          {link.type === 'twitter' && <Twitter className="w-4 h-4" />}
+                          {link.type === 'external' && <ExternalLink className="w-4 h-4" />}
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                  {renderMeta()}
                 </div>
 
-                {/* Project thumbnail - Right Aligned */}
-                {post.type === "Prosjekt" && projectThumb && (
-                  <div className="relative w-16 h-16 sm:w-20 sm:h-20 shrink-0 rounded-lg overflow-hidden border border-gray-100 dark:border-gray-800">
-                    <NextImage
-                      src={projectThumb}
-                      alt=""
-                      fill
-                      className="object-cover"
-                      sizes="80px"
-                      loader={loaderFor(projectThumb)}
+                {/* Illustration — right aligned; book covers keep 2:3 */}
+                {sideImage && (
+                  <div
+                    className={cn(
+                      "shrink-0 overflow-hidden",
+                      post.type === "Bok"
+                        ? "relative aspect-[2/3] w-20 rounded-sm border border-gray-100 shadow-md dark:border-gray-800 sm:w-24"
+                        : "w-28 self-center rounded-lg sm:w-40"
+                    )}
+                  >
+                    <img
+                      src={notionImgSrc(sideImage, 480)}
+                      srcSet={notionImgSrcSet(sideImage, [240, 480, 960])}
+                      sizes="(max-width: 640px) 112px, 160px"
+                      alt={post.type === "Bok" ? `Omslag for ${post.title}` : ""}
+                      loading="lazy"
+                      className={
+                        post.type === "Bok"
+                          ? "absolute inset-0 h-full w-full object-cover"
+                          : "h-auto w-full object-contain"
+                      }
                     />
                   </div>
                 )}
               </div>
             )}
 
-            {/* Single-photo Bilete: one big square frame, like the 3D viewer */}
-            {singlePhoto && (
-              <div
-                className="relative mb-4 aspect-square w-full cursor-pointer overflow-hidden rounded-lg bg-gray-50 dark:bg-gray-900"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setEnlargedImageIndex(0)
-                }}
-              >
-                <NextImage
-                  src={singlePhoto.src}
-                  alt={singlePhoto.alt}
-                  fill
-                  className="object-cover"
-                  sizes="(min-width: 1152px) 990px, 100vw"
-                  loader={loaderFor(singlePhoto.src)}
-                />
-              </div>
-            )}
-
-            {/* Image Grid for "Bilete" or Thumbnails for others */}
-            {!singlePhoto && post.type !== "Skriving" && post.type !== "Bok" && post.thumbnails && post.thumbnails.length > 0 && (
-              <div className={cn(
-                "grid gap-1 mb-4 max-w-[620px]",
-                post.type === "Bilete" ? "grid-cols-4" : "grid-cols-3"
-              )}>
-                {(post.type === "Bilete" ? post.thumbnails.slice(0, 8) : post.thumbnails.slice(0, 3)).map((img, i) => {
-                  const isLastVisible = post.type === "Bilete" && i === 7 && post.thumbnails!.length > 8;
-
-                  return (
-                    <div 
-                      key={`${post.uid}-thumb-${i}`}
-                      className={cn(
-                        "aspect-square relative rounded-sm overflow-hidden group/thumb",
-                        post.type === "Bilete" && !img.src.endsWith('.glb') && "cursor-pointer"
-                      )}
-                      onClick={(e) => {
-                        if (post.type === "Bilete" && !img.src.endsWith('.glb')) {
-                          e.stopPropagation()
-                          const galleryIdx = galleryImages.findIndex(g => g.src === img.src)
-                          if (galleryIdx !== -1) setEnlargedImageIndex(galleryIdx)
-                        }
-                      }}
-                    >
-                      {img.src.endsWith('.glb') ? (
-                        <ModelViewer 
-                          src={img.src} 
-                          alt={img.alt} 
-                          disableZoom={true} 
-                          disablePan={true}
-                          className="h-full w-full"
-                        />
-                      ) : (
-                        <NextImage
-                          src={img.src}
-                          alt={img.alt}
-                          fill
-                          className="object-contain"
-                          sizes="(max-width: 640px) 25vw, 155px"
-                          loading="lazy"
-                          loader={loaderFor(img.src)}
-                        />
-                      )}
-                      
-                      {/* Plus overlay for the 9th image if there are more */}
-                      {isLastVisible && (
-                        <div className="absolute inset-0 bg-black/5 flex items-center justify-center pointer-events-none group-hover/thumb:bg-black/20 transition-colors">
-                          <Plus className="text-white w-8 h-8 opacity-20 group-hover/thumb:opacity-60 transition-opacity" />
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* Special layout for Bilete type since title is hidden */}
+            {/* Bilete: no title — category label, then the photo(s), then tags */}
             {post.type === "Bilete" && (
-              <>
-                <time className="block sm:hidden text-sm text-muted-foreground mb-2 lowercase">
-                  <span className="font-extrabold">{day}.</span> {month}
-                </time>
-                {renderTags()}
-              </>
+              <div className="p-4 sm:p-5">
+                <p className={cn("mb-3 text-[11px] font-bold uppercase tracking-[0.1em]", typeLabelColors.Bilete)}>
+                  Bilete
+                </p>
+                {singlePhoto ? (
+                  // Single photo: one big square frame, like the 3D viewer
+                  <div
+                    className="relative aspect-square w-full cursor-pointer overflow-hidden rounded-lg bg-gray-50 dark:bg-gray-900"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setEnlargedImageIndex(0)
+                    }}
+                  >
+                    <NextImage
+                      src={singlePhoto.src}
+                      alt={singlePhoto.alt}
+                      fill
+                      className="object-cover"
+                      sizes="(min-width: 1152px) 990px, 100vw"
+                      loader={loaderFor(singlePhoto.src)}
+                    />
+                  </div>
+                ) : post.thumbnails && post.thumbnails.length > 0 ? (
+                  <div className="grid max-w-[620px] grid-cols-4 gap-1">
+                    {post.thumbnails.slice(0, 8).map((img, i) => {
+                      const isLastVisible = i === 7 && post.thumbnails!.length > 8;
+
+                      return (
+                        <div
+                          key={`${post.uid}-thumb-${i}`}
+                          className={cn(
+                            "aspect-square relative rounded-sm overflow-hidden group/thumb",
+                            !img.src.endsWith('.glb') && "cursor-pointer"
+                          )}
+                          onClick={(e) => {
+                            if (!img.src.endsWith('.glb')) {
+                              e.stopPropagation()
+                              const galleryIdx = galleryImages.findIndex(g => g.src === img.src)
+                              if (galleryIdx !== -1) setEnlargedImageIndex(galleryIdx)
+                            }
+                          }}
+                        >
+                          {img.src.endsWith('.glb') ? (
+                            <ModelViewer
+                              src={img.src}
+                              alt={img.alt}
+                              disableZoom={true}
+                              disablePan={true}
+                              className="h-full w-full"
+                            />
+                          ) : (
+                            <NextImage
+                              src={img.src}
+                              alt={img.alt}
+                              fill
+                              className="object-contain"
+                              sizes="(max-width: 640px) 25vw, 155px"
+                              loading="lazy"
+                              loader={loaderFor(img.src)}
+                            />
+                          )}
+
+                          {/* Plus overlay for the 9th image if there are more */}
+                          {isLastVisible && (
+                            <div className="absolute inset-0 bg-black/5 flex items-center justify-center pointer-events-none group-hover/thumb:bg-black/20 transition-colors">
+                              <Plus className="text-white w-8 h-8 opacity-20 group-hover/thumb:opacity-60 transition-opacity" />
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : null}
+                {renderMeta()}
+              </div>
             )}
 
-            {/* Expanded Content */}
+            {/* Expanded Content — only reachable when the post's "Les meir"
+                checkbox is on in Notion */}
             <AnimatePresence initial={false}>
-              {isExpanded && post.type !== "Bilete" && post.type !== "Lenkje" && (
+              {post.lesMeir && isExpanded && post.type !== "Bilete" && post.type !== "Lenkje" && (
                 <motion.div
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: "auto" }}
@@ -615,12 +570,13 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
                     height: { type: 'spring', stiffness: 400, damping: 40, mass: 0.8 },
                     opacity: { duration: 0.2, ease: [0.25, 0.1, 0.25, 1] }
                   }}
-                  className="overflow-hidden mt-3 border-t border-gray-100 dark:border-gray-800 pt-4"
+                  className="overflow-hidden"
                 >
                   <div
                     lang="nn"
                     className={cn(
                       "prose dark:prose-invert max-w-none text-base leading-normal overflow-hidden break-words",
+                      "border-t border-gray-100 dark:border-gray-800 px-4 pb-5 pt-4 sm:px-5",
                       isProse && "text-justify hyphens-auto prose-p:text-justify"
                     )}
                     onClick={(e) => e.stopPropagation()}
@@ -658,6 +614,13 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
                 </motion.div>
               )}
             </AnimatePresence>
+
+            {/* Audio row — round play button + full-width scrubber (mockup 1) */}
+            {post.lyd && post.type !== "Lenkje" && (
+              <div className="border-t border-gray-100 px-4 py-3 dark:border-gray-800 sm:px-5">
+                <AudioPlayer src={post.lyd} title={post.title} variant="card" />
+              </div>
+            )}
           </motion.article>
 
           {/* Image gallery lightbox with navigation, gestures, keyboard support */}

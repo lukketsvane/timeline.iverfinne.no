@@ -7,6 +7,9 @@ interface AudioPlayerProps {
   src: string
   title?: string
   className?: string
+  // 'inline' is the compact tag-row player; 'card' is the full-width row with
+  // a round play button and a flexible scrubber (timeline card footer).
+  variant?: 'inline' | 'card'
 }
 
 function formatTime(seconds: number): string {
@@ -16,7 +19,8 @@ function formatTime(seconds: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`
 }
 
-export function AudioPlayer({ src, title, className = '' }: AudioPlayerProps) {
+export function AudioPlayer({ src, title, className = '', variant = 'inline' }: AudioPlayerProps) {
+  const isCard = variant === 'card'
   const audioRef = useRef<HTMLAudioElement>(null)
   const progressRef = useRef<HTMLDivElement>(null)
   const [isPlaying, setIsPlaying] = useState(false)
@@ -91,7 +95,7 @@ export function AudioPlayer({ src, title, className = '' }: AudioPlayerProps) {
 
   return (
     <div
-      className={`inline-flex items-center gap-1.5 select-none ${className}`}
+      className={`${isCard ? 'flex w-full items-center gap-3' : 'inline-flex items-center gap-1.5'} select-none ${className}`}
       onClick={(e) => e.stopPropagation()}
     >
       <audio ref={audioRef} src={src} preload="metadata" />
@@ -99,7 +103,11 @@ export function AudioPlayer({ src, title, className = '' }: AudioPlayerProps) {
       {/* Play/Pause button */}
       <button
         onClick={togglePlay}
-        className="w-5 h-5 flex items-center justify-center text-foreground shrink-0 hover:text-foreground/70 transition-colors"
+        className={
+          isCard
+            ? 'flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-gray-200 bg-background text-foreground shadow-sm transition-colors hover:border-gray-300 dark:border-gray-700 dark:hover:border-gray-600'
+            : 'w-5 h-5 flex items-center justify-center text-foreground shrink-0 hover:text-foreground/70 transition-colors'
+        }
         aria-label={isPlaying ? 'Pause' : 'Spel av'}
       >
         <AnimatePresence mode="wait" initial={false}>
@@ -110,7 +118,7 @@ export function AudioPlayer({ src, title, className = '' }: AudioPlayerProps) {
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.5, opacity: 0 }}
               transition={{ duration: 0.15 }}
-              width="10" height="10" viewBox="0 0 14 14" fill="currentColor"
+              width={isCard ? 12 : 10} height={isCard ? 12 : 10} viewBox="0 0 14 14" fill="currentColor"
             >
               <rect x="2" y="1" width="3.5" height="12" rx="1" />
               <rect x="8.5" y="1" width="3.5" height="12" rx="1" />
@@ -122,7 +130,7 @@ export function AudioPlayer({ src, title, className = '' }: AudioPlayerProps) {
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.5, opacity: 0 }}
               transition={{ duration: 0.15 }}
-              width="10" height="10" viewBox="0 0 14 14" fill="currentColor"
+              width={isCard ? 12 : 10} height={isCard ? 12 : 10} viewBox="0 0 14 14" fill="currentColor"
             >
               <path d="M3 1.5v11l9-5.5z" />
             </motion.svg>
@@ -131,13 +139,13 @@ export function AudioPlayer({ src, title, className = '' }: AudioPlayerProps) {
       </button>
 
       {/* Progress bar */}
-      <div className="flex items-center gap-1.5 min-w-0">
-        <span className="text-[10px] tabular-nums text-muted-foreground/70 w-6 text-right shrink-0">
+      <div className={`flex items-center min-w-0 ${isCard ? 'flex-1 gap-2.5' : 'gap-1.5'}`}>
+        <span className={`tabular-nums text-muted-foreground/70 text-right shrink-0 ${isCard ? 'text-xs w-9' : 'text-[10px] w-6'}`}>
           {formatTime(currentTime)}
         </span>
         <div
           ref={progressRef}
-          className="w-24 h-0.5 bg-gray-300/60 dark:bg-gray-600/40 rounded-full cursor-pointer relative group"
+          className={`${isCard ? 'flex-1 h-1' : 'w-24 h-0.5'} bg-gray-300/60 dark:bg-gray-600/40 rounded-full cursor-pointer relative group`}
           onClick={handleProgressClick}
           onPointerDown={handlePointerDown}
         >
@@ -150,7 +158,7 @@ export function AudioPlayer({ src, title, className = '' }: AudioPlayerProps) {
             style={{ left: `${progress}%`, transform: `translate(-50%, -50%)` }}
           />
         </div>
-        <span className="text-[10px] tabular-nums text-muted-foreground/70 w-6 shrink-0">
+        <span className={`tabular-nums text-muted-foreground/70 shrink-0 ${isCard ? 'text-xs w-9' : 'text-[10px] w-6'}`}>
           {formatTime(duration)}
         </span>
       </div>

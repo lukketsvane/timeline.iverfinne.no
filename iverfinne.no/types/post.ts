@@ -13,6 +13,9 @@ export interface Post {
   lyd?: string
   icon?: string
   sosialbilete?: string
+  // "Les meir" checkbox in Notion: when checked, the timeline card gets an
+  // inline expander. Unchecked/missing (the default) links straight to the post.
+  lesMeir?: boolean
   thumbnails?: { src: string; alt: string }[]
   ogTitle?: string
   ogDescription?: string
