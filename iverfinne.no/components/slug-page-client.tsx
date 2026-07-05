@@ -25,6 +25,9 @@ interface SlugPageClientProps {
 
 export default function SlugPageClient({ post }: SlugPageClientProps) {
   const [enlargedImage, setEnlargedImage] = useState<string | null>(null)
+  // The back link floats over the header image; pick black or white from the
+  // brightness of the image's top-left corner. Default white until measured.
+  const [headerDark, setHeaderDark] = useState(true)
 
   useEffect(() => {
     if (!enlargedImage) return
@@ -81,10 +84,16 @@ export default function SlugPageClient({ post }: SlugPageClientProps) {
               widths={[640, 960, 1280, 1600]}
               sizes="(min-width: 896px) 896px, 100vw"
               fullWidth={1280}
+              onLuminance={setHeaderDark}
             />
             <Link
               href="/"
-              className="absolute left-4 top-4 inline-flex items-center text-sm text-white/90 hover:text-white transition-colors"
+              className={cn(
+                "absolute left-4 top-4 inline-flex items-center text-sm transition-colors",
+                headerDark
+                  ? "text-white/90 hover:text-white"
+                  : "text-gray-900/80 hover:text-gray-900"
+              )}
             >
               <ArrowLeft className="w-4 h-4 mr-2" />
               Tilbake til forsida
