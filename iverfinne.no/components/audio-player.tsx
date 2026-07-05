@@ -2,11 +2,17 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { Clock } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 interface AudioPlayerProps {
   src: string
   title?: string
   className?: string
+  // 'inline' — compact pill (used in tag rows, post header).
+  // 'bar'    — full-width scrubber row with a prominent play button, a clock
+  //            icon and start/end timestamps (the timeline card treatment).
+  variant?: 'inline' | 'bar'
 }
 
 function formatTime(seconds: number): string {
@@ -16,7 +22,7 @@ function formatTime(seconds: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`
 }
 
-export function AudioPlayer({ src, title, className = '' }: AudioPlayerProps) {
+export function AudioPlayer({ src, title, className = '', variant = 'inline' }: AudioPlayerProps) {
   const audioRef = useRef<HTMLAudioElement>(null)
   const progressRef = useRef<HTMLDivElement>(null)
   const [isPlaying, setIsPlaying] = useState(false)
@@ -88,6 +94,75 @@ export function AudioPlayer({ src, title, className = '' }: AudioPlayerProps) {
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp)
   }, [seekTo])
+
+  if (variant === 'bar') {
+    return (
+      <div
+        className={cn('flex w-full items-center gap-3 select-none', className)}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <audio ref={audioRef} src={src} preload="metadata" />
+
+        {/* Prominent circular play/pause button */}
+        <button
+          onClick={togglePlay}
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gray-100 text-foreground transition-colors hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700"
+          aria-label={isPlaying ? 'Pause' : 'Spel av'}
+        >
+          <AnimatePresence mode="wait" initial={false}>
+            {isPlaying ? (
+              <motion.svg
+                key="pause"
+                initial={{ scale: 0.5, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.5, opacity: 0 }}
+                transition={{ duration: 0.15 }}
+                width="16" height="16" viewBox="0 0 14 14" fill="currentColor"
+              >
+                <rect x="2" y="1" width="3.5" height="12" rx="1" />
+                <rect x="8.5" y="1" width="3.5" height="12" rx="1" />
+              </motion.svg>
+            ) : (
+              <motion.svg
+                key="play"
+                initial={{ scale: 0.5, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.5, opacity: 0 }}
+                transition={{ duration: 0.15 }}
+                width="16" height="16" viewBox="0 0 14 14" fill="currentColor"
+                className="translate-x-[1px]"
+              >
+                <path d="M3 1.5v11l9-5.5z" />
+              </motion.svg>
+            )}
+          </AnimatePresence>
+        </button>
+
+        <Clock className="h-4 w-4 shrink-0 text-muted-foreground/60" />
+        <span className="w-9 shrink-0 text-right text-xs tabular-nums text-muted-foreground/70">
+          {formatTime(currentTime)}
+        </span>
+        <div
+          ref={progressRef}
+          className="group relative h-1 flex-1 cursor-pointer rounded-full bg-gray-200/80 dark:bg-gray-700/60"
+          onClick={handleProgressClick}
+          onPointerDown={handlePointerDown}
+        >
+          <div
+            className="absolute inset-y-0 left-0 rounded-full bg-foreground/70 transition-[width] duration-75"
+            style={{ width: `${progress}%` }}
+          />
+          <div
+            className="absolute top-1/2 h-3 w-3 rounded-full bg-foreground opacity-0 transition-opacity group-hover:opacity-100"
+            style={{ left: `${progress}%`, transform: 'translate(-50%, -50%)' }}
+          />
+        </div>
+        <span className="w-9 shrink-0 text-xs tabular-nums text-muted-foreground/70">
+          {formatTime(duration)}
+        </span>
+      </div>
+    )
+  }
 
   return (
     <div

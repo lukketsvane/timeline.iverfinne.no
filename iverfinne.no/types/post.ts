@@ -13,6 +13,10 @@ export interface Post {
   lyd?: string
   icon?: string
   sosialbilete?: string
+  // Opt-in "Les meir" expansion, driven by a Notion checkbox. Off by default:
+  // the card then shows only its image, category, title and date (+ audio),
+  // and hides the description, the read-more toggle and the tag row.
+  lesMeir?: boolean
   thumbnails?: { src: string; alt: string }[]
   ogTitle?: string
   ogDescription?: string

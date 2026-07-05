@@ -292,6 +292,16 @@ function getPageProperties(page: any) {
     return "";
   };
 
+  // Notion checkbox → boolean. Absent property (or non-checkbox) reads as false,
+  // so newly-added columns default off across the whole database.
+  const getCheckbox = (names: string[]) => {
+    for (const name of names) {
+      const prop = findProp(name);
+      if (prop && typeof prop.checkbox === "boolean") return prop.checkbox;
+    }
+    return false;
+  };
+
   const getAnyImageUrl = () => {
     for (const key in props) {
       const prop = props[key];
@@ -370,6 +380,9 @@ function getPageProperties(page: any) {
   };
   const sosialbilete = getFileUrl("sosialbilete") ? proxyPageProp(page.id, "sosialbilete") : undefined;
 
+  // Opt-in "Les meir" expansion. New Notion checkbox, defaults off everywhere.
+  const lesMeir = getCheckbox(["Les meir", "LesMeir", "Les meir?", "Utvid", "Expandable"]);
+
   const uid = `${type}-${slug}`;
 
   return {
@@ -385,7 +398,8 @@ function getPageProperties(page: any) {
     url,
     lyd,
     icon,
-    sosialbilete
+    sosialbilete,
+    lesMeir
   };
 }
 

@@ -52,6 +52,7 @@ import { getTagColor } from "@/lib/tag-utils"
 import { HtmlIframe } from "@/components/html-iframe"
 import { ModelViewer } from "@/components/model-viewer"
 import { AudioPlayer } from "@/components/audio-player"
+import { ProgressiveImage } from "@/components/progressive-image"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { baseMdxComponents } from "@/lib/mdx-components"
@@ -93,6 +94,19 @@ interface Post {
   ogDescription?: string
   ogImage?: string
   modelSrc?: string
+  lesMeir?: boolean
+}
+
+// Category-label / timeline colour per type. Text-only tints (the badge tints
+// live in tag-utils); used for the small uppercase label above each title.
+const typeTextColor: Record<string, string> = {
+  Skriving: "text-blue-600 dark:text-blue-400",
+  Bok: "text-green-600 dark:text-green-400",
+  Prosjekt: "text-purple-600 dark:text-purple-400",
+  Lenkje: "text-orange-600 dark:text-orange-400",
+  Interaktiv: "text-pink-600 dark:text-pink-400",
+  Bilete: "text-teal-600 dark:text-teal-400",
+  Presentasjon: "text-indigo-600 dark:text-indigo-400",
 }
 
 interface MDXCardProps {
@@ -249,12 +263,14 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
             {tag}
           </Badge>
         ))}
-        {post.lyd && post.type !== "Lenkje" && (
-          <AudioPlayer src={post.lyd} title={post.title} />
-        )}
       </div>
     )
   }
+
+  // The card only opens inline when "Les meir" is enabled for the post; Lenkje
+  // always deep-links out and Bilete opens its lightbox. Everything else is a
+  // static (non-expanding) card by default.
+  const isExpandable = post.type !== "Lenkje" && post.type !== "Bilete" && !!post.lesMeir
 
   const dateObj = new Date(post.date)
   const day = dateObj.getDate()
@@ -275,9 +291,11 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
   const handleCardClick = () => {
     if (post.type === "Lenkje" && post.url) {
       window.open(post.url, '_blank')
-    } else {
+    } else if (isExpandable) {
       onToggle()
     }
+    // Non-expandable cards do nothing on body click — the title still links to
+    // the full post page.
   }
 
   // A post whose whole body is a single attached 3D model renders as a bare
@@ -325,7 +343,9 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
               "relative rounded-lg p-4 transition-colors",
               post.type === "Lenkje"
                 ? "hover:bg-blue-50/30 dark:hover:bg-blue-900/10 cursor-alias"
-                : (isExpanded ? "dark:bg-gray-800" : "hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer"),
+                : isExpandable
+                  ? (isExpanded ? "dark:bg-gray-800" : "hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer")
+                  : "",
               "ml-0"
             )}
             onClick={handleCardClick}
@@ -384,7 +404,27 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
 
             {/* Main Content Section */}
             {post.type !== "Bilete" && post.type !== "Lenkje" && (
-              <div className="flex items-start gap-4 mb-4">
+              <div className="mb-4">
+                {/* Social image / hero — sits on top of the card with the text
+                    below it (no overlay). Blur-up load so it appears instantly. */}
+                {post.sosialbilete && (
+                  <div className="relative mb-3">
+                    <ProgressiveImage
+                      src={post.sosialbilete}
+                      widths={[640, 960, 1280]}
+                      sizes="(min-width: 1152px) 990px, 100vw"
+                      fullWidth={1280}
+                      className="rounded-lg"
+                    />
+                    {post.lesMeir && post.type === "Skriving" && readTime > 0 && !post.lyd && (
+                      <div className="absolute top-2.5 right-2.5 flex items-center rounded-full bg-black/45 px-2 py-0.5 text-xs text-white">
+                        <Clock className="w-3.5 h-3.5 mr-1" />
+                        {readTime} min
+                      </div>
+                    )}
+                  </div>
+                )}
+                <div className="flex items-start gap-4">
                 {/* Book Cover - Left Aligned */}
                 {post.type === "Bok" && bookCover && (
                   <div className="relative w-20 sm:w-24 aspect-[2/3] shrink-0 shadow-md rounded-sm overflow-hidden border border-gray-100 dark:border-gray-800">
@@ -400,47 +440,19 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
                 )}
 
                 <div className="flex-1 group/title min-w-0">
-                  {/* sosialbilete hero: the image carries the title and date on a
-                      gradient scrim (same pattern as the Lenkje bookmark card). */}
-                  {post.sosialbilete && (
-                    <div className="relative mb-3 overflow-hidden rounded-lg">
-                      <img
-                        src={notionImgSrc(post.sosialbilete, 960)}
-                        srcSet={notionImgSrcSet(post.sosialbilete, [640, 960, 1280])}
-                        sizes="(min-width: 1152px) 990px, 100vw"
-                        alt=""
-                        loading="lazy"
-                        className="w-full h-auto object-cover"
-                      />
-                      <div className="absolute inset-x-0 bottom-0 p-3 sm:p-4 bg-gradient-to-t from-black/75 via-black/35 to-transparent text-white">
-                        <Link href={`/${post.type.toLowerCase()}/${post.slug}`} onClick={(e) => e.stopPropagation()}>
-                          <h2 className="text-2xl font-semibold tracking-tight drop-shadow-sm group-hover/title:underline decoration-2 underline-offset-2">
-                            {post.title}
-                          </h2>
-                        </Link>
-                        <time className="text-sm text-white/85 lowercase">
-                          <span className="font-extrabold">{day}.</span> {month}
-                        </time>
-                      </div>
-                      {post.type === "Skriving" && readTime > 0 && !post.lyd && (
-                        <div className="absolute top-2.5 right-2.5 flex items-center text-xs text-white/90 drop-shadow">
-                          <Clock className="w-3.5 h-3.5 mr-1" />
-                          {readTime} min
-                        </div>
-                      )}
-                    </div>
-                  )}
+                  {/* Category label above the title (colour matches the type). */}
+                  <div className={cn("mb-1 text-xs font-semibold uppercase tracking-wide", typeTextColor[post.type] || "text-muted-foreground")}>
+                    {post.type}
+                  </div>
                   <div className="flex items-start gap-2 flex-wrap">
-                    {!post.sosialbilete && (
                     <Link href={`/${post.type.toLowerCase()}/${post.slug}`} onClick={(e) => e.stopPropagation()}>
-                      <h2 className="text-2xl font-semibold tracking-tight mb-2 group-hover/title:underline decoration-2 underline-offset-2 transition-colors">
+                      <h2 className="text-2xl font-semibold tracking-tight group-hover/title:underline decoration-2 underline-offset-2 transition-colors">
                         {post.title}
                       </h2>
                     </Link>
-                    )}
                     {/* Read time sits top-right of the title row so the body text
                         below can use the card's full width. */}
-                    {!post.sosialbilete && post.type === "Skriving" && readTime > 0 && !post.lyd && (
+                    {post.lesMeir && !post.sosialbilete && post.type === "Skriving" && readTime > 0 && !post.lyd && (
                       <div className="ml-auto shrink-0 flex items-center text-xs text-muted-foreground whitespace-nowrap pt-1.5">
                         <Clock className="w-3.5 h-3.5 mr-1" />
                         {readTime} min
@@ -473,33 +485,38 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
                       </div>
                     )}
                   </div>
-                  {!post.sosialbilete && (
-                  <time className="block sm:hidden text-sm text-muted-foreground mb-2 lowercase">
+                  {/* Date under the title (desktop shows it in the left rail). */}
+                  <time className="block sm:hidden text-sm text-muted-foreground mt-0.5 mb-2 lowercase">
                     <span className="font-extrabold">{day}.</span> {month}
                   </time>
-                  )}
-                  {post.description && (
-                    <p
-                      lang="nn"
-                      className={cn(
-                        "text-muted-foreground text-sm font-serif",
-                        isProse && "text-justify hyphens-auto",
-                        !isExpanded && "line-clamp-3"
+                  {/* Description, read-more toggle and tags only when "Les meir"
+                      is enabled for the post (a Notion checkbox, off by default). */}
+                  {post.lesMeir && (
+                    <>
+                      {post.description && (
+                        <p
+                          lang="nn"
+                          className={cn(
+                            "text-muted-foreground text-sm font-serif",
+                            isProse && "text-justify hyphens-auto",
+                            !isExpanded && "line-clamp-3"
+                          )}
+                        >
+                          {post.description}
+                        </p>
                       )}
-                    >
-                      {post.description}
-                    </p>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); onToggle() }}
+                        className="inline-flex items-center gap-1 mt-1 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+                        aria-expanded={isExpanded}
+                      >
+                        {isExpanded ? "Les mindre" : "Les meir"}
+                        <ArrowRight className={cn("w-4 h-4 transition-transform", isExpanded && "-rotate-90")} />
+                      </button>
+                      {renderTags()}
+                    </>
                   )}
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); onToggle() }}
-                    className="inline-flex items-center gap-0.5 mt-1 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-                    aria-expanded={isExpanded}
-                  >
-                    {isExpanded ? "Les mindre" : "Les meir"}
-                    <ChevronDown className={cn("w-4 h-4 transition-transform", isExpanded && "rotate-180")} />
-                  </button>
-                  {renderTags()}
                 </div>
 
                 {/* Project thumbnail - Right Aligned */}
@@ -515,6 +532,7 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
                     />
                   </div>
                 )}
+                </div>
               </div>
             )}
 
@@ -604,9 +622,17 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
               </>
             )}
 
+            {/* Audio scrubber — full-width bar under the card content, shown for
+                any post with audio regardless of the "Les meir" setting. */}
+            {post.lyd && post.type !== "Lenkje" && (
+              <div className="mt-1">
+                <AudioPlayer src={post.lyd} title={post.title} variant="bar" />
+              </div>
+            )}
+
             {/* Expanded Content */}
             <AnimatePresence initial={false}>
-              {isExpanded && post.type !== "Bilete" && post.type !== "Lenkje" && (
+              {isExpanded && isExpandable && post.type !== "Bilete" && (
                 <motion.div
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: "auto" }}
