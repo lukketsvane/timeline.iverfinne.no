@@ -103,9 +103,19 @@ const FilterButton = ({ label, isActive, onClick, variant = "default" }: FilterB
 interface MDXBlogProps {
   initialPosts?: Post[]
   initialType?: string
+  // Set to '404' when rendered from the not-found route: reveals (and selects)
+  // the hidden "404" tab so a mistyped URL lands inside the app, not a bare page.
+  initialView?: 'timeline' | 'gallery' | 'om' | '404'
 }
 
-export default function MDXBlog({ initialPosts = [], initialType }: MDXBlogProps) {
+// The two standalone games; one is picked at random client-side so the choice
+// isn't baked into the statically-prerendered 404.
+const GAMES = [
+  { name: 'bl.okk', url: 'https://blokk.iverfinne.no' },
+  { name: 'kl.oss', url: 'https://kloss.iverfinne.no' },
+] as const
+
+export default function MDXBlog({ initialPosts = [], initialType, initialView }: MDXBlogProps) {
   const router = useRouter()
   const [posts, setPosts] = useState<Post[]>([])
   const [search, setSearch] = useState("")
@@ -117,8 +127,30 @@ export default function MDXBlog({ initialPosts = [], initialType }: MDXBlogProps
   // Years collapsed via their timeline pill — posts from these years are hidden.
   const [collapsedYears, setCollapsedYears] = useState<Set<number>>(new Set())
   const [error, setError] = useState<string | null>(null)
-  const [view, setView] = useState<'timeline' | 'gallery' | 'skissebok' | 'om'>('timeline')
+  const [view, setView] = useState<'timeline' | 'gallery' | 'skissebok' | 'om' | '404'>(initialView || 'timeline')
   const [filtersOpen, setFiltersOpen] = useState(false)
+  // The "404" tab stays hidden until the visitor first discovers it (by hitting
+  // a dead URL). After that it sticks around so they can come back to the game.
+  const [found404, setFound404] = useState(false)
+  const [gameSrc, setGameSrc] = useState<string | null>(null)
+
+  useEffect(() => {
+    const already = typeof window !== 'undefined' && localStorage.getItem('found404') === '1'
+    if (initialView === '404') {
+      localStorage.setItem('found404', '1')
+      setFound404(true)
+    } else if (already) {
+      setFound404(true)
+    }
+  }, [initialView])
+
+  // Pick the game only once the 404 tab is actually viewed (avoids loading the
+  // iframe for everyone), and keep the choice stable for the session.
+  useEffect(() => {
+    if (view === '404' && !gameSrc) {
+      setGameSrc(GAMES[Math.floor(Math.random() * GAMES.length)].url)
+    }
+  }, [view, gameSrc])
 
   // The Skissebok tab turns the whole page dark — paint html + body so the
   // colour reaches the safe-area / overscroll edges, not just the container.
@@ -371,10 +403,12 @@ export default function MDXBlog({ initialPosts = [], initialType }: MDXBlogProps
             ['om', 'Om meg', 'bg-green-600'],
             // Skissebok is hidden for now — restore the tuple below to bring the tab back.
             // ['skissebok', 'Skissebok', 'bg-red-500'],
-          ] as const).map(([v, label, activeColor]) => (
+            // The "404" tab only appears once the visitor has discovered it.
+            ...(found404 ? [['404', '404', 'bg-neutral-800']] : []),
+          ] as [string, string, string][]).map(([v, label, activeColor]) => (
             <button
               key={v}
-              onClick={() => setView(v)}
+              onClick={() => setView(v as typeof view)}
               aria-pressed={view === v}
               className={cn(
                 "relative px-3 py-1.5 rounded-full transition-colors",
@@ -472,6 +506,21 @@ export default function MDXBlog({ initialPosts = [], initialType }: MDXBlogProps
           <Skissebok />
         ) : view === 'om' ? (
           <OmMeg />
+        ) : view === '404' ? (
+          <div className="mt-4">
+            <p className="mb-3 font-mono text-xs text-muted-foreground">
+              404 — sida finst ikkje
+              {gameSrc && <> · spel <span className="font-semibold text-foreground">{GAMES.find(g => g.url === gameSrc)?.name}</span> så lenge</>}
+            </p>
+            <div
+              className="relative -mx-4 overflow-hidden border-y border-gray-200 dark:border-gray-800 sm:mx-0 sm:rounded-xl sm:border"
+              style={{ height: 'calc(100svh - 13rem)' }}
+            >
+              {gameSrc && (
+                <iframe src={gameSrc} title="spel" allow="fullscreen" className="h-full w-full border-0" />
+              )}
+            </div>
+          </div>
         ) : (
         <motion.div
           className="relative mt-4"
@@ -488,10 +537,10 @@ export default function MDXBlog({ initialPosts = [], initialType }: MDXBlogProps
               return (
                 <div key={post.uid}>
                   {showYear && (
-                    <div className="relative grid grid-cols-[auto,1fr] gap-5 sm:gap-6 max-w-full">
+                    <div className="relative grid grid-cols-[auto,1fr] gap-2.5 sm:gap-4 max-w-full">
                       <div className="w-9 sm:w-24 shrink-0" />
                       <div className="relative">
-                        <div className="absolute -left-2.5 sm:-left-3 w-0.5 -top-4 bottom-0 bg-gray-200 dark:bg-gray-700 -translate-x-1/2" />
+                        <div className="absolute -left-1.5 sm:-left-2 w-0.5 -top-4 bottom-0 bg-gray-200 dark:bg-gray-700 -translate-x-1/2" />
                         <div className="py-4">
                           {/* Tapping the year pill collapses/expands every post from that year. */}
                           <button
@@ -506,7 +555,7 @@ export default function MDXBlog({ initialPosts = [], initialType }: MDXBlogProps
                             }
                             aria-expanded={!yearCollapsed}
                             aria-label={`${yearCollapsed ? 'Vis' : 'Skjul'} innlegg frå ${currentYear}`}
-                            className="bg-white dark:bg-gray-900 pl-3 pr-1.5 py-1 text-sm font-bold text-gray-400 border border-gray-200 dark:border-gray-700 rounded-full relative z-10 -translate-x-[calc(50%+10px)] sm:-translate-x-[calc(50%+12px)] inline-flex items-center gap-0.5 transition-colors hover:text-gray-600 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600"
+                            className="bg-white dark:bg-gray-900 pl-3 pr-1.5 py-1 text-sm font-bold text-gray-400 border border-gray-200 dark:border-gray-700 rounded-full relative z-10 -translate-x-[calc(50%+6px)] sm:-translate-x-[calc(50%+8px)] inline-flex items-center gap-0.5 transition-colors hover:text-gray-600 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600"
                           >
                             {currentYear}
                             <ChevronDown className={cn('h-3 w-3 transition-transform', yearCollapsed && '-rotate-90')} />
