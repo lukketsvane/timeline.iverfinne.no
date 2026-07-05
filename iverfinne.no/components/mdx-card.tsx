@@ -356,19 +356,15 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
         <div className="pb-8 pt-0">
           <motion.article
             className={cn(
-              "relative transition-colors ml-0",
+              // Every card is the same bounded surface: soft background, hairline
+              // border, rounded corners, full-bleed media inside. Keeps every
+              // entry the same width and shape regardless of type.
+              "relative ml-0 overflow-hidden rounded-2xl border border-gray-200/70 bg-gray-50/70 p-4 transition-colors dark:border-gray-800 dark:bg-white/[0.03]",
               post.type === "Lenkje"
-                ? "rounded-lg p-4 hover:bg-blue-50/30 dark:hover:bg-blue-900/10 cursor-alias"
-                : post.type === "Bilete"
-                  ? "rounded-lg p-4 hover:bg-gray-50 dark:hover:bg-gray-800"
-                  : cn(
-                      // Standard cards are bounded: soft surface, hairline border,
-                      // rounded corners — the illustration sits inside, not full-bleed.
-                      "overflow-hidden rounded-2xl border border-gray-200/70 bg-gray-50/70 p-4 dark:border-gray-800 dark:bg-white/[0.03]",
-                      isExpandable
-                        ? "cursor-pointer hover:border-gray-300 dark:hover:border-gray-700"
-                        : "",
-                    )
+                ? "cursor-alias hover:border-gray-300 dark:hover:border-gray-700"
+                : isExpandable
+                  ? "cursor-pointer hover:border-gray-300 dark:hover:border-gray-700"
+                  : ""
             )}
             onClick={handleCardClick}
             initial={false}
@@ -390,37 +386,33 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
                   <span className="truncate">{linkHostname}</span>
                 </div>
               )
-              return (
-              // Compact link card: just the image with the site + title overlaid on
-              // a gradient scrim. No separate description section.
-              <div className="relative border border-gray-200 dark:border-gray-800 rounded-xl shadow-sm overflow-hidden hover:border-gray-300 dark:hover:border-gray-700 transition-colors">
-                {image ? (
-                  <div className="relative w-full aspect-[1.91/1] bg-gray-100 dark:bg-gray-800">
-                    {/* Use plain <img> — ogImage is an arbitrary external URL not in remotePatterns */}
-                    <img
-                      src={notionImgSrc(image, 960)}
-                      srcSet={notionImgSrcSet(image, [640, 960, 1280])}
-                      sizes="(min-width: 1152px) 990px, 100vw"
-                      alt=""
-                      className="absolute inset-0 w-full h-full object-cover"
-                    />
-                    <div className="absolute inset-x-0 bottom-0 p-3 sm:p-4 bg-gradient-to-t from-black/75 via-black/35 to-transparent text-white">
-                      <div className="text-white/80 mb-0.5">{hostRow}</div>
-                      <h2 className="text-base sm:text-lg font-semibold tracking-tight line-clamp-2 drop-shadow-sm">
-                        {title}
-                      </h2>
-                    </div>
-                  </div>
-                ) : (
-                  // Fallback when the link has no image
-                  <div className="p-3 sm:p-4 min-w-0 bg-gray-50 dark:bg-gray-800/40">
-                    <div className="text-muted-foreground mb-1.5">{hostRow}</div>
-                    <h2 className="text-base sm:text-lg font-semibold tracking-tight line-clamp-2">
+              return image ? (
+                // Full-bleed link card — same 1200×630 frame as every other card,
+                // with the site + title overlaid on a gradient scrim.
+                <div className="relative -mx-4 -my-4 aspect-[1200/630] overflow-hidden bg-gray-100 dark:bg-gray-800">
+                  {/* Use plain <img> — ogImage is an arbitrary external URL not in remotePatterns */}
+                  <img
+                    src={notionImgSrc(image, 1280)}
+                    srcSet={notionImgSrcSet(image, [640, 960, 1280])}
+                    sizes="(min-width: 1152px) 620px, 100vw"
+                    alt=""
+                    className="absolute inset-0 w-full h-full object-cover"
+                  />
+                  <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/80 via-black/25 to-transparent text-white">
+                    <div className="text-white/85 mb-0.5">{hostRow}</div>
+                    <h2 className="text-base sm:text-lg font-semibold tracking-tight line-clamp-2 drop-shadow-sm">
                       {title}
                     </h2>
                   </div>
-                )}
-              </div>
+                </div>
+              ) : (
+                // Fallback when the link has no image
+                <div className="min-w-0">
+                  <div className="text-muted-foreground mb-1.5">{hostRow}</div>
+                  <h2 className="text-base sm:text-lg font-semibold tracking-tight line-clamp-2">
+                    {title}
+                  </h2>
+                </div>
               )
             })()}
 
