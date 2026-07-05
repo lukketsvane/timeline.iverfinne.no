@@ -89,9 +89,13 @@ body {
     max-width: 100%;
   }
 
-  /* Prevent iOS zoom on input focus */
-  @supports (-webkit-touch-callout: none) {
-    input, select, textarea {
+  /* Prevent iOS Safari from zooming the page when a sub-16px input is focused.
+     The @supports(-webkit-touch-callout) hack isn't reliable on current iOS, so
+     force the effective font-size to 16px on phone-width viewports instead. */
+  @media (max-width: 639px) {
+    input:not([type="checkbox"]):not([type="radio"]),
+    select,
+    textarea {
       font-size: 16px !important;
     }
   }
