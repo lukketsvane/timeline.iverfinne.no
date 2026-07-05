@@ -226,11 +226,9 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
   const readTime = (post.type === "Skriving" || post.type === "Bok") && post.content ? estimateReadTime(post.content) : 0
   // Reading time sits in the category row for reading posts without audio.
   const showReadTime = readTime > 0 && !post.lyd
-  // Non-audio posts with a social image get the bold treatment: the 1200×630
-  // image fills the top of the card with the title/category overlaid on it.
-  // Audio posts stay compact (image, then text + scrubber below).
-  const heroOverlay =
-    !!post.sosialbilete && !post.lyd && post.type !== "Bilete" && post.type !== "Lenkje"
+  // Text is never overlaid on the illustration — it collides with the artwork
+  // and reads as clutter. Every card puts the image on top and the text below.
+  const heroOverlay = false
   const figmaUrl = post.type === "Presentasjon" ? getFigmaEmbedUrl(post.content, post.url) : null
   // Reading-text posts get justified body text by default (with hyphenation so
   // the ragged-right gaps stay tight).
@@ -387,24 +385,26 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
                 </div>
               )
               return image ? (
-                // Full-bleed link card — same 1200×630 frame as every other card,
-                // with the site + title overlaid on a gradient scrim.
-                <div className="relative -mx-4 -my-4 aspect-[1200/630] overflow-hidden bg-gray-100 dark:bg-gray-800">
-                  {/* Use plain <img> — ogImage is an arbitrary external URL not in remotePatterns */}
-                  <img
-                    src={notionImgSrc(image, 1280)}
-                    srcSet={notionImgSrcSet(image, [640, 960, 1280])}
-                    sizes="(min-width: 1152px) 620px, 100vw"
-                    alt=""
-                    className="absolute inset-0 w-full h-full object-cover"
-                  />
-                  <div className="absolute inset-x-0 bottom-0 p-4 text-black">
-                    <div className="mb-0.5 text-black/70">{hostRow}</div>
+                // Image on top, site + title below — same layout as every other
+                // card so text never collides with the artwork.
+                <>
+                  <div className="relative -mx-4 -mt-4 mb-3 aspect-[1200/630] overflow-hidden rounded-t-2xl bg-gray-100 dark:bg-gray-800">
+                    {/* Use plain <img> — ogImage is an arbitrary external URL not in remotePatterns */}
+                    <img
+                      src={notionImgSrc(image, 1280)}
+                      srcSet={notionImgSrcSet(image, [640, 960, 1280])}
+                      sizes="(min-width: 1152px) 620px, 100vw"
+                      alt=""
+                      className="absolute inset-0 w-full h-full object-cover"
+                    />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="mb-0.5 text-muted-foreground">{hostRow}</div>
                     <h2 className="text-base sm:text-lg font-semibold tracking-tight line-clamp-2">
                       {title}
                     </h2>
                   </div>
-                </div>
+                </>
               ) : (
                 // Fallback when the link has no image
                 <div className="min-w-0">
@@ -481,17 +481,11 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
                         </div>
                       )}
                       <div className="flex-1 group/title min-w-0">
-                        <div className="flex items-baseline justify-between gap-3">
-                          <span className={cn("text-xs font-semibold uppercase tracking-wide", typeTextColor[post.type] || "text-muted-foreground")}>
-                            {post.type}
-                          </span>
-                          {showReadTime && (
-                            <span className="flex shrink-0 items-center text-xs text-muted-foreground">
-                              <Clock className="mr-1 h-3.5 w-3.5" />{readTime} min
-                            </span>
-                          )}
+                        <div className={cn("mb-0.5 text-xs font-semibold uppercase tracking-wide", typeTextColor[post.type] || "text-muted-foreground")}>
+                          {post.type}
                         </div>
-                        <div className="mt-0.5 flex items-start gap-2 flex-wrap">
+                        <div className="flex items-end justify-between gap-3">
+                          <div className="flex min-w-0 items-start gap-2 flex-wrap">
                           <Link href={`/${post.type.toLowerCase()}/${post.slug}`} onClick={(e) => e.stopPropagation()}>
                             <h2 className="text-2xl font-semibold tracking-tight group-hover/title:underline decoration-2 underline-offset-2 transition-colors">
                               {post.title}
@@ -521,6 +515,12 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
                                 </a>
                               ))}
                             </div>
+                          )}
+                          </div>
+                          {showReadTime && (
+                            <span className="flex shrink-0 items-center whitespace-nowrap pb-1 text-xs text-muted-foreground">
+                              <Clock className="mr-1 h-3.5 w-3.5" />{readTime} min
+                            </span>
                           )}
                         </div>
                       </div>
