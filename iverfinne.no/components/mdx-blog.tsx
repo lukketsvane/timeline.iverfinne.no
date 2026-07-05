@@ -32,6 +32,7 @@ interface Post {
   icon?: string
   thumbnails?: { src: string; alt: string }[]
   modelSrc?: string
+  lesMeir?: boolean
 }
 
 const contentTypes = [

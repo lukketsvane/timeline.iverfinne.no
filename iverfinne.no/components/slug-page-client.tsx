@@ -12,6 +12,7 @@ import { useEffect, useState } from 'react'
 import { fullPageMdxComponents } from '@/lib/mdx-components'
 import WebDesignKeys from '@/components/WebDesignKeys'
 import { AudioPlayer } from '@/components/audio-player'
+import { ProgressiveImage } from '@/components/progressive-image'
 
 const components = {
   ...fullPageMdxComponents,
@@ -75,16 +76,15 @@ export default function SlugPageClient({ post }: SlugPageClientProps) {
             on top of the image. */}
         {post.sosialbilete ? (
           <div className="relative -mx-4 -mt-12 mb-8">
-            <img
-              src={notionImgSrc(post.sosialbilete, 1280)}
-              srcSet={notionImgSrcSet(post.sosialbilete, [640, 960, 1280, 1600])}
+            <ProgressiveImage
+              src={post.sosialbilete}
+              widths={[640, 960, 1280, 1600]}
               sizes="(min-width: 896px) 896px, 100vw"
-              alt=""
-              className="w-full h-auto object-cover"
+              fullWidth={1280}
             />
             <Link
               href="/"
-              className="absolute left-4 top-4 inline-flex items-center text-sm text-white/90 hover:text-white drop-shadow-md transition-colors"
+              className="absolute left-4 top-4 inline-flex items-center text-sm text-white/90 hover:text-white transition-colors"
             >
               <ArrowLeft className="w-4 h-4 mr-2" />
               Tilbake til forsida
