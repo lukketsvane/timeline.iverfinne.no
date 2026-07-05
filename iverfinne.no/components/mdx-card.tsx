@@ -398,9 +398,9 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
                     alt=""
                     className="absolute inset-0 w-full h-full object-cover"
                   />
-                  <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/80 via-black/25 to-transparent text-white">
-                    <div className="text-white/85 mb-0.5">{hostRow}</div>
-                    <h2 className="text-base sm:text-lg font-semibold tracking-tight line-clamp-2 drop-shadow-sm">
+                  <div className="absolute inset-x-0 bottom-0 p-4 text-black">
+                    <div className="mb-0.5 text-black/70">{hostRow}</div>
+                    <h2 className="text-base sm:text-lg font-semibold tracking-tight line-clamp-2">
                       {title}
                     </h2>
                   </div>
@@ -435,17 +435,17 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
                       sizes="(min-width: 1152px) 620px, 100vw"
                       fullWidth={1280}
                     />
-                    <div className="group/title absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/80 via-black/25 to-transparent">
+                    <div className="group/title absolute inset-x-0 bottom-0 p-4">
                       <div className="flex items-baseline justify-between gap-3">
-                        <span className="text-xs font-semibold uppercase tracking-wide text-white/85">{post.type}</span>
+                        <span className={cn("text-xs font-semibold uppercase tracking-wide", typeTextColor[post.type] || "text-black")}>{post.type}</span>
                         {showReadTime && (
-                          <span className="flex shrink-0 items-center text-xs text-white/80">
+                          <span className="flex shrink-0 items-center text-xs text-black/70">
                             <Clock className="mr-1 h-3.5 w-3.5" />{readTime} min
                           </span>
                         )}
                       </div>
                       <Link href={`/${post.type.toLowerCase()}/${post.slug}`} onClick={(e) => e.stopPropagation()}>
-                        <h2 className="mt-0.5 text-2xl font-semibold tracking-tight text-white drop-shadow-sm group-hover/title:underline decoration-2 underline-offset-2">
+                        <h2 className="mt-0.5 text-2xl font-semibold tracking-tight text-black group-hover/title:underline decoration-2 underline-offset-2">
                           {post.title}
                         </h2>
                       </Link>
