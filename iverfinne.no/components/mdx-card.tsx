@@ -340,13 +340,19 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
         <div className="pb-8 pt-0">
           <motion.article
             className={cn(
-              "relative rounded-lg p-4 transition-colors",
+              "relative transition-colors ml-0",
               post.type === "Lenkje"
-                ? "hover:bg-blue-50/30 dark:hover:bg-blue-900/10 cursor-alias"
-                : isExpandable
-                  ? (isExpanded ? "dark:bg-gray-800" : "hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer")
-                  : "",
-              "ml-0"
+                ? "rounded-lg p-4 hover:bg-blue-50/30 dark:hover:bg-blue-900/10 cursor-alias"
+                : post.type === "Bilete"
+                  ? "rounded-lg p-4 hover:bg-gray-50 dark:hover:bg-gray-800"
+                  : cn(
+                      // Standard cards are bounded: soft surface, hairline border,
+                      // rounded corners — the illustration sits inside, not full-bleed.
+                      "overflow-hidden rounded-2xl border border-gray-200/70 bg-gray-50/70 p-4 dark:border-gray-800 dark:bg-white/[0.03]",
+                      isExpandable
+                        ? "cursor-pointer hover:border-gray-300 dark:hover:border-gray-700"
+                        : "",
+                    )
             )}
             onClick={handleCardClick}
             initial={false}
@@ -404,20 +410,23 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
 
             {/* Main Content Section */}
             {post.type !== "Bilete" && post.type !== "Lenkje" && (
-              <div className="mb-4">
-                {/* Social image / hero — sits on top of the card with the text
-                    below it (no overlay). Blur-up load so it appears instantly. */}
+              <div>
+                {/* Social image — a fixed-height frame the illustration is
+                    contained within (shown in full, centred on the card surface)
+                    and bled to the card edges. Blur-up so it appears instantly. */}
                 {post.sosialbilete && (
-                  <div className="relative mb-3">
+                  <div className="relative -mx-4 -mt-4 mb-4 h-52 sm:h-60 overflow-hidden rounded-t-2xl bg-gray-100/40 dark:bg-white/[0.02]">
                     <ProgressiveImage
+                      fill
+                      objectFit="contain"
                       src={post.sosialbilete}
                       widths={[640, 960, 1280]}
-                      sizes="(min-width: 1152px) 990px, 100vw"
+                      sizes="(min-width: 1152px) 620px, 100vw"
                       fullWidth={1280}
-                      className="rounded-lg"
+                      imgClassName="p-3"
                     />
                     {post.lesMeir && post.type === "Skriving" && readTime > 0 && !post.lyd && (
-                      <div className="absolute top-2.5 right-2.5 flex items-center rounded-full bg-black/45 px-2 py-0.5 text-xs text-white">
+                      <div className="absolute top-3 right-3 flex items-center rounded-full bg-black/45 px-2 py-0.5 text-xs text-white">
                         <Clock className="w-3.5 h-3.5 mr-1" />
                         {readTime} min
                       </div>
