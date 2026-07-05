@@ -537,10 +537,10 @@ export default function MDXBlog({ initialPosts = [], initialType, initialView }:
               return (
                 <div key={post.uid}>
                   {showYear && (
-                    <div className="relative grid grid-cols-[auto,1fr] gap-2.5 sm:gap-4 max-w-full">
+                    <div className="relative grid grid-cols-[auto,1fr] gap-5 sm:gap-6 max-w-full">
                       <div className="w-9 sm:w-24 shrink-0" />
                       <div className="relative">
-                        <div className="absolute -left-1.5 sm:-left-2 w-0.5 -top-4 bottom-0 bg-gray-200 dark:bg-gray-700 -translate-x-1/2" />
+                        <div className="absolute -left-2.5 sm:-left-3 w-0.5 -top-4 bottom-0 bg-gray-200 dark:bg-gray-700 -translate-x-1/2" />
                         <div className="py-4">
                           {/* Tapping the year pill collapses/expands every post from that year. */}
                           <button
@@ -555,7 +555,7 @@ export default function MDXBlog({ initialPosts = [], initialType, initialView }:
                             }
                             aria-expanded={!yearCollapsed}
                             aria-label={`${yearCollapsed ? 'Vis' : 'Skjul'} innlegg frå ${currentYear}`}
-                            className="bg-white dark:bg-gray-900 pl-3 pr-1.5 py-1 text-sm font-bold text-gray-400 border border-gray-200 dark:border-gray-700 rounded-full relative z-10 -translate-x-[calc(50%+6px)] sm:-translate-x-[calc(50%+8px)] inline-flex items-center gap-0.5 transition-colors hover:text-gray-600 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600"
+                            className="bg-white dark:bg-gray-900 pl-3 pr-1.5 py-1 text-sm font-bold text-gray-400 border border-gray-200 dark:border-gray-700 rounded-full relative z-10 -translate-x-[calc(50%+10px)] sm:-translate-x-[calc(50%+12px)] inline-flex items-center gap-0.5 transition-colors hover:text-gray-600 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600"
                           >
                             {currentYear}
                             <ChevronDown className={cn('h-3 w-3 transition-transform', yearCollapsed && '-rotate-90')} />
