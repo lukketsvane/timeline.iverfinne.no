@@ -123,7 +123,7 @@ const loaderFor = (src: string) =>
   src.startsWith('/api/notion-image?') ? notionImageLoader : undefined
 
 const TimelineConnector = () => (
-  <div className="absolute -left-2.5 sm:-left-3 w-0.5 top-0 bottom-0 bg-gray-200 dark:bg-gray-700 -translate-x-1/2" />
+  <div className="absolute -left-1.5 sm:-left-2 w-0.5 top-0 bottom-0 bg-gray-200 dark:bg-gray-700 -translate-x-1/2" />
 )
 
 const TimelineNode = ({ type, onToggle, url }: { type: string, onToggle: () => void, url?: string }) => {
@@ -150,7 +150,7 @@ const TimelineNode = ({ type, onToggle, url }: { type: string, onToggle: () => v
     <button 
       onClick={handleClick}
       className={cn(
-        "absolute -left-2.5 sm:-left-3 top-4 w-4 h-4 sm:w-5 sm:h-5 rounded-full -translate-x-1/2 border-2 border-white dark:border-gray-900 z-10 transition-transform hover:scale-125 cursor-pointer",
+        "absolute -left-1.5 sm:-left-2 top-4 w-4 h-4 sm:w-5 sm:h-5 rounded-full -translate-x-1/2 border-2 border-white dark:border-gray-900 z-10 transition-transform hover:scale-125 cursor-pointer",
         typeColors[type as keyof typeof typeColors] || "bg-gray-500"
       )}
       aria-label={type === "Lenkje" ? "Opna lenkje" : "Utvid eller skjul innhald"}
@@ -314,7 +314,7 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
     post.content?.trim().match(/^<ModelViewer\s[^>]*src="([^"]+)"[^>]*\/>$/)?.[1]
   if (modelOnlySrc) {
     return (
-      <div className="relative grid grid-cols-[auto,1fr] gap-5 sm:gap-6 max-w-full">
+      <div className="relative grid grid-cols-[auto,1fr] gap-3 sm:gap-4 max-w-full">
         <div className="w-9 sm:w-24 shrink-0 pt-3 sm:pt-5 pr-0 sm:pr-6 text-right">
           <time className="whitespace-nowrap lowercase text-muted-foreground leading-tight">
             <span className="font-extrabold text-sm sm:text-lg">{day}.</span>
@@ -340,7 +340,7 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
   }
 
   return (
-    <div className="relative grid grid-cols-[auto,1fr] gap-5 sm:gap-6 max-w-full">
+    <div className="relative grid grid-cols-[auto,1fr] gap-3 sm:gap-4 max-w-full">
       {/* Shorthand date in the timeline gutter, aligned with the node dot. */}
       <div className="w-9 sm:w-24 shrink-0 pt-3 sm:pt-5 pr-0 sm:pr-6 text-right">
         <time className="whitespace-nowrap lowercase text-muted-foreground leading-tight">
@@ -436,19 +436,19 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
                       fullWidth={1280}
                     />
                     <div className="group/title absolute inset-x-0 bottom-0 p-4">
-                      <div className="flex items-baseline justify-between gap-3">
-                        <span className={cn("text-xs font-semibold uppercase tracking-wide", typeTextColor[post.type] || "text-black")}>{post.type}</span>
+                      <span className={cn("text-xs font-semibold uppercase tracking-wide", typeTextColor[post.type] || "text-black")}>{post.type}</span>
+                      <div className="mt-0.5 flex items-end justify-between gap-3">
+                        <Link href={`/${post.type.toLowerCase()}/${post.slug}`} onClick={(e) => e.stopPropagation()}>
+                          <h2 className="text-2xl font-semibold tracking-tight text-black group-hover/title:underline decoration-2 underline-offset-2">
+                            {post.title}
+                          </h2>
+                        </Link>
                         {showReadTime && (
-                          <span className="flex shrink-0 items-center text-xs text-black/70">
+                          <span className="flex shrink-0 items-center whitespace-nowrap pb-1 text-xs text-black/70">
                             <Clock className="mr-1 h-3.5 w-3.5" />{readTime} min
                           </span>
                         )}
                       </div>
-                      <Link href={`/${post.type.toLowerCase()}/${post.slug}`} onClick={(e) => e.stopPropagation()}>
-                        <h2 className="mt-0.5 text-2xl font-semibold tracking-tight text-black group-hover/title:underline decoration-2 underline-offset-2">
-                          {post.title}
-                        </h2>
-                      </Link>
                     </div>
                   </div>
                 ) : (
