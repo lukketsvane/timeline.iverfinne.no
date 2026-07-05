@@ -508,13 +508,9 @@ export default function MDXBlog({ initialPosts = [], initialType, initialView }:
           <OmMeg />
         ) : view === '404' ? (
           <div className="mt-4">
-            <p className="mb-3 font-mono text-xs text-muted-foreground">
-              404 — sida finst ikkje
-              {gameSrc && <> · spel <span className="font-semibold text-foreground">{GAMES.find(g => g.url === gameSrc)?.name}</span> så lenge</>}
-            </p>
             <div
               className="relative -mx-4 overflow-hidden border-y border-gray-200 dark:border-gray-800 sm:mx-0 sm:rounded-xl sm:border"
-              style={{ height: 'calc(100svh - 13rem)' }}
+              style={{ height: 'calc(100svh - 11rem)' }}
             >
               {gameSrc && (
                 <iframe src={gameSrc} title="spel" allow="fullscreen" className="h-full w-full border-0" />
