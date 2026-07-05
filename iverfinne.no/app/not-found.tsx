@@ -1,44 +1,23 @@
-'use client'
+import HomePage from '@/components/home-page'
+import { getPublishedPosts } from '@/lib/notion'
 
-import { useEffect, useState } from 'react'
-import Link from 'next/link'
+export const revalidate = 60
 
-// The two standalone games hosted on their own subdomains. One is picked at
-// random on the client so the choice isn't baked in at build time (the 404
-// page is statically prerendered).
-const GAMES = [
-  { name: 'bl.okk', url: 'https://blokk.iverfinne.no' },
-  { name: 'kl.oss', url: 'https://kloss.iverfinne.no' },
-] as const
-
-export default function NotFound() {
-  const [game, setGame] = useState<(typeof GAMES)[number] | null>(null)
-
-  useEffect(() => {
-    setGame(GAMES[Math.floor(Math.random() * GAMES.length)])
-  }, [])
+// A mistyped URL lands inside the app — same single page, full top nav — with
+// the hidden "404" tab revealed (and the block game running there). Posts are
+// loaded so the other tabs work too; if Notion is unreachable we still render
+// the shell so the game tab is available.
+export default async function NotFound() {
+  let posts: any[] = []
+  try {
+    posts = await getPublishedPosts()
+  } catch {
+    posts = []
+  }
 
   return (
-    <div className="fixed inset-0 bg-white">
-      {game && (
-        <iframe
-          src={game.url}
-          title={game.name}
-          allow="fullscreen"
-          className="h-full w-full border-0"
-        />
-      )}
-      <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-4 p-4">
-        <span className="pointer-events-auto select-none rounded-full bg-white/80 px-3 py-1.5 font-mono text-xs text-neutral-500 shadow-sm backdrop-blur">
-          404 — sida finst ikkje{game && <> · spel <em className="not-italic font-semibold text-neutral-700">{game.name}</em> så lenge</>}
-        </span>
-        <Link
-          href="/"
-          className="pointer-events-auto rounded-full bg-white/80 px-3 py-1.5 font-mono text-xs text-neutral-500 shadow-sm backdrop-blur transition-colors hover:text-neutral-900"
-        >
-          ← heim
-        </Link>
-      </div>
+    <div className="w-full max-w-6xl mx-auto px-4 py-8 overflow-x-hidden">
+      <HomePage initialPosts={JSON.parse(JSON.stringify(posts))} initialView="404" />
     </div>
   )
 }

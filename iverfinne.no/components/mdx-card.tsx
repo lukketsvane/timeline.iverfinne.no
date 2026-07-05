@@ -48,6 +48,7 @@ import {
 } from 'lucide-react'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { getTagColor } from "@/lib/tag-utils"
 import { HtmlIframe } from "@/components/html-iframe"
 import { ModelViewer } from "@/components/model-viewer"
@@ -123,7 +124,7 @@ const loaderFor = (src: string) =>
   src.startsWith('/api/notion-image?') ? notionImageLoader : undefined
 
 const TimelineConnector = () => (
-  <div className="absolute -left-2.5 sm:-left-3 w-0.5 top-0 bottom-0 bg-gray-200 dark:bg-gray-700 -translate-x-1/2" />
+  <div className="absolute -left-1.5 sm:-left-2 w-0.5 top-0 bottom-0 bg-gray-200 dark:bg-gray-700 -translate-x-1/2" />
 )
 
 const TimelineNode = ({ type, onToggle, url }: { type: string, onToggle: () => void, url?: string }) => {
@@ -150,7 +151,7 @@ const TimelineNode = ({ type, onToggle, url }: { type: string, onToggle: () => v
     <button 
       onClick={handleClick}
       className={cn(
-        "absolute -left-2.5 sm:-left-3 top-4 w-4 h-4 sm:w-5 sm:h-5 rounded-full -translate-x-1/2 border-2 border-white dark:border-gray-900 z-10 transition-transform hover:scale-125 cursor-pointer",
+        "absolute -left-1.5 sm:-left-2 top-4 w-4 h-4 sm:w-5 sm:h-5 rounded-full -translate-x-1/2 border-2 border-white dark:border-gray-900 z-10 transition-transform hover:scale-125 cursor-pointer",
         typeColors[type as keyof typeof typeColors] || "bg-gray-500"
       )}
       aria-label={type === "Lenkje" ? "Opna lenkje" : "Utvid eller skjul innhald"}
@@ -217,6 +218,7 @@ function extractOutgoingLinks(content: string, postUrl?: string): SocialLink[] {
 }
 
 export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCardProps) {
+  const router = useRouter()
   const [enlargedImageIndex, setEnlargedImageIndex] = useState<number | null>(null)
   const bookCover = post.type === "Bok" ? (post.image || post.icon || getFirstImageFromContent(post.content)) : null
   const projectThumb = post.type === "Prosjekt" ? (post.image || getFirstImageFromContent(post.content)) : null
@@ -224,13 +226,24 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
   // Only once the body content has been (pre)fetched — otherwise every card
   // would flash a bogus "1 min" from empty content.
   const readTime = (post.type === "Skriving" || post.type === "Bok") && post.content ? estimateReadTime(post.content) : 0
-  // Reading time sits in the category row for reading posts without audio.
+  // Reading time sits in the meta-pill row for reading posts without audio.
   const showReadTime = readTime > 0 && !post.lyd
-  // Non-audio posts with a social image get the bold treatment: the 1200×630
-  // image fills the top of the card with the title/category overlaid on it.
-  // Audio posts stay compact (image, then text + scrubber below).
-  const heroOverlay =
-    !!post.sosialbilete && !post.lyd && post.type !== "Bilete" && post.type !== "Lenkje"
+  // The card's top image: the social image, else a link's og:image, else a
+  // project's thumbnail. Bilete uses its own photo grid instead.
+  const cardImage =
+    post.sosialbilete ||
+    (post.type === "Lenkje" ? (post.ogImage || post.image) : undefined) ||
+    (post.type === "Prosjekt" ? (projectThumb || undefined) : undefined)
+  // Book covers are portrait, so they sit beside the text rather than as a
+  // full-bleed 1200×630 top image.
+  const bokThumb = post.type === "Bok" && !cardImage && !!bookCover
+  const urlHost = post.url
+    ? (() => { try { return new URL(post.url).hostname.replace(/^www\./, '') } catch { return '' } })()
+    : ''
+  const tags = Array.isArray(post.tags) ? post.tags : []
+  // Outlined meta pill (read time, link host, tags).
+  const metaPill =
+    "inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 py-1 text-xs text-muted-foreground dark:border-gray-700"
   const figmaUrl = post.type === "Presentasjon" ? getFigmaEmbedUrl(post.content, post.url) : null
   // Reading-text posts get justified body text by default (with hyphenation so
   // the ragged-right gaps stay tight).
@@ -283,7 +296,8 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
 
   const dateObj = new Date(post.date)
   const day = dateObj.getDate()
-  
+  const year = dateObj.getFullYear()
+
   const monthsFull = [
     "januar", "februar", "mars", "april", "mai", "juni", 
     "juli", "august", "september", "oktober", "november", "desember"
@@ -298,13 +312,12 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
   const month = monthName.length > 4 ? monthsShort[monthIdx] : monthName
 
   const handleCardClick = () => {
+    // Lenkje deep-links out; every other card opens its full post page.
     if (post.type === "Lenkje" && post.url) {
       window.open(post.url, '_blank')
-    } else if (isExpandable) {
-      onToggle()
+    } else {
+      router.push(`/${post.type.toLowerCase()}/${post.slug}`)
     }
-    // Non-expandable cards do nothing on body click — the title still links to
-    // the full post page.
   }
 
   // A post whose whole body is a single attached 3D model renders as a bare
@@ -314,7 +327,7 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
     post.content?.trim().match(/^<ModelViewer\s[^>]*src="([^"]+)"[^>]*\/>$/)?.[1]
   if (modelOnlySrc) {
     return (
-      <div className="relative grid grid-cols-[auto,1fr] gap-5 sm:gap-6 max-w-full">
+      <div className="relative grid grid-cols-[auto,1fr] gap-2.5 sm:gap-4 max-w-full">
         <div className="w-9 sm:w-24 shrink-0 pt-3 sm:pt-5 pr-0 sm:pr-6 text-right">
           <time className="whitespace-nowrap lowercase text-muted-foreground leading-tight">
             <span className="font-extrabold text-sm sm:text-lg">{day}.</span>
@@ -340,12 +353,13 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
   }
 
   return (
-    <div className="relative grid grid-cols-[auto,1fr] gap-5 sm:gap-6 max-w-full">
+    <div className="relative grid grid-cols-[auto,1fr] gap-2.5 sm:gap-4 max-w-full">
       {/* Shorthand date in the timeline gutter, aligned with the node dot. */}
       <div className="w-9 sm:w-24 shrink-0 pt-3 sm:pt-5 pr-0 sm:pr-6 text-right">
         <time className="whitespace-nowrap lowercase text-muted-foreground leading-tight">
           <span className="font-extrabold text-sm sm:text-lg">{day}.</span>
           <span className="block sm:inline sm:ml-1 text-xs sm:text-lg">{month}</span>
+          <span className="block text-[11px] sm:text-xs text-muted-foreground/70">{year}</span>
         </time>
       </div>
       <div className="relative min-w-0">
@@ -356,362 +370,118 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
         <div className="pb-8 pt-0">
           <motion.article
             className={cn(
-              // Every card is the same bounded surface: soft background, hairline
-              // border, rounded corners, full-bleed media inside. Keeps every
-              // entry the same width and shape regardless of type.
-              "relative ml-0 overflow-hidden rounded-2xl border border-gray-200/70 bg-gray-50/70 p-4 transition-colors dark:border-gray-800 dark:bg-white/[0.03]",
-              post.type === "Lenkje"
-                ? "cursor-alias hover:border-gray-300 dark:hover:border-gray-700"
-                : isExpandable
-                  ? "cursor-pointer hover:border-gray-300 dark:hover:border-gray-700"
-                  : ""
+              // One card for every type: image on top, a white content section
+              // below (category, title, description, meta pills). Same width and
+              // shape throughout.
+              "relative ml-0 overflow-hidden rounded-2xl border border-gray-200 bg-white transition-colors hover:border-gray-300 dark:border-gray-800 dark:bg-gray-900/40 dark:hover:border-gray-700",
+              post.type === "Lenkje" ? "cursor-alias" : "cursor-pointer"
             )}
             onClick={handleCardClick}
             initial={false}
           >
-            {/* Lenkje Bookmark Preview */}
-            {post.type === "Lenkje" && (() => {
-              const title = post.ogTitle || post.title
-              // sosialbilete override takes priority over the link target's og:image
-              const image = post.sosialbilete || post.ogImage || post.image
-              const hostRow = linkHostname && (
-                <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide">
-                  <img
-                    src={`https://www.google.com/s2/favicons?domain=${linkHostname}&sz=16`}
-                    alt=""
-                    width={14}
-                    height={14}
-                    className="rounded-sm"
-                  />
-                  <span className="truncate">{linkHostname}</span>
-                </div>
-              )
-              return image ? (
-                // Full-bleed link card — same 1200×630 frame as every other card,
-                // with the site + title overlaid on a gradient scrim.
-                <div className="relative -mx-4 -my-4 aspect-[1200/630] overflow-hidden bg-gray-100 dark:bg-gray-800">
-                  {/* Use plain <img> — ogImage is an arbitrary external URL not in remotePatterns */}
-                  <img
-                    src={notionImgSrc(image, 1280)}
-                    srcSet={notionImgSrcSet(image, [640, 960, 1280])}
-                    sizes="(min-width: 1152px) 620px, 100vw"
-                    alt=""
-                    className="absolute inset-0 w-full h-full object-cover"
-                  />
-                  <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/80 via-black/25 to-transparent text-white">
-                    <div className="text-white/85 mb-0.5">{hostRow}</div>
-                    <h2 className="text-base sm:text-lg font-semibold tracking-tight line-clamp-2 drop-shadow-sm">
-                      {title}
-                    </h2>
-                  </div>
-                </div>
-              ) : (
-                // Fallback when the link has no image
-                <div className="min-w-0">
-                  <div className="text-muted-foreground mb-1.5">{hostRow}</div>
-                  <h2 className="text-base sm:text-lg font-semibold tracking-tight line-clamp-2">
-                    {title}
-                  </h2>
-                </div>
-              )
-            })()}
-
-            {/* Main Content Section */}
-            {post.type !== "Bilete" && post.type !== "Lenkje" && (
-              <div>
-                {heroOverlay ? (
-                  /* NON-AUDIO with a social image: the 1200×630 image fills the
-                     top of the card and the category/title sit on a scrim over
-                     it. Bleeds to the card edges (cancels the p-4). */
-                  <div className={cn(
-                    "relative -mx-4 -mt-4 aspect-[1200/630] overflow-hidden rounded-t-2xl bg-gray-100 dark:bg-white/[0.03]",
-                    post.lesMeir ? "mb-4" : "-mb-4"
-                  )}>
-                    <ProgressiveImage
-                      fill
-                      objectFit="cover"
-                      src={post.sosialbilete!}
-                      widths={[640, 960, 1280]}
-                      sizes="(min-width: 1152px) 620px, 100vw"
-                      fullWidth={1280}
-                    />
-                    <div className="group/title absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/80 via-black/25 to-transparent">
-                      <div className="flex items-baseline justify-between gap-3">
-                        <span className="text-xs font-semibold uppercase tracking-wide text-white/85">{post.type}</span>
-                        {showReadTime && (
-                          <span className="flex shrink-0 items-center text-xs text-white/80">
-                            <Clock className="mr-1 h-3.5 w-3.5" />{readTime} min
-                          </span>
-                        )}
-                      </div>
-                      <Link href={`/${post.type.toLowerCase()}/${post.slug}`} onClick={(e) => e.stopPropagation()}>
-                        <h2 className="mt-0.5 text-2xl font-semibold tracking-tight text-white drop-shadow-sm group-hover/title:underline decoration-2 underline-offset-2">
-                          {post.title}
-                        </h2>
-                      </Link>
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    {/* Audio / other posts: compact — image fills the top, text
-                        and (for audio) the scrubber sit below it. */}
-                    {post.sosialbilete && (
-                      <div className="relative -mx-4 -mt-4 mb-3 aspect-[1200/630] overflow-hidden rounded-t-2xl bg-gray-100 dark:bg-white/[0.03]">
-                        <ProgressiveImage
-                          fill
-                          objectFit="cover"
-                          src={post.sosialbilete}
-                          widths={[640, 960, 1280]}
-                          sizes="(min-width: 1152px) 620px, 100vw"
-                          fullWidth={1280}
-                        />
-                      </div>
-                    )}
-                    <div className="flex items-start gap-4">
-                      {post.type === "Bok" && !post.sosialbilete && bookCover && (
-                        <div className="relative w-20 sm:w-24 aspect-[2/3] shrink-0 shadow-md rounded-sm overflow-hidden border border-gray-100 dark:border-gray-800">
-                          <NextImage
-                            src={bookCover}
-                            alt={`Omslag for ${post.title}`}
-                            fill
-                            className="object-cover"
-                            sizes="(max-width: 640px) 80px, 96px"
-                            loader={loaderFor(bookCover)}
-                          />
-                        </div>
-                      )}
-                      <div className="flex-1 group/title min-w-0">
-                        <div className="flex items-baseline justify-between gap-3">
-                          <span className={cn("text-xs font-semibold uppercase tracking-wide", typeTextColor[post.type] || "text-muted-foreground")}>
-                            {post.type}
-                          </span>
-                          {showReadTime && (
-                            <span className="flex shrink-0 items-center text-xs text-muted-foreground">
-                              <Clock className="mr-1 h-3.5 w-3.5" />{readTime} min
-                            </span>
-                          )}
-                        </div>
-                        <div className="mt-0.5 flex items-start gap-2 flex-wrap">
-                          <Link href={`/${post.type.toLowerCase()}/${post.slug}`} onClick={(e) => e.stopPropagation()}>
-                            <h2 className="text-2xl font-semibold tracking-tight group-hover/title:underline decoration-2 underline-offset-2 transition-colors">
-                              {post.title}
-                            </h2>
-                          </Link>
-                          {post.type === "Prosjekt" && projectLinks.length > 0 && (
-                            <div className="flex items-center gap-1.5 pt-1.5">
-                              {projectLinks.map((link) => (
-                                <a
-                                  key={link.type}
-                                  href={link.url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  onClick={(e) => e.stopPropagation()}
-                                  className="text-muted-foreground hover:text-foreground transition-colors"
-                                  aria-label={link.type}
-                                >
-                                  {link.type === 'github' && <Github className="w-4 h-4" />}
-                                  {link.type === 'instagram' && (
-                                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="20" x="2" y="2" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" x2="17.51" y1="6.5" y2="6.5"/></svg>
-                                  )}
-                                  {link.type === 'linkedin' && (
-                                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect width="4" height="12" x="2" y="9"/><circle cx="4" cy="4" r="2"/></svg>
-                                  )}
-                                  {link.type === 'twitter' && <Twitter className="w-4 h-4" />}
-                                  {link.type === 'external' && <ExternalLink className="w-4 h-4" />}
-                                </a>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                      {post.type === "Prosjekt" && !post.sosialbilete && projectThumb && (
-                        <div className="relative w-16 h-16 sm:w-20 sm:h-20 shrink-0 rounded-lg overflow-hidden border border-gray-100 dark:border-gray-800">
-                          <NextImage
-                            src={projectThumb}
-                            alt=""
-                            fill
-                            className="object-cover"
-                            sizes="80px"
-                            loader={loaderFor(projectThumb)}
-                          />
-                        </div>
-                      )}
-                    </div>
-                  </>
-                )}
-
-                {/* Description, read-more toggle and tags — only when "Les meir"
-                    is enabled for the post (a Notion checkbox, off by default). */}
-                {post.lesMeir && (
-                  <div className="mt-2">
-                    {post.description && (
-                      <p
-                        lang="nn"
-                        className={cn(
-                          "text-muted-foreground text-sm font-serif",
-                          isProse && "text-justify hyphens-auto",
-                          !isExpanded && "line-clamp-3"
-                        )}
-                      >
-                        {post.description}
-                      </p>
-                    )}
-                    <button
-                      type="button"
-                      onClick={(e) => { e.stopPropagation(); onToggle() }}
-                      className="inline-flex items-center gap-1 mt-1 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-                      aria-expanded={isExpanded}
-                    >
-                      {isExpanded ? "Les mindre" : "Les meir"}
-                      <ArrowRight className={cn("w-4 h-4 transition-transform", isExpanded && "-rotate-90")} />
-                    </button>
-                    {renderTags()}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Single-photo Bilete: one big square frame, like the 3D viewer */}
-            {singlePhoto && (
-              <div
-                className="relative mb-4 aspect-square w-full cursor-pointer overflow-hidden rounded-lg bg-gray-50 dark:bg-gray-900"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setEnlargedImageIndex(0)
-                }}
-              >
-                <NextImage
-                  src={singlePhoto.src}
-                  alt={singlePhoto.alt}
-                  fill
-                  className="object-cover"
-                  sizes="(min-width: 1152px) 990px, 100vw"
-                  loader={loaderFor(singlePhoto.src)}
-                />
-              </div>
-            )}
-
-            {/* Image Grid for "Bilete" or Thumbnails for others */}
-            {!singlePhoto && post.type !== "Skriving" && post.type !== "Bok" && post.thumbnails && post.thumbnails.length > 0 && (
-              <div className={cn(
-                "grid gap-1 mb-4 max-w-[620px]",
-                post.type === "Bilete" ? "grid-cols-4" : "grid-cols-3"
-              )}>
-                {(post.type === "Bilete" ? post.thumbnails.slice(0, 8) : post.thumbnails.slice(0, 3)).map((img, i) => {
-                  const isLastVisible = post.type === "Bilete" && i === 7 && post.thumbnails!.length > 8;
-
+            {/* MEDIA — full-bleed at the top of the card */}
+            {post.type === "Bilete" && post.thumbnails && post.thumbnails.length > 0 ? (
+              <div className={cn("grid gap-0.5 bg-gray-100 dark:bg-gray-800", post.thumbnails.length === 1 ? "grid-cols-1" : "grid-cols-3")}>
+                {post.thumbnails.slice(0, post.thumbnails.length === 1 ? 1 : 6).map((img, i) => {
+                  const isLast = i === 5 && post.thumbnails!.length > 6
                   return (
-                    <div 
+                    <div
                       key={`${post.uid}-thumb-${i}`}
                       className={cn(
-                        "aspect-square relative rounded-sm overflow-hidden group/thumb",
-                        post.type === "Bilete" && !img.src.endsWith('.glb') && "cursor-pointer"
+                        "relative overflow-hidden",
+                        post.thumbnails!.length === 1 ? "aspect-[1200/630]" : "aspect-square",
+                        !img.src.endsWith('.glb') && "cursor-pointer"
                       )}
                       onClick={(e) => {
-                        if (post.type === "Bilete" && !img.src.endsWith('.glb')) {
+                        if (!img.src.endsWith('.glb')) {
                           e.stopPropagation()
-                          const galleryIdx = galleryImages.findIndex(g => g.src === img.src)
-                          if (galleryIdx !== -1) setEnlargedImageIndex(galleryIdx)
+                          const gi = galleryImages.findIndex(g => g.src === img.src)
+                          if (gi !== -1) setEnlargedImageIndex(gi)
                         }
                       }}
                     >
                       {img.src.endsWith('.glb') ? (
-                        <ModelViewer 
-                          src={img.src} 
-                          alt={img.alt} 
-                          disableZoom={true} 
-                          disablePan={true}
-                          className="h-full w-full"
-                        />
+                        <ModelViewer src={img.src} alt={img.alt} disableZoom disablePan className="h-full w-full" />
                       ) : (
-                        <NextImage
-                          src={img.src}
-                          alt={img.alt}
-                          fill
-                          className="object-contain"
-                          sizes="(max-width: 640px) 25vw, 155px"
-                          loading="lazy"
-                          loader={loaderFor(img.src)}
-                        />
+                        <NextImage src={img.src} alt={img.alt} fill className="object-cover" sizes="(max-width: 640px) 33vw, 200px" loading="lazy" loader={loaderFor(img.src)} />
                       )}
-                      
-                      {/* Plus overlay for the 9th image if there are more */}
-                      {isLastVisible && (
-                        <div className="absolute inset-0 bg-black/5 flex items-center justify-center pointer-events-none group-hover/thumb:bg-black/20 transition-colors">
-                          <Plus className="text-white w-8 h-8 opacity-20 group-hover/thumb:opacity-60 transition-opacity" />
+                      {isLast && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/40 text-sm font-semibold text-white">
+                          +{post.thumbnails!.length - 6}
                         </div>
                       )}
                     </div>
-                  );
+                  )
                 })}
               </div>
-            )}
-
-            {/* Special layout for Bilete type since title is hidden */}
-            {post.type === "Bilete" && renderTags()}
-
-            {/* Audio scrubber — full-width bar under the card content, shown for
-                any post with audio regardless of the "Les meir" setting. */}
-            {post.lyd && post.type !== "Lenkje" && (
-              <div className="mt-1">
-                <AudioPlayer src={post.lyd} title={post.title} variant="bar" />
+            ) : cardImage ? (
+              <div className="relative aspect-[1200/630] bg-gray-100 dark:bg-white/[0.03]">
+                {post.type === "Lenkje" ? (
+                  // ogImage is an arbitrary external URL not in remotePatterns
+                  <img
+                    src={notionImgSrc(cardImage, 1280)}
+                    srcSet={notionImgSrcSet(cardImage, [640, 960, 1280])}
+                    sizes="(min-width: 1152px) 620px, 100vw"
+                    alt=""
+                    className="absolute inset-0 h-full w-full object-cover"
+                  />
+                ) : (
+                  <ProgressiveImage fill objectFit="cover" src={cardImage} widths={[640, 960, 1280]} sizes="(min-width: 1152px) 620px, 100vw" fullWidth={1280} />
+                )}
               </div>
-            )}
+            ) : null}
 
-            {/* Expanded Content */}
-            <AnimatePresence initial={false}>
-              {isExpanded && isExpandable && post.type !== "Bilete" && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: "auto" }}
-                  exit={{ opacity: 0, height: 0 }}
-                  transition={{
-                    height: { type: 'spring', stiffness: 400, damping: 40, mass: 0.8 },
-                    opacity: { duration: 0.2, ease: [0.25, 0.1, 0.25, 1] }
-                  }}
-                  className="overflow-hidden mt-3 border-t border-gray-100 dark:border-gray-800 pt-4"
-                >
-                  <div
-                    lang="nn"
-                    className={cn(
-                      "prose dark:prose-invert max-w-none text-base leading-normal overflow-hidden break-words",
-                      isProse && "text-justify hyphens-auto prose-p:text-justify"
-                    )}
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    {post.type === "Presentasjon" && figmaUrl ? (
-                      <div className="aspect-video w-full rounded-lg overflow-hidden">
-                        <iframe
-                          src={figmaUrl}
-                          className="w-full h-full border-0"
-                          allowFullScreen
-                        />
-                      </div>
-                    ) : post.type === "Interaktiv" ? (
-                      <HtmlIframe content={post.content} />
-                    ) : (
-                      <>
-                        {serializedContent ? (
-                          <MDXRemote
-                            {...serializedContent}
-                            components={{
-                              ...mdxComponents,
-                              WebDesignKeys,
-                              ...(post.type === "Bok" && bookCover ? {
-                                img: (props: any) => {
-                                  if (props.src === bookCover) return null
-                                  return <img {...props} className="max-w-full h-auto rounded-lg mb-4" />
-                                }
-                              } : {})
-                            }}
-                          />
-                        ) : null}
-                      </>
-                    )}
+            {/* CONTENT — white section below the image */}
+            <div className="p-4">
+              <div className={cn(bokThumb && "flex gap-4")}>
+                {bokThumb && (
+                  <div className="relative w-16 sm:w-20 aspect-[2/3] shrink-0 overflow-hidden rounded-sm border border-gray-100 shadow-md dark:border-gray-800">
+                    <NextImage src={bookCover!} alt={`Omslag for ${post.title}`} fill className="object-cover" sizes="80px" loader={loaderFor(bookCover!)} />
                   </div>
-                </motion.div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <div className={cn("mb-1 text-[11px] font-bold uppercase tracking-wide", typeTextColor[post.type] || "text-muted-foreground")}>
+                    {post.type}
+                  </div>
+                  {post.type === "Lenkje" ? (
+                    <h2 className="text-lg sm:text-xl font-bold tracking-tight line-clamp-2">{post.ogTitle || post.title}</h2>
+                  ) : (
+                    <Link href={`/${post.type.toLowerCase()}/${post.slug}`} onClick={(e) => e.stopPropagation()}>
+                      <h2 className="text-lg sm:text-xl font-bold tracking-tight decoration-2 underline-offset-2 hover:underline">{post.title}</h2>
+                    </Link>
+                  )}
+                  {post.description && (
+                    <p lang="nn" className="mt-1.5 text-sm text-muted-foreground line-clamp-2">{post.description}</p>
+                  )}
+                  {(showReadTime || urlHost || tags.length > 0 || (post.type === "Prosjekt" && projectLinks.length > 0)) && (
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      {showReadTime && (
+                        <span className={metaPill}><Clock className="h-3.5 w-3.5" />{readTime} min å lese</span>
+                      )}
+                      {urlHost && (
+                        <a href={post.url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className={cn(metaPill, "transition-colors hover:border-gray-300 hover:text-foreground dark:hover:border-gray-600")}>
+                          <Globe className="h-3.5 w-3.5" />{urlHost}
+                        </a>
+                      )}
+                      {tags.map((tag) => (
+                        <span key={`${post.uid}-tag-${tag}`} className={metaPill}><Tag className="h-3 w-3" />{tag}</span>
+                      ))}
+                      {post.type === "Prosjekt" && projectLinks.filter((l) => l.type !== 'external').map((link) => (
+                        <a key={link.type} href={link.url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className={cn(metaPill, "capitalize transition-colors hover:text-foreground")} aria-label={link.type}>
+                          {link.type === 'github' ? <Github className="h-3.5 w-3.5" /> : link.type === 'twitter' ? <Twitter className="h-3.5 w-3.5" /> : <ExternalLink className="h-3.5 w-3.5" />}
+                          {link.type}
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+              {post.lyd && post.type !== "Lenkje" && (
+                <div className="mt-3">
+                  <AudioPlayer src={post.lyd} title={post.title} variant="bar" />
+                </div>
               )}
-            </AnimatePresence>
+            </div>
           </motion.article>
 
           {/* Image gallery lightbox with navigation, gestures, keyboard support */}
