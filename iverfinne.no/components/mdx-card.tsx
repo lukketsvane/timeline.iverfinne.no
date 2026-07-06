@@ -313,10 +313,10 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
   if (modelOnlySrc) {
     return (
       <div className="relative grid grid-cols-[auto,1fr] gap-3 sm:gap-4 max-w-full">
-        <div className="w-8 sm:w-16 shrink-0 pt-3 sm:pt-5 pr-0 sm:pr-4 text-right">
+        <div className="w-14 sm:w-20 shrink-0 pt-3 sm:pt-5 pr-0 sm:pr-3 text-right">
           <time className="whitespace-nowrap lowercase text-muted-foreground leading-tight">
             <span className="font-extrabold text-sm sm:text-lg">{day}.</span>
-            <span className="block sm:inline sm:ml-1 text-xs sm:text-lg">{month}</span>
+            <span className="ml-1 text-sm sm:text-lg">{month}</span>
           </time>
         </div>
         <div className="relative min-w-0">
@@ -340,7 +340,7 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
   return (
     <div className="relative grid grid-cols-[auto,1fr] gap-3 sm:gap-4 max-w-full">
       {/* Shorthand date in the timeline gutter, aligned with the node dot. */}
-      <div className="w-8 sm:w-16 shrink-0 pt-3 sm:pt-5 pr-0 sm:pr-4 text-right">
+      <div className="w-14 sm:w-20 shrink-0 pt-3 sm:pt-5 pr-0 sm:pr-3 text-right">
         <time className="whitespace-nowrap lowercase text-muted-foreground leading-tight">
           <span className="font-extrabold text-sm sm:text-lg">{day}.</span>
           <span className="block sm:inline sm:ml-1 text-xs sm:text-lg">{month}</span>
