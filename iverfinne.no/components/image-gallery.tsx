@@ -130,7 +130,7 @@ export function ImageGallery({ images = [], className, initialIndex = null, onIn
     else if (dir.current === 'y') setOffset({ x: 0, y: dy })
   }, [])
 
-  const onUp = useCallback(() => {
+  const onUp = useCallback((e: React.PointerEvent) => {
     if (!startRef.current) return
     const { x: sx, y: sy, t } = startRef.current
     const dt = Math.max(Date.now() - t, 1)
@@ -139,6 +139,11 @@ export function ImageGallery({ images = [], className, initialIndex = null, onIn
       close()
     } else if (dir.current === 'x' && (Math.abs(offset.x) > 50 || Math.abs(offset.x) / dt * 1000 > 400)) {
       if (offset.x > 0) goPrev(); else goNext()
+    } else if (dir.current === 'none') {
+      // No drag — a plain tap. Tapping the left half of the image steps
+      // backwards, the right half steps forwards.
+      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+      if (e.clientX - rect.left < rect.width / 2) goPrev(); else goNext()
     }
 
     startRef.current = null
@@ -146,6 +151,14 @@ export function ImageGallery({ images = [], className, initialIndex = null, onIn
     dir.current = 'none'
     setOffset({ x: 0, y: 0 })
   }, [offset, goPrev, goNext, close])
+
+  // A cancelled pointer (interrupted gesture) is not a tap — reset silently.
+  const onCancel = useCallback(() => {
+    startRef.current = null
+    dragging.current = false
+    dir.current = 'none'
+    setOffset({ x: 0, y: 0 })
+  }, [])
 
   const scale = 1 - Math.min(Math.abs(offset.y) / 500, 0.15)
   const bgAlpha = Math.max(0.4, 1 - Math.abs(offset.y) / 300)
@@ -217,7 +230,7 @@ export function ImageGallery({ images = [], className, initialIndex = null, onIn
             onPointerDown={onDown}
             onPointerMove={onMove}
             onPointerUp={onUp}
-            onPointerCancel={onUp}
+            onPointerCancel={onCancel}
             onClick={(e) => e.stopPropagation()}
             className="max-w-[95vw] max-h-[85vh] object-contain select-none relative z-[105]"
             style={{
