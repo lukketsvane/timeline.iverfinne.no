@@ -313,7 +313,7 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
   if (modelOnlySrc) {
     return (
       <div className="relative grid grid-cols-[auto,1fr] gap-3 sm:gap-4 max-w-full">
-        <div className="w-9 sm:w-24 shrink-0 pt-3 sm:pt-5 pr-0 sm:pr-6 text-right">
+        <div className="w-8 sm:w-16 shrink-0 pt-3 sm:pt-5 pr-0 sm:pr-4 text-right">
           <time className="whitespace-nowrap lowercase text-muted-foreground leading-tight">
             <span className="font-extrabold text-sm sm:text-lg">{day}.</span>
             <span className="block sm:inline sm:ml-1 text-xs sm:text-lg">{month}</span>
@@ -324,7 +324,7 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
             <TimelineNode type={post.type} onToggle={() => {}} />
             <TimelineConnector />
           </div>
-          <div className="pb-8 pt-0">
+          <div className="pb-8 pt-0 ml-2 sm:ml-3">
             <ModelViewer
               src={modelOnlySrc}
               alt={post.title}
@@ -340,7 +340,7 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
   return (
     <div className="relative grid grid-cols-[auto,1fr] gap-3 sm:gap-4 max-w-full">
       {/* Shorthand date in the timeline gutter, aligned with the node dot. */}
-      <div className="w-9 sm:w-24 shrink-0 pt-3 sm:pt-5 pr-0 sm:pr-6 text-right">
+      <div className="w-8 sm:w-16 shrink-0 pt-3 sm:pt-5 pr-0 sm:pr-4 text-right">
         <time className="whitespace-nowrap lowercase text-muted-foreground leading-tight">
           <span className="font-extrabold text-sm sm:text-lg">{day}.</span>
           <span className="block sm:inline sm:ml-1 text-xs sm:text-lg">{month}</span>
@@ -351,7 +351,7 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
           <TimelineNode type={post.type} onToggle={handleCardClick} url={post.url} />
           <TimelineConnector />
         </div>
-        <div className="pb-8 pt-0">
+        <div className="pb-8 pt-0 ml-2 sm:ml-3">
           <motion.article
             className={cn(
               // Every card is the same bounded surface: soft background, hairline
