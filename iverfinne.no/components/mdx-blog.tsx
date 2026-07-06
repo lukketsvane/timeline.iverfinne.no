@@ -534,7 +534,7 @@ export default function MDXBlog({ initialPosts = [], initialType, initialView }:
                 <div key={post.uid}>
                   {showYear && (
                     <div className="relative grid grid-cols-[auto,1fr] gap-3 sm:gap-4 max-w-full">
-                      <div className="w-9 sm:w-24 shrink-0" />
+                      <div className="w-8 sm:w-16 shrink-0" />
                       <div className="relative">
                         <div className="absolute -left-1.5 sm:-left-2 w-0.5 -top-4 bottom-0 bg-gray-200 dark:bg-gray-700 -translate-x-1/2" />
                         <div className="py-4">
