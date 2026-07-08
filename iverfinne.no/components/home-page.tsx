@@ -2,14 +2,16 @@
 
 import { useEffect } from 'react'
 import { usePosts } from '@/lib/posts-context'
-import MDXBlog from './mdx-blog'
+import MDXBlog, { type GameKey } from './mdx-blog'
 
 export default function HomePage({
   initialPosts,
   initialView,
+  initialGame,
 }: {
   initialPosts: any[]
   initialView?: 'timeline' | 'gallery' | 'om' | '404'
+  initialGame?: GameKey
 }) {
   const { setPosts } = usePosts()
 
@@ -17,5 +19,5 @@ export default function HomePage({
     setPosts(initialPosts)
   }, [initialPosts, setPosts])
 
-  return <MDXBlog initialPosts={initialPosts} initialView={initialView} />
+  return <MDXBlog initialPosts={initialPosts} initialView={initialView} initialGame={initialGame} />
 }

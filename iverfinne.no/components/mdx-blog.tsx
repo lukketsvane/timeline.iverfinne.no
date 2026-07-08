@@ -106,16 +106,21 @@ interface MDXBlogProps {
   // Set to '404' when rendered from the not-found route: reveals (and selects)
   // the hidden "404" tab so a mistyped URL lands inside the app, not a bare page.
   initialView?: 'timeline' | 'gallery' | 'om' | '404'
+  // Pins the 404 game (set by the /blokk and /kloss routes). Without it, a
+  // game is picked at random client-side so the choice isn't baked into the
+  // statically-prerendered 404.
+  initialGame?: GameKey
 }
 
-// The two standalone games; one is picked at random client-side so the choice
-// isn't baked into the statically-prerendered 404.
-const GAMES = [
-  { name: 'bl.okk', url: 'https://blokk.iverfinne.no' },
-  { name: 'kl.oss', url: 'https://kloss.iverfinne.no' },
-] as const
+// The two standalone games, each with its own route and 404-tab colour.
+// Tapping the 404 tab while it's already active toggles between them.
+const GAMES = {
+  blokk: { name: 'bl.okk', url: 'https://blokk.iverfinne.no', tabColor: 'bg-neutral-800' },
+  kloss: { name: 'kl.oss', url: 'https://kloss.iverfinne.no', tabColor: 'bg-red-500' },
+} as const
+export type GameKey = keyof typeof GAMES
 
-export default function MDXBlog({ initialPosts = [], initialType, initialView }: MDXBlogProps) {
+export default function MDXBlog({ initialPosts = [], initialType, initialView, initialGame }: MDXBlogProps) {
   const router = useRouter()
   const [posts, setPosts] = useState<Post[]>([])
   const [search, setSearch] = useState("")
@@ -132,7 +137,7 @@ export default function MDXBlog({ initialPosts = [], initialType, initialView }:
   // The "404" tab stays hidden until the visitor first discovers it (by hitting
   // a dead URL). After that it sticks around so they can come back to the game.
   const [found404, setFound404] = useState(false)
-  const [gameSrc, setGameSrc] = useState<string | null>(null)
+  const [game, setGame] = useState<GameKey | null>(initialGame ?? null)
 
   useEffect(() => {
     const already = typeof window !== 'undefined' && localStorage.getItem('found404') === '1'
@@ -144,13 +149,14 @@ export default function MDXBlog({ initialPosts = [], initialType, initialView }:
     }
   }, [initialView])
 
-  // Pick the game only once the 404 tab is actually viewed (avoids loading the
-  // iframe for everyone), and keep the choice stable for the session.
+  // Pick a game only once the 404 tab is actually viewed (avoids loading the
+  // iframe for everyone), and keep the choice stable for the session. Runs in
+  // an effect, not render, so the statically-prerendered 404 stays neutral.
   useEffect(() => {
-    if (view === '404' && !gameSrc) {
-      setGameSrc(GAMES[Math.floor(Math.random() * GAMES.length)].url)
+    if (view === '404' && !game) {
+      setGame(Math.random() < 0.5 ? 'blokk' : 'kloss')
     }
-  }, [view, gameSrc])
+  }, [view, game])
 
   // The Skissebok tab turns the whole page dark — paint html + body so the
   // colour reaches the safe-area / overscroll edges, not just the container.
@@ -408,11 +414,22 @@ export default function MDXBlog({ initialPosts = [], initialType, initialView }:
             // Skissebok is hidden for now — restore the tuple below to bring the tab back.
             // ['skissebok', 'Skissebok', 'bg-red-500'],
             // The "404" tab only appears once the visitor has discovered it.
-            ...(found404 ? [['404', '404', 'bg-neutral-800']] : []),
+            // Its colour follows the active game (retapping it toggles games).
+            ...(found404 ? [['404', '404', GAMES[game ?? 'blokk'].tabColor]] : []),
           ] as [string, string, string][]).map(([v, label, activeColor]) => (
             <button
               key={v}
-              onClick={() => setView(v as typeof view)}
+              onClick={() => {
+                // Retapping the already-active 404 tab flips to the other game
+                // and recolours the pill. Deliberately no URL update: the app
+                // router treats history.replaceState as a navigation, and
+                // template.tsx remounts (resetting this state) on navigation.
+                if (v === '404' && view === '404') {
+                  setGame(game === 'kloss' ? 'blokk' : 'kloss')
+                  return
+                }
+                setView(v as typeof view)
+              }}
               aria-pressed={view === v}
               className={cn(
                 "relative px-3 py-1.5 rounded-full transition-colors",
@@ -514,8 +531,14 @@ export default function MDXBlog({ initialPosts = [], initialType, initialView }:
           // Edge-to-edge under the header — no borders, no page padding; the
           // fixed root (see container above) provides the viewport-sized frame.
           <div className="relative mt-4 min-h-0 flex-1">
-            {gameSrc && (
-              <iframe src={gameSrc} title="spel" allow="fullscreen" className="absolute inset-0 h-full w-full border-0" />
+            {game && (
+              <iframe
+                key={game}
+                src={GAMES[game].url}
+                title={GAMES[game].name}
+                allow="fullscreen"
+                className="absolute inset-0 h-full w-full border-0"
+              />
             )}
           </div>
         ) : (
