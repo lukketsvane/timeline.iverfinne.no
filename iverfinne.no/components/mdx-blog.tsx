@@ -106,7 +106,7 @@ interface MDXBlogProps {
   // Set to '404' when rendered from the not-found route: reveals (and selects)
   // the hidden "404" tab so a mistyped URL lands inside the app, not a bare page.
   initialView?: 'timeline' | 'gallery' | 'om' | '404'
-  // Pins the 404 game (set by the /blokk and /kloss routes). Without it, a
+  // Pins the 404 game (set by the /404-blokk and /404-kloss routes). Without it, a
   // game is picked at random client-side so the choice isn't baked into the
   // statically-prerendered 404.
   initialGame?: GameKey
