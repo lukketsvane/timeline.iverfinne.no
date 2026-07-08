@@ -2,7 +2,7 @@ import HomePage from '@/components/home-page'
 import { getPublishedPosts } from '@/lib/notion'
 import type { GameKey } from '@/components/mdx-blog'
 
-// Shared shell for the /blokk and /kloss routes: the normal app (full top nav)
+// Shared shell for the /404-blokk and /404-kloss routes: the normal app (full top nav)
 // with the 404 tab revealed and pinned to the named game. Posts are loaded so
 // the other tabs work too; if Notion is unreachable we still render the shell
 // so the game is playable.
