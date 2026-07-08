@@ -389,7 +389,23 @@ export default function MDXBlog({ initialPosts = [], initialType, initialView, i
           view === '404' && 'mx-auto w-full max-w-6xl px-4 pt-12 sm:px-8'
         )}
       >
-        <Link href="/" aria-label="iverfinne.no" className="flex items-center">
+        <Link
+          href="/"
+          aria-label="iverfinne.no"
+          className="flex items-center"
+          onClick={(e) => {
+            // Modified clicks (new tab etc.) keep normal link behaviour.
+            if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return
+            // Already on the home route: the tabs are client state and a
+            // same-URL navigation is a no-op, so switch the tab directly.
+            if (window.location.pathname === '/') {
+              e.preventDefault()
+              setView('timeline')
+            }
+            // Any other route (mistyped URL, /404-blokk, …): let the Link
+            // navigate to '/', which mounts fresh on the timeline view.
+          }}
+        >
           <img src={view === 'skissebok' ? '/icon-white.png' : '/icon.svg'} alt="" width={28} height={28} className="h-7 w-7" />
         </Link>
         <div className="flex items-center gap-3">
