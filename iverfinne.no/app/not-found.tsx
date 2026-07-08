@@ -16,7 +16,7 @@ export default async function NotFound() {
   }
 
   return (
-    <div className="w-full max-w-6xl mx-auto px-4 py-8 overflow-x-hidden">
+    <div className="w-full max-w-6xl mx-auto px-2 py-8 sm:px-4 overflow-x-hidden">
       <HomePage initialPosts={JSON.parse(JSON.stringify(posts))} initialView="404" />
     </div>
   )

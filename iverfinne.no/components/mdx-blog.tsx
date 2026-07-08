@@ -380,7 +380,15 @@ export default function MDXBlog({ initialPosts = [], initialType, initialView, i
             : 'min-h-screen'
       )}
     >
-      <div className="flex items-center justify-between gap-3 px-2 sm:px-4 pt-4">
+      <div
+        className={cn(
+          'flex items-center justify-between gap-3 px-2 sm:px-4 pt-4',
+          // The fixed 404 view escapes the page's `max-w-6xl mx-auto px-2 py-8
+          // sm:px-4` wrapper, so fold that wrapper's geometry into the header
+          // here — the navbar must sit in the exact same spot on every tab.
+          view === '404' && 'mx-auto w-full max-w-6xl px-4 pt-12 sm:px-8'
+        )}
+      >
         <Link href="/" aria-label="iverfinne.no" className="flex items-center">
           <img src={view === 'skissebok' ? '/icon-white.png' : '/icon.svg'} alt="" width={28} height={28} className="h-7 w-7" />
         </Link>
