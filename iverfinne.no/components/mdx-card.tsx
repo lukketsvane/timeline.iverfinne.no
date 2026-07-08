@@ -313,10 +313,10 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
   if (modelOnlySrc) {
     return (
       <div className="relative grid grid-cols-[auto,1fr] gap-3 sm:gap-4 max-w-full">
-        <div className="w-14 sm:w-20 shrink-0 pt-3 sm:pt-5 pr-0 sm:pr-3 text-right">
-          <time className="whitespace-nowrap lowercase text-muted-foreground leading-tight">
+        <div className="relative w-14 sm:w-20 shrink-0">
+          <time className="absolute right-1.5 sm:right-2 top-3 sm:top-5 whitespace-nowrap lowercase text-muted-foreground leading-tight">
             <span className="font-extrabold text-sm sm:text-lg">{day}.</span>
-            <span className="ml-1 text-sm sm:text-lg">{month}</span>
+            <span className="ml-1 text-xs sm:text-lg">{month}</span>
           </time>
         </div>
         <div className="relative min-w-0">
@@ -339,11 +339,13 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
 
   return (
     <div className="relative grid grid-cols-[auto,1fr] gap-3 sm:gap-4 max-w-full">
-      {/* Shorthand date in the timeline gutter, aligned with the node dot. */}
-      <div className="w-14 sm:w-20 shrink-0 pt-3 sm:pt-5 pr-0 sm:pr-3 text-right">
-        <time className="whitespace-nowrap lowercase text-muted-foreground leading-tight">
+      {/* Shorthand date in the timeline gutter: one line, anchored to the
+          gutter's right edge just left of the node dot. Absolutely positioned
+          so a long month overflows leftwards without moving the timeline. */}
+      <div className="relative w-14 sm:w-20 shrink-0">
+        <time className="absolute right-1.5 sm:right-2 top-3 sm:top-5 whitespace-nowrap lowercase text-muted-foreground leading-tight">
           <span className="font-extrabold text-sm sm:text-lg">{day}.</span>
-          <span className="block sm:inline sm:ml-1 text-xs sm:text-lg">{month}</span>
+          <span className="ml-1 text-xs sm:text-lg">{month}</span>
         </time>
       </div>
       <div className="relative min-w-0">
