@@ -367,7 +367,11 @@ export default function MDXBlog({ initialPosts = [], initialType, initialView }:
         // and subtract that container's py-8 (4rem) from 100svh.
         view === 'skissebok'
           ? 'flex h-[calc(100svh-4rem)] flex-col overflow-hidden'
-          : 'min-h-screen'
+          : view === '404'
+            // The game fills the whole viewport (header included) regardless of
+            // the page's max-width/padding wrapper — fixed breaks out of it.
+            ? 'fixed inset-0 z-40 flex flex-col overflow-hidden bg-background'
+            : 'min-h-screen'
       )}
     >
       <div className="flex items-center justify-between gap-3 px-2 sm:px-4 pt-4">
@@ -434,8 +438,8 @@ export default function MDXBlog({ initialPosts = [], initialType, initialView }:
         </div>
         </div>
       </div>
-    <div className={cn('max-w-full overflow-x-hidden', view === 'skissebok' ? 'flex min-h-0 flex-1 flex-col' : 'px-2 py-4 sm:p-4')}>
-      <main className={cn('min-w-0', view === 'skissebok' && 'flex min-h-0 flex-1 flex-col')}>
+    <div className={cn('max-w-full overflow-x-hidden', view === 'skissebok' || view === '404' ? 'flex min-h-0 flex-1 flex-col' : 'px-2 py-4 sm:p-4')}>
+      <main className={cn('min-w-0', (view === 'skissebok' || view === '404') && 'flex min-h-0 flex-1 flex-col')}>
         {/* Gentle fade-in when switching tabs. Deliberately no AnimatePresence:
             the views unmount inner motion components at will (year collapse,
             card expansion), which corrupts presence exit bookkeeping. A keyed
@@ -445,7 +449,7 @@ export default function MDXBlog({ initialPosts = [], initialType, initialView }:
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.15, ease: 'easeOut' }}
-          className={view === 'skissebok' ? 'flex min-h-0 flex-1 flex-col' : 'space-y-4'}
+          className={view === 'skissebok' || view === '404' ? 'flex min-h-0 flex-1 flex-col' : 'space-y-4'}
         >
         {/* Search + category filters only apply to the timeline; the gallery and
             sketchbook tabs show everything, so hide them there. */}
@@ -507,15 +511,12 @@ export default function MDXBlog({ initialPosts = [], initialType, initialView }:
         ) : view === 'om' ? (
           <OmMeg />
         ) : view === '404' ? (
-          <div className="mt-4">
-            <div
-              className="relative -mx-2 overflow-hidden border-y border-gray-200 dark:border-gray-800 sm:mx-0 sm:rounded-xl sm:border"
-              style={{ height: 'calc(100svh - 11rem)' }}
-            >
-              {gameSrc && (
-                <iframe src={gameSrc} title="spel" allow="fullscreen" className="h-full w-full border-0" />
-              )}
-            </div>
+          // Edge-to-edge under the header — no borders, no page padding; the
+          // fixed root (see container above) provides the viewport-sized frame.
+          <div className="relative mt-4 min-h-0 flex-1">
+            {gameSrc && (
+              <iframe src={gameSrc} title="spel" allow="fullscreen" className="absolute inset-0 h-full w-full border-0" />
+            )}
           </div>
         ) : (
         <motion.div
