@@ -1,10 +1,53 @@
 import { NextRequest } from 'next/server'
 import { Client } from '@notionhq/client'
+import { unstable_cache } from 'next/cache'
+import { NOTION_CACHE_TAG } from '@/lib/notion'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
 
 const notion = new Client({ auth: process.env.NOTION_API_KEY })
+
+// Notion's signed S3 URLs live for ~1h. Caching the resolved URL for 29min
+// means at most two Notion API calls per image per hour — instead of one per
+// edge-cache miss, which is what used to melt the API into 429s and break
+// every image on the site.
+const resolveBlockFileUrl = unstable_cache(
+  async (blockId: string): Promise<string | null> => {
+    const block = await notion.blocks.retrieve({ block_id: blockId }) as any
+    if (block.type !== 'image' && block.type !== 'file') return null
+    const data = block[block.type]
+    return data.type === 'external' ? data.external.url : data.file.url
+  },
+  ['notion-image-block-url'],
+  { revalidate: 1740, tags: [NOTION_CACHE_TAG] }
+)
+
+const resolvePageImageUrl = unstable_cache(
+  async (pageId: string, type: string | null, prop: string | null): Promise<string | null> => {
+    const page = await notion.pages.retrieve({ page_id: pageId }) as any
+    let imageUrl: string | null = null
+
+    if (type === 'cover' && page.cover) {
+      imageUrl = page.cover.type === 'external'
+        ? page.cover.external.url
+        : page.cover.file?.url
+    } else if (type === 'icon' && page.icon) {
+      if (page.icon.type === 'external') imageUrl = page.icon.external.url
+      else if (page.icon.type === 'file') imageUrl = page.icon.file.url
+    } else if (prop) {
+      const key = Object.keys(page.properties || {}).find(
+        k => k.toLowerCase() === prop.toLowerCase()
+      )
+      const file = key ? page.properties[key]?.files?.[0] : undefined
+      if (file) imageUrl = file.type === 'external' ? file.external?.url : file.file?.url
+    }
+
+    return imageUrl ?? null
+  },
+  ['notion-image-page-url'],
+  { revalidate: 1740, tags: [NOTION_CACHE_TAG] }
+)
 
 // Allowed hostnames for the URL-based image proxy to prevent SSRF
 const ALLOWED_HOSTS = [
@@ -88,7 +131,7 @@ async function fetchAndReturn(imageUrl: string, request: NextRequest): Promise<R
       // Images keyed by stable block/page ids rarely change. Cache at the edge
       // for an hour and serve stale while revalidating in the background, so
       // image loads stay fast without re-hitting Notion on every request.
-      'Cache-Control': 'public, max-age=300, s-maxage=3600, stale-while-revalidate=86400',
+      'Cache-Control': 'public, max-age=300, s-maxage=3600, stale-while-revalidate=86400, stale-if-error=604800',
       // The webp negotiation above makes the response depend on Accept.
       'Vary': 'Accept',
     }
@@ -106,37 +149,16 @@ export async function GET(request: NextRequest) {
     // Block-based: fetch fresh file URL from Notion block. Covers image
     // blocks and file blocks (e.g. attached .glb models for <ModelViewer>).
     if (blockId) {
-      const block = await notion.blocks.retrieve({ block_id: blockId }) as any
-      if (block.type !== 'image' && block.type !== 'file') {
+      const imageUrl = await resolveBlockFileUrl(blockId)
+      if (!imageUrl) {
         return new Response('Block is not an image or file', { status: 400 })
       }
-      const data = block[block.type]
-      const imageUrl = data.type === 'external'
-        ? data.external.url
-        : data.file.url
       return fetchAndReturn(imageUrl, request)
     }
 
     // Page-based: cover, icon, or a file property (e.g. prop=sosialbilete)
     if (pageId && (type || prop)) {
-      const page = await notion.pages.retrieve({ page_id: pageId }) as any
-      let imageUrl: string | null = null
-
-      if (type === 'cover' && page.cover) {
-        imageUrl = page.cover.type === 'external'
-          ? page.cover.external.url
-          : page.cover.file?.url
-      } else if (type === 'icon' && page.icon) {
-        if (page.icon.type === 'external') imageUrl = page.icon.external.url
-        else if (page.icon.type === 'file') imageUrl = page.icon.file.url
-      } else if (prop) {
-        const key = Object.keys(page.properties || {}).find(
-          k => k.toLowerCase() === prop.toLowerCase()
-        )
-        const file = key ? page.properties[key]?.files?.[0] : undefined
-        if (file) imageUrl = file.type === 'external' ? file.external?.url : file.file?.url
-      }
-
+      const imageUrl = await resolvePageImageUrl(pageId, type, prop)
       if (!imageUrl) {
         return new Response('Image not found on page', { status: 404 })
       }
@@ -154,6 +176,12 @@ export async function GET(request: NextRequest) {
     return new Response('Missing block, page, or url parameter', { status: 400 })
   } catch (error) {
     console.error('[notion-image] Error:', error)
-    return new Response('Failed to fetch image', { status: 502 })
+    // Cache the failure briefly at the edge — during a Notion rate-limit
+    // wave, uncached 502s turn every broken <img> retry into another API
+    // call, which keeps the rate limit tripped.
+    return new Response('Failed to fetch image', {
+      status: 502,
+      headers: { 'Cache-Control': 'public, max-age=15, s-maxage=60' },
+    })
   }
 }

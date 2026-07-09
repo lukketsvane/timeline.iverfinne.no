@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { revalidatePath } from 'next/cache'
+import { revalidatePath, revalidateTag } from 'next/cache'
+import { NOTION_CACHE_TAG } from '@/lib/notion'
 
 export async function POST(request: NextRequest) {
   try {
@@ -21,6 +22,10 @@ export async function POST(request: NextRequest) {
     const entityId = body.data?.id || body.entity?.id || 'unknown'
     console.log('[webhook] received:', eventType, 'entity:', entityId)
 
+    // Purge the Notion data-cache entries (post list, per-post content,
+    // resolved image URLs) before the route cache, so re-rendered pages pull
+    // fresh data instead of the hour-long cached copies.
+    revalidateTag(NOTION_CACHE_TAG)
     revalidatePath('/', 'layout')
 
     return NextResponse.json({

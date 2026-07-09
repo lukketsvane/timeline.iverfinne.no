@@ -15,6 +15,13 @@ const notion = new Client({
   auth: process.env.NOTION_API_KEY,
 });
 
+// Every unstable_cache entry that ultimately reads from Notion carries this
+// tag, so the Notion webhook / manual revalidate route can purge the whole
+// data layer at once. TTLs below are deliberately long — freshness comes from
+// the webhook, not from short revalidation windows (which used to hammer the
+// Notion API into 429s and take the whole site down with it).
+export const NOTION_CACHE_TAG = "notion-content";
+
 // Retry wrapper for Notion API calls that handles 429 rate limits
 async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> {
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -447,7 +454,7 @@ const fetchOgMetadataCached = unstable_cache(
   { revalidate: 3600 }
 );
 
-export const getPublishedPosts = cache(async (): Promise<Post[]> => {
+const getPublishedPostsUncached = async (): Promise<Post[]> => {
   const databaseId = getDatabaseId();
   try {
     const response = await withRetry(() => notion.databases.query({
@@ -525,6 +532,33 @@ export const getPublishedPosts = cache(async (): Promise<Post[]> => {
     console.error("Notion API error:", error);
     throw error;
   }
+};
+
+// Cross-request data cache for the post list — every consumer (/,
+// /[...slug] type pages, sitemap, feed, /api/posts) shares one copy instead
+// of each firing its own database query + body-media fan-out at Notion.
+const getPublishedPostsData = unstable_cache(getPublishedPostsUncached, ["published-posts"], {
+  revalidate: 300,
+  tags: [NOTION_CACHE_TAG],
+});
+
+// Last successful result per lambda instance. When Notion rate-limits right
+// as the cache entry expires, serving a stale list beats the "Application
+// error" page a thrown 429 produces.
+let lastGoodPosts: Post[] | null = null;
+
+export const getPublishedPosts = cache(async (): Promise<Post[]> => {
+  try {
+    const posts = await getPublishedPostsData();
+    lastGoodPosts = posts;
+    return posts;
+  } catch (error) {
+    if (lastGoodPosts) {
+      console.error("getPublishedPosts failed, serving last known good list:", error);
+      return lastGoodPosts;
+    }
+    throw error;
+  }
 });
 
 // ── Skissebok ───────────────────────────────────────────────────────────────
@@ -594,6 +628,27 @@ export async function getPostContent(pageId: string): Promise<string> {
   const mdObject = n2m.toMarkdownString(mdblocks);
   return proxyMarkdownImages(mdObject.parent || "");
 }
+
+// pageToMarkdown recursively lists block children — dozens of Notion calls
+// for a text-heavy page — so a post's markdown must never be rebuilt more
+// than once an hour across all visitors.
+export const getPostContentCached = unstable_cache(getPostContent, ["post-content"], {
+  revalidate: 3600,
+  tags: [NOTION_CACHE_TAG],
+});
+
+// Full payload for /api/posts/[id]: markdown + serialized MDX, cached as one
+// unit so the client's prefetch-everything loop costs Notion nothing on repeat
+// visits.
+export const getSerializedPost = unstable_cache(
+  async (pageId: string) => {
+    const content = await getPostContent(pageId);
+    const source = await serializeMarkdown(content);
+    return { content, source };
+  },
+  ["post-serialized"],
+  { revalidate: 3600, tags: [NOTION_CACHE_TAG] }
+);
 
 // Shared MDX serialization — single source of truth for all serialize calls
 export async function serializeMarkdown(content: string): Promise<MDXRemoteSerializeResult> {
@@ -807,33 +862,55 @@ export async function getPostIdBySlug(slug: string): Promise<string | null> {
     return null;
 }
 
-export const getPostBySlug = cache(async (slug: string): Promise<Post | null> => {
-  const databaseId = getDatabaseId();
-  const response = await withRetry(() => notion.databases.query({
-    database_id: databaseId,
-    filter: {
-      and: [
-        {
-          or: [
-            { property: "Status", status: { equals: "Ferdig" } },
-            { property: "Status", status: { equals: "Complete" } }
-          ]
-        },
-        { property: "Slug", rich_text: { equals: slug } }
-      ]
+const getPostBySlugData = unstable_cache(
+  async (slug: string): Promise<Post | null> => {
+    const databaseId = getDatabaseId();
+    const response = await withRetry(() => notion.databases.query({
+      database_id: databaseId,
+      filter: {
+        and: [
+          {
+            or: [
+              { property: "Status", status: { equals: "Ferdig" } },
+              { property: "Status", status: { equals: "Complete" } }
+            ]
+          },
+          { property: "Slug", rich_text: { equals: slug } }
+        ]
+      }
+    }));
+    if (response.results.length === 0) return null;
+    const page = response.results[0];
+    const props = getPageProperties(page);
+    const content = await getPostContentCached(page.id);
+    let thumbnails = props.image ? [{ src: props.image, alt: props.title }] : [];
+    if (props.type === "Bilete") {
+      thumbnails = await fetchBileteThumbnails(page.id, props.title, props.image);
     }
-  }));
-  if (response.results.length === 0) return null;
-  const page = response.results[0];
-  const props = getPageProperties(page);
-  const content = await getPostContent(page.id);
-  let thumbnails = props.image ? [{ src: props.image, alt: props.title }] : [];
-  if (props.type === "Bilete") {
-    thumbnails = await fetchBileteThumbnails(page.id, props.title, props.image);
+    return {
+      ...props,
+      content,
+      thumbnails,
+    };
+  },
+  ["post-by-slug"],
+  { revalidate: 3600, tags: [NOTION_CACHE_TAG] }
+);
+
+// Same stale-beats-crash fallback as getPublishedPosts, per slug.
+const lastGoodPostBySlug = new Map<string, Post | null>();
+
+export const getPostBySlug = cache(async (slug: string): Promise<Post | null> => {
+  try {
+    const post = await getPostBySlugData(slug);
+    lastGoodPostBySlug.set(slug, post);
+    return post;
+  } catch (error) {
+    const lastGood = lastGoodPostBySlug.get(slug);
+    if (lastGood !== undefined) {
+      console.error(`getPostBySlug(${slug}) failed, serving last known good:`, error);
+      return lastGood;
+    }
+    throw error;
   }
-  return {
-    ...props,
-    content,
-    thumbnails,
-  };
 });
