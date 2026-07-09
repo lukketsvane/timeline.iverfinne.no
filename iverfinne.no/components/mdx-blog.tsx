@@ -192,6 +192,17 @@ export default function MDXBlog({ initialPosts = [], initialType, initialView, i
   const inflightRef = useRef<Set<string>>(new Set())
   const prefetchStartedRef = useRef(false)
 
+  // The header logo is a 4s video that starts and ends on the same fully
+  // coloured frame as its poster, so hovering or tapping plays the colour
+  // sweep and lands back exactly where it started — no visible cut.
+  const logoVideoRef = useRef<HTMLVideoElement>(null)
+  const playLogo = () => {
+    const v = logoVideoRef.current
+    if (!v || !v.paused || v.seeking) return
+    v.currentTime = 0
+    v.play().catch(() => { /* autoplay refusal just leaves the poster */ })
+  }
+
   useEffect(() => {
     setPosts(initialPosts)
     prefetchStartedRef.current = false
@@ -393,7 +404,9 @@ export default function MDXBlog({ initialPosts = [], initialType, initialView, i
           href="/"
           aria-label="iverfinne.no"
           className="flex items-center"
+          onMouseEnter={playLogo}
           onClick={(e) => {
+            playLogo()
             // Modified clicks (new tab etc.) keep normal link behaviour.
             if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return
             // Already on the home route: the tabs are client state and a
@@ -406,7 +419,26 @@ export default function MDXBlog({ initialPosts = [], initialType, initialView, i
             // navigate to '/', which mounts fresh on the timeline view.
           }}
         >
-          <img src={view === 'skissebok' ? '/icon-white.png' : '/icon.svg'} alt="" width={28} height={28} className="h-7 w-7" />
+          {view === 'skissebok' ? (
+            <img src="/icon-white.png" alt="" width={28} height={28} className="h-7 w-7" />
+          ) : (
+            <video
+              ref={logoVideoRef}
+              poster="/logo-still.png"
+              muted
+              playsInline
+              preload="auto"
+              disablePictureInPicture
+              width={28}
+              height={28}
+              className="h-7 w-7 rounded-[5px]"
+              aria-hidden="true"
+            >
+              {/* mp4 first (Safari); webm covers Chromium/Firefox builds without H.264 */}
+              <source src="/logo-anim.mp4" type="video/mp4" />
+              <source src="/logo-anim.webm" type="video/webm" />
+            </video>
+          )}
         </Link>
         <div className="flex items-center gap-3">
         <a
