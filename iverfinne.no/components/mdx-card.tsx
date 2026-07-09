@@ -95,6 +95,7 @@ interface Post {
   ogImage?: string
   modelSrc?: string
   lesMeir?: boolean
+  readTime?: number
 }
 
 // Category-label / timeline colour per type. Text-only tints (the badge tints
@@ -221,11 +222,14 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
   const bookCover = post.type === "Bok" ? (post.image || post.icon || getFirstImageFromContent(post.content)) : null
   const projectThumb = post.type === "Prosjekt" ? (post.image || getFirstImageFromContent(post.content)) : null
   const projectLinks = post.type === "Prosjekt" ? extractOutgoingLinks(post.content, post.url) : []
-  // Only once the body content has been (pre)fetched — otherwise every card
-  // would flash a bogus "1 min" from empty content.
-  const readTime = (post.type === "Skriving" || post.type === "Bok") && post.content ? estimateReadTime(post.content) : 0
-  // Reading time sits in the category row for reading posts without audio.
-  const showReadTime = readTime > 0 && !post.lyd
+  // Server-computed from the body word count (available immediately in the
+  // list payload); content-based estimate is the fallback for older payloads.
+  const readTime = (post.type === "Skriving" || post.type === "Bok")
+    ? (post.readTime || (post.content ? estimateReadTime(post.content) : 0))
+    : 0
+  // Reading time sits at the right of the title row, only for longer reads —
+  // a "1 min" chip on every note is noise.
+  const showReadTime = readTime >= 2 && !post.lyd
   // Text is never overlaid on the illustration — it collides with the artwork
   // and reads as clutter. Every card puts the image on top and the text below.
   const heroOverlay = false
@@ -441,7 +445,7 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
                       <span className={cn("text-xs font-semibold uppercase tracking-wide", typeTextColor[post.type] || "text-black")}>{post.type}</span>
                       <div className="mt-0.5 flex items-end justify-between gap-3">
                         <Link href={`/${post.type.toLowerCase()}/${post.slug}`} onClick={(e) => e.stopPropagation()}>
-                          <h2 className="text-2xl font-semibold tracking-tight text-black group-hover/title:underline decoration-2 underline-offset-2">
+                          <h2 className="text-base sm:text-lg font-semibold tracking-tight text-black group-hover/title:underline decoration-2 underline-offset-2">
                             {post.title}
                           </h2>
                         </Link>
@@ -489,7 +493,7 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
                         <div className="flex items-end justify-between gap-3">
                           <div className="flex min-w-0 items-start gap-2 flex-wrap">
                           <Link href={`/${post.type.toLowerCase()}/${post.slug}`} onClick={(e) => e.stopPropagation()}>
-                            <h2 className="text-2xl font-semibold tracking-tight group-hover/title:underline decoration-2 underline-offset-2 transition-colors">
+                            <h2 className="text-base sm:text-lg font-semibold tracking-tight group-hover/title:underline decoration-2 underline-offset-2 transition-colors">
                               {post.title}
                             </h2>
                           </Link>

@@ -518,6 +518,7 @@ const getPublishedPostsUncached = async (): Promise<Post[]> => {
             bodyImages: bodyMedia.images,
             bodyModels: bodyMedia.models,
             imageDims: bodyMedia.dims,
+            readTime: bodyMedia.words > 0 ? Math.max(1, Math.round(bodyMedia.words / 200)) : 0,
             ...ogData,
             modelSrc,
           };
@@ -691,6 +692,9 @@ export type BodyMedia = {
   // sosialbilete). Best-effort — absent entries just fall back to on-load
   // measurement in the client.
   dims: Record<string, { w: number; h: number }>;
+  // Body word count (same block walk as the media scan), so the list payload
+  // can carry a reading time without the client fetching full content.
+  words: number;
 };
 
 // Read just enough bytes of an image to learn its pixel size.
@@ -746,10 +750,19 @@ async function fetchBodyMedia(pageId: string, fallbackAlt: string): Promise<Body
   // Recursion budget: a handful of extra child-list calls per post, so deeply
   // nested pages can't fan the API out.
   let budget = 6;
+  let words = 0;
 
   const collect = async (parentId: string, depth: number): Promise<any[]> => {
     const blocks = await listAllChildren(parentId);
     for (const b of blocks) {
+      const richText = (b as any)[b.type]?.rich_text;
+      if (Array.isArray(richText) && richText.length) {
+        words += richText
+          .map((t: any) => t.plain_text || "")
+          .join(" ")
+          .split(/\s+/)
+          .filter(Boolean).length;
+      }
       if (b.type === "image") {
         const src = proxyBlockImage(b.id);
         images.push({ src, alt: b.image?.caption?.[0]?.plain_text || fallbackAlt });
@@ -771,7 +784,7 @@ async function fetchBodyMedia(pageId: string, fallbackAlt: string): Promise<Body
   try {
     rootBlocks = await collect(pageId, 0);
   } catch {
-    return { images: [], models: [], dims: {} };
+    return { images: [], models: [], dims: {}, words: 0 };
   }
 
   // The page cover and sosialbilete also show in the gallery — fetch the page
@@ -811,16 +824,18 @@ async function fetchBodyMedia(pageId: string, fallbackAlt: string): Promise<Body
     break;
   }
 
-  return { images, models, modelOnlySrc, dims };
+  return { images, models, modelOnlySrc, dims, words };
 }
 
 // Cache keyed by page id + last_edited_time: a page that hasn't changed reuses
 // its cached media for an hour, so steady-state regenerations barely touch the
 // Notion API. The extra parameter exists purely to vary the cache key.
+// Key bumped to -v2 when `words` was added — persisted entries with the old
+// shape would otherwise serve readTime-less posts until they expire.
 const fetchBodyMediaCached = unstable_cache(
   async (pageId: string, fallbackAlt: string, _lastEdited: string) =>
     fetchBodyMedia(pageId, fallbackAlt),
-  ["body-media"],
+  ["body-media-v2"],
   { revalidate: 3600 }
 );
 
