@@ -192,10 +192,18 @@ export default function MDXBlog({ initialPosts = [], initialType, initialView, i
   const inflightRef = useRef<Set<string>>(new Set())
   const prefetchStartedRef = useRef(false)
 
-  // The header logo is a 4s video that starts and ends on the same fully
-  // coloured frame as its poster, so hovering or tapping plays the colour
-  // sweep and lands back exactly where it started — no visible cut.
+  // The header logo is a short video that starts and ends on the same fully
+  // coloured frame as its poster, so hovering or tapping plays the animation
+  // and lands back exactly where it started — no visible cut. One of the
+  // variants in /public/logo is picked at random per mount (page load /
+  // reload); chosen client-side after hydration since the server render is
+  // cached and would pin a single variant for everyone.
   const logoVideoRef = useRef<HTMLVideoElement>(null)
+  const [logoVariant, setLogoVariant] = useState<string | null>(null)
+  useEffect(() => {
+    const LOGO_VARIANTS = ['03', '04', '05', '06', '07']
+    setLogoVariant(LOGO_VARIANTS[Math.floor(Math.random() * LOGO_VARIANTS.length)])
+  }, [])
   const playLogo = () => {
     const v = logoVideoRef.current
     if (!v || !v.paused || v.seeking) return
@@ -421,23 +429,34 @@ export default function MDXBlog({ initialPosts = [], initialType, initialView, i
         >
           {view === 'skissebok' ? (
             <img src="/icon-white.png" alt="" width={28} height={28} className="h-7 w-7" />
-          ) : (
-            <video
-              ref={logoVideoRef}
-              poster="/logo-still.png"
-              muted
-              playsInline
-              preload="auto"
-              disablePictureInPicture
-              width={28}
-              height={28}
-              className="h-7 w-7 rounded-[5px]"
-              aria-hidden="true"
+          ) : logoVariant ? (
+            <motion.span
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.25, ease: 'easeOut' }}
+              className="block h-7 w-7"
             >
-              {/* mp4 first (Safari); webm covers Chromium/Firefox builds without H.264 */}
-              <source src="/logo-anim.mp4" type="video/mp4" />
-              <source src="/logo-anim.webm" type="video/webm" />
-            </video>
+              <video
+                key={logoVariant}
+                ref={logoVideoRef}
+                poster={`/logo/${logoVariant}.png`}
+                muted
+                playsInline
+                preload="auto"
+                disablePictureInPicture
+                width={28}
+                height={28}
+                className="h-7 w-7 rounded-[5px]"
+                aria-hidden="true"
+              >
+                {/* mp4 first (Safari); webm covers Chromium/Firefox builds without H.264 */}
+                <source src={`/logo/${logoVariant}.mp4`} type="video/mp4" />
+                <source src={`/logo/${logoVariant}.webm`} type="video/webm" />
+              </video>
+            </motion.span>
+          ) : (
+            // Placeholder keeps the header height stable until the variant is chosen.
+            <span className="block h-7 w-7" aria-hidden="true" />
           )}
         </Link>
         <div className="flex items-center gap-3">
