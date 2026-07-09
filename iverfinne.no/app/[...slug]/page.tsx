@@ -1,4 +1,5 @@
-export const revalidate = 60
+// Webhook-driven revalidation keeps posts fresh; this is only the fallback.
+export const revalidate = 300
 export const maxDuration = 60
 
 import { getPublishedPosts, getPostBySlug, serializeMarkdown, VALID_TYPES } from '@/lib/notion'

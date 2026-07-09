@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { revalidatePath } from 'next/cache'
+import { revalidatePath, revalidateTag } from 'next/cache'
+import { NOTION_CACHE_TAG } from '@/lib/notion'
 
 function validateSecret(secret: string | null): boolean {
   return secret === process.env.REVALIDATION_SECRET
 }
 
 function doRevalidate(path: string | null) {
+  // Data cache first (post list, per-post content, image URLs), then the
+  // route cache — so the re-render sees fresh Notion data.
+  revalidateTag(NOTION_CACHE_TAG)
   if (path) {
     revalidatePath(path)
   } else {
