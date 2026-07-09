@@ -56,7 +56,7 @@ interface FilterButtonProps {
 const typeColorMap: Record<string, string> = {
   Skriving: "bg-blue-500",
   Bok: "bg-green-500",
-  Prosjekt: "bg-purple-500",
+  Prosjekt: "bg-cyan-500",
   Lenkje: "bg-orange-500",
   Interaktiv: "bg-pink-500",
   Bilete: "bg-teal-500",

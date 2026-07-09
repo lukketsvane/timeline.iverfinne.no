@@ -214,7 +214,7 @@ Content from Notion is converted to MDX via `notion-to-md` with custom transform
 | Divider | `<hr>` | Subtle gray line |
 | Quote | `<blockquote>` | Left border, italic, muted color |
 | Table | `<table>` | Responsive with horizontal scroll |
-| Callout | `<Callout>` | Left colored border + icon. Colors: blue, red, green, yellow, orange, purple, pink, gray, brown |
+| Callout | `<Callout>` | Left colored border + icon. Colors: blue, red, green, yellow, orange, cyan, pink, gray, brown |
 | Toggle | `<details><summary>` | Collapsible with arrow indicator |
 | Toggle heading | `<details><summary><h1-3>` | Collapsible heading (custom transformer) |
 
@@ -229,7 +229,7 @@ Notion callout colors map to styled borders and backgrounds:
 | `green` / `green_background` | Green |
 | `yellow` / `yellow_background` | Yellow |
 | `orange` / `orange_background` | Orange |
-| `purple` / `purple_background` | Purple |
+| `purple` / `purple_background` | Cyan |
 | `pink` / `pink_background` | Pink |
 | `gray` / `gray_background` | Gray |
 | `brown` / `brown_background` | Amber |

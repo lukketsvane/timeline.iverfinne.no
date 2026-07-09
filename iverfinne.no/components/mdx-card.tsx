@@ -102,7 +102,7 @@ interface Post {
 const typeTextColor: Record<string, string> = {
   Skriving: "text-blue-600 dark:text-blue-400",
   Bok: "text-green-600 dark:text-green-400",
-  Prosjekt: "text-purple-600 dark:text-purple-400",
+  Prosjekt: "text-cyan-600 dark:text-cyan-400",
   Lenkje: "text-orange-600 dark:text-orange-400",
   Interaktiv: "text-pink-600 dark:text-pink-400",
   Bilete: "text-teal-600 dark:text-teal-400",
@@ -130,7 +130,7 @@ const TimelineNode = ({ type, onToggle, url }: { type: string, onToggle: () => v
   const typeColors = {
     Skriving: "bg-blue-500",
     Bok: "bg-green-500",
-    Prosjekt: "bg-purple-500",
+    Prosjekt: "bg-cyan-500",
     Lenkje: "bg-orange-500",
     Interaktiv: "bg-pink-500",
     Bilete: "bg-teal-500",
