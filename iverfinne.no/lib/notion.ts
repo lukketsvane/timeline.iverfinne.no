@@ -22,14 +22,18 @@ const notion = new Client({
 // Notion API into 429s and take the whole site down with it).
 export const NOTION_CACHE_TAG = "notion-content";
 
-// Retry wrapper for Notion API calls that handles 429 rate limits
-async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> {
+// Retry wrapper for Notion API calls that handles 429 rate limits. Honours
+// the Retry-After header when Notion sends one — its rate-limit windows are
+// often tens of seconds, which the old fixed 2/4/8s backoff never outlasted,
+// so builds kept failing mid-prerender.
+async function withRetry<T>(fn: () => Promise<T>, maxRetries = 4): Promise<T> {
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       return await fn();
     } catch (error: any) {
       if (error?.status === 429 && attempt < maxRetries) {
-        const delay = Math.pow(2, attempt + 1) * 1000; // 2s, 4s, 8s
+        const retryAfter = Number(error?.headers?.get?.("retry-after")) * 1000 || 0;
+        const delay = Math.min(Math.max(retryAfter, Math.pow(2, attempt + 1) * 1000), 30000);
         console.warn(`Notion rate limited, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
         await new Promise(resolve => setTimeout(resolve, delay));
         continue;
