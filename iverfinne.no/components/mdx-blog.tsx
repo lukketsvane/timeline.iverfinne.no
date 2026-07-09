@@ -495,7 +495,7 @@ export default function MDXBlog({ initialPosts = [], initialType, initialView, i
         {/* Search + category filters only apply to the timeline; the gallery and
             sketchbook tabs show everything, so hide them there. */}
         {view === 'timeline' && (
-          <>
+          <div>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-gray-500" />
               <Input
@@ -514,30 +514,39 @@ export default function MDXBlog({ initialPosts = [], initialType, initialView, i
                 <ChevronDown className={cn('h-4 w-4 transition-transform', filtersOpen && 'rotate-180')} />
               </button>
             </div>
-            {/* Empty selection means "all" — so every pill reads as selected by default. */}
-            {filtersOpen && (
-            <div className="flex flex-wrap gap-1.5">
-              {contentTypes.map((type) => (
-                <FilterButton
-                  key={type.value}
-                  label={type.label}
-                  isActive={selectedTypes.length === 0 || selectedTypes.includes(type.value)}
-                  onClick={() => {
-                    setSelectedTypes((prev) => {
-                      // From "all" (empty), the first click isolates to just this type.
-                      if (prev.length === 0) return [type.value]
-                      // Otherwise toggle it; deselecting the last one returns to "all".
-                      return prev.includes(type.value)
-                        ? prev.filter((t) => t !== type.value)
-                        : [...prev, type.value]
-                    })
-                  }}
-                  variant="type"
-                />
-              ))}
-            </div>
-            )}
-          </>
+            {/* Always mounted so open/close is a smooth height animation instead of
+                a pop-in; `inert` keeps the hidden pills out of tab order. The pt-4
+                lives inside the measured content, so it collapses along with it. */}
+            <motion.div
+              initial={false}
+              animate={{ height: filtersOpen ? 'auto' : 0, opacity: filtersOpen ? 1 : 0 }}
+              transition={{ duration: 0.25, ease: 'easeOut' }}
+              className="overflow-hidden"
+              inert={!filtersOpen}
+            >
+              {/* Empty selection means "all" — so every pill reads as selected by default. */}
+              <div className="flex flex-wrap gap-1.5 pt-4">
+                {contentTypes.map((type) => (
+                  <FilterButton
+                    key={type.value}
+                    label={type.label}
+                    isActive={selectedTypes.length === 0 || selectedTypes.includes(type.value)}
+                    onClick={() => {
+                      setSelectedTypes((prev) => {
+                        // From "all" (empty), the first click isolates to just this type.
+                        if (prev.length === 0) return [type.value]
+                        // Otherwise toggle it; deselecting the last one returns to "all".
+                        return prev.includes(type.value)
+                          ? prev.filter((t) => t !== type.value)
+                          : [...prev, type.value]
+                      })
+                    }}
+                    variant="type"
+                  />
+                ))}
+              </div>
+            </motion.div>
+          </div>
         )}
         {view === 'gallery' ? (
           // Pull out to the container edge on mobile (the -mx exactly cancels the
@@ -569,7 +578,7 @@ export default function MDXBlog({ initialPosts = [], initialType, initialView, i
         <motion.div
           className="relative mt-4"
           layout
-          transition={{ duration: 0.2, ease: "linear" }}
+          transition={{ duration: 0.25, ease: "easeOut" }}
         >
           {filteredPosts.length > 0 ? (
             filteredPosts.map((post, index) => {
@@ -584,7 +593,14 @@ export default function MDXBlog({ initialPosts = [], initialType, initialView, i
                     <div className="relative grid grid-cols-[auto,1fr] gap-3 sm:gap-4 max-w-full">
                       <div className="w-14 sm:w-20 shrink-0" />
                       <div className="relative">
-                        <div className="absolute -left-1.5 sm:-left-2 w-0.5 -top-4 bottom-0 bg-gray-200 dark:bg-gray-700 -translate-x-1/2" />
+                        {/* The very first year pill is where the line begins: start it
+                            behind the pill (top-1/2) instead of poking a floating stub
+                            up into the search/filter area. Later year rows bridge the
+                            gap up to the previous card with -top-4. */}
+                        <div className={cn(
+                          "absolute -left-1.5 sm:-left-2 w-0.5 bottom-0 bg-gray-200 dark:bg-gray-700 -translate-x-1/2",
+                          index === 0 ? "top-1/2" : "-top-4"
+                        )} />
                         <div className="py-4">
                           {/* Tapping the year pill collapses/expands every post from that year. */}
                           <button

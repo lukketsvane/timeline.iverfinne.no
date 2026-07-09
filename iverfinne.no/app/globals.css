@@ -100,6 +100,12 @@ body {
     }
   }
 
+  /* Fast consecutive taps (toggling filters, expanding cards) must register as
+     two taps, not iOS Safari's double-tap-to-zoom. Scroll and pinch still work. */
+  a, button, input, select, textarea, label, summary, [role="button"] {
+    touch-action: manipulation;
+  }
+
   p {
     font-family: var(--font-newsreader), serif;
     font-feature-settings: "kern", "liga";

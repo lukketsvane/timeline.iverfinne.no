@@ -25,11 +25,14 @@ const OG_IMAGE = {
   alt: APP_DEFAULT_TITLE,
 }
 
-// No maximumScale: pinch-zoom must stay available (a11y). iOS input zoom is
-// already prevented by the 16px input font-size rule in globals.css.
+// maximumScale stops iOS Safari's automatic zoom-in when focusing the search
+// field — the 16px input font-size rule in globals.css alone proved
+// insufficient on current iOS. Safari has ignored maximum-scale for user
+// pinch gestures since iOS 10, so pinch-zoom (a11y) still works there.
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
+  maximumScale: 1,
   viewportFit: 'cover',
 }
 
