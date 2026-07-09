@@ -313,7 +313,7 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
   if (modelOnlySrc) {
     return (
       <div className="relative grid grid-cols-[auto,1fr] gap-3 sm:gap-4 max-w-full">
-        <div className="relative w-14 sm:w-20 shrink-0">
+        <div className="relative w-11 sm:w-20 shrink-0">
           <time className="absolute right-1.5 sm:right-2 top-3 sm:top-5 whitespace-nowrap lowercase text-muted-foreground leading-tight">
             <span className="font-extrabold text-sm sm:text-lg">{day}.</span>
             <span className="ml-1 text-xs sm:text-lg">{month}</span>
