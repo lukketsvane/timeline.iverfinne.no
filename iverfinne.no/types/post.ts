@@ -32,5 +32,8 @@ export interface Post {
   // Pixel dimensions keyed by proxy src (body images, cover, sosialbilete),
   // so frames can render at the real aspect ratio before the image loads.
   imageDims?: Record<string, { w: number; h: number }>
+  // Estimated reading time in minutes, from the server-side body word count —
+  // available immediately, unlike content, which the client fetches lazily.
+  readTime?: number
 }
 
