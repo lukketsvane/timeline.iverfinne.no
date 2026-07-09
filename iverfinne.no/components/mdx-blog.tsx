@@ -495,7 +495,17 @@ export default function MDXBlog({ initialPosts = [], initialType, initialView, i
         {/* Search + category filters only apply to the timeline; the gallery and
             sketchbook tabs show everything, so hide them there. */}
         {view === 'timeline' && (
-          <div>
+          <div className="relative">
+            {/* Continues the timeline's vertical line up from the first year pill
+                so it touches the search field, threading behind the filter pills
+                when they're open. Sits at the same x as the row connectors:
+                gutter + grid gap - the connectors' -left offset, centered. Zero
+                height while the filters are closed (top-10 = input height); the
+                first year row's -top-4 bridges the block margin below. */}
+            <div
+              aria-hidden
+              className="absolute left-[3.125rem] sm:left-[5.5rem] top-10 bottom-0 w-0.5 -translate-x-1/2 bg-gray-200 dark:bg-gray-700"
+            />
             <div className="relative">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-gray-500" />
               <Input
@@ -521,7 +531,7 @@ export default function MDXBlog({ initialPosts = [], initialType, initialView, i
               initial={false}
               animate={{ height: filtersOpen ? 'auto' : 0, opacity: filtersOpen ? 1 : 0 }}
               transition={{ duration: 0.25, ease: 'easeOut' }}
-              className="overflow-hidden"
+              className="relative overflow-hidden"
               inert={!filtersOpen}
             >
               {/* Empty selection means "all" — so every pill reads as selected by default. */}
@@ -591,16 +601,12 @@ export default function MDXBlog({ initialPosts = [], initialType, initialView, i
                 <div key={post.uid}>
                   {showYear && (
                     <div className="relative grid grid-cols-[auto,1fr] gap-3 sm:gap-4 max-w-full">
-                      <div className="w-14 sm:w-20 shrink-0" />
+                      <div className="w-11 sm:w-20 shrink-0" />
                       <div className="relative">
-                        {/* The very first year pill is where the line begins: start it
-                            behind the pill (top-1/2) instead of poking a floating stub
-                            up into the search/filter area. Later year rows bridge the
-                            gap up to the previous card with -top-4. */}
-                        <div className={cn(
-                          "absolute -left-1.5 sm:-left-2 w-0.5 bottom-0 bg-gray-200 dark:bg-gray-700 -translate-x-1/2",
-                          index === 0 ? "top-1/2" : "-top-4"
-                        )} />
+                        {/* -top-4 spans the 1rem gap up to the element above — the
+                            previous card, or for the first year the search/filter
+                            block, whose own extender line continues up to the input. */}
+                        <div className="absolute -left-1.5 sm:-left-2 w-0.5 -top-4 bottom-0 bg-gray-200 dark:bg-gray-700 -translate-x-1/2" />
                         <div className="py-4">
                           {/* Tapping the year pill collapses/expands every post from that year. */}
                           <button
