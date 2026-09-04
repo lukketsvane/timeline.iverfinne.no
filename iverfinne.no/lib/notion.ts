@@ -562,6 +562,16 @@ export const getPublishedPosts = cache(async (): Promise<Post[]> => {
       console.error("getPublishedPosts failed, serving last known good list:", error);
       return lastGoodPosts;
     }
+    // A build starts with no last-known-good copy, so a Notion rate limit
+    // during prerender took the whole deploy down with it (the feed and the
+    // sitemap fetch the same list, and there is no cache to fall back on).
+    // Ship an empty list instead: every consumer is ISR-backed and fills in
+    // on the first request past its revalidate window. At runtime the error
+    // still propagates.
+    if (process.env.NEXT_PHASE === "phase-production-build") {
+      console.error("getPublishedPosts failed during build, prerendering an empty list:", error);
+      return [];
+    }
     throw error;
   }
 });
