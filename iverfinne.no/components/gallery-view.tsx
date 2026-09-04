@@ -125,6 +125,26 @@ function fmtDate(d?: string): string {
   return day && mo && y ? `${day}.${mo}.${y}` : d
 }
 
+// Where a frame leads: the post page, or straight out for a Lenkje post.
+function PostLink({ post, className, children }: {
+  post: GalleryPost
+  className?: string
+  children: React.ReactNode
+}) {
+  if (post.type === 'Lenkje' && post.url) {
+    return (
+      <a href={post.url} target="_blank" rel="noopener noreferrer" className={className}>
+        {children}
+      </a>
+    )
+  }
+  return (
+    <Link href={`/${post.type.toLowerCase()}/${post.slug}`} className={className}>
+      {children}
+    </Link>
+  )
+}
+
 function GalleryFrame({ item, index, onOpen }: { item: GalleryItem; index: number; onOpen: () => void }) {
   const [loaded, setLoaded] = useState(false)
   // Real ratio when the server probed it (no layout shift); otherwise start
@@ -133,6 +153,18 @@ function GalleryFrame({ item, index, onOpen }: { item: GalleryItem; index: numbe
     item.dims ? closestAr(item.dims.w / item.dims.h) : SNAP_ARS[hash(item.key) % SNAP_ARS.length]
   )
   const color = FILL_COLORS[hash('clr' + item.key) % FILL_COLORS.length]
+  const imgRef = useRef<HTMLImageElement>(null)
+
+  // The frames are server-rendered, so an image that finishes before hydration
+  // (a cached one, usually) fires its load event with no React handler attached
+  // — onLoad alone leaves it stuck at opacity-0 behind the fill colour. Catch
+  // that case on mount.
+  useEffect(() => {
+    const img = imgRef.current
+    if (!img?.complete || !img.naturalWidth) return
+    setLoaded(true)
+    setAr(closestAr(img.naturalWidth / img.naturalHeight))
+  }, [])
 
   // 3D models render live in the grid (rotatable in place, no lightbox).
   if (item.model) {
@@ -144,36 +176,63 @@ function GalleryFrame({ item, index, onOpen }: { item: GalleryItem; index: numbe
   }
 
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      className="block w-full rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400 dark:focus-visible:ring-gray-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900"
-      aria-label={item.alt || item.post.title}
+    <div
+      className="group relative w-full overflow-hidden rounded-2xl transition-transform duration-300 ease-out hover:scale-[1.02]"
+      style={{ aspectRatio: String(ar), backgroundColor: color }}
     >
-      <div
-        className="relative w-full overflow-hidden rounded-2xl transition-transform duration-300 ease-out hover:scale-[1.02]"
-        style={{ aspectRatio: String(ar), backgroundColor: color }}
+      <img
+        ref={imgRef}
+        src={notionImgSrc(item.src, 640)}
+        srcSet={notionImgSrcSet(item.src)}
+        sizes={FRAME_SIZES}
+        alt={item.alt || item.post.title}
+        // Eagerly load the first frames (near the top) so they appear first.
+        loading={index < 6 ? 'eager' : 'lazy'}
+        fetchPriority={index < 6 ? 'high' : 'auto'}
+        onLoad={(e) => {
+          setLoaded(true)
+          const img = e.currentTarget
+          if (img.naturalWidth && img.naturalHeight) setAr(closestAr(img.naturalWidth / img.naturalHeight))
+        }}
+        className={cn(
+          'absolute inset-0 h-full w-full object-cover transition-opacity duration-500',
+          loaded ? 'opacity-100' : 'opacity-0'
+        )}
+      />
+      <button
+        type="button"
+        onClick={onOpen}
+        aria-label={item.alt || item.post.title}
+        className="absolute inset-0 h-full w-full rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-cyan-400"
+      />
+      {/* Title + date, so a frame is never a mute block and always has a way
+          into the post. A block with no image yet (or a broken one) is the
+          label: the whole colour field links. Once the image is up the label
+          steps back to a hover strip. */}
+      <PostLink
+        post={item.post}
+        className={cn(
+          'absolute flex items-end justify-between gap-2 p-3 text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.45)] transition-opacity duration-200',
+          loaded
+            ? // Hover devices only: on a touch screen the tap that "hovers" would
+              // land on the strip and navigate instead of opening the frame.
+              'inset-x-0 bottom-0 bg-gradient-to-t from-black/70 via-black/25 to-transparent opacity-0 pointer-events-none [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-hover:pointer-events-auto focus-visible:opacity-100 focus-visible:pointer-events-auto focus-visible:outline-none'
+            : 'inset-0'
+        )}
       >
-        <img
-          src={notionImgSrc(item.src, 640)}
-          srcSet={notionImgSrcSet(item.src)}
-          sizes={FRAME_SIZES}
-          alt={item.alt || item.post.title}
-          // Eagerly load the first frames (near the top) so they appear first.
-          loading={index < 6 ? 'eager' : 'lazy'}
-          fetchPriority={index < 6 ? 'high' : 'auto'}
-          onLoad={(e) => {
-            setLoaded(true)
-            const img = e.currentTarget
-            if (img.naturalWidth && img.naturalHeight) setAr(closestAr(img.naturalWidth / img.naturalHeight))
-          }}
-          className={cn(
-            'absolute inset-0 h-full w-full object-cover transition-opacity duration-500',
-            loaded ? 'opacity-100' : 'opacity-0'
+        <span className="min-w-0">
+          <span className="block truncate text-xs leading-snug">{item.post.title}</span>
+          {item.post.date && (
+            <span className="block text-[10px] tabular-nums text-white/70">{fmtDate(item.post.date)}</span>
           )}
-        />
-      </div>
-    </button>
+        </span>
+        {item.post.type === 'Lenkje' && item.post.url ? (
+          <ExternalLink className="h-4 w-4 shrink-0 text-white/80" />
+        ) : (
+          <ArrowUpRight className="h-4 w-4 shrink-0 text-white/80" />
+        )}
+      </PostLink>
+    </div>
   )
 }
 
@@ -253,7 +312,6 @@ function Lightbox({ items, index, onClose, onNavigate }: {
   const item = items[index]
   const post = item.post
   const isLink = post.type === 'Lenkje' && post.url
-  const iconClass = 'text-white/70 hover:text-white transition-colors'
   const swipeScale = 1 - Math.min(Math.abs(offset.y) / 500, 0.15)
 
   return (
@@ -334,21 +392,20 @@ function Lightbox({ items, index, onClose, onNavigate }: {
           )}
         </div>
 
-        <div className="flex items-center justify-between gap-4">
-          <div className="min-w-0">
-            <p className="truncate font-sans text-sm leading-snug text-white/90">{post.title}</p>
-            <span className="text-xs tabular-nums text-white/50">{fmtDate(post.date)}</span>
-          </div>
-          {isLink ? (
-            <a href={post.url} target="_blank" rel="noopener noreferrer" className={iconClass} aria-label="Opne lenkje">
-              <ExternalLink className="h-6 w-6" />
-            </a>
-          ) : (
-            <Link href={`/${post.type.toLowerCase()}/${post.slug}`} className={iconClass} aria-label="Opne innlegg">
-              <ArrowUpRight className="h-6 w-6" />
-            </Link>
-          )}
-        </div>
+        {/* The whole row is the way into the post — a 24px icon was too small
+            a target to find, let alone hit. */}
+        <PostLink
+          post={post}
+          className="group/open -mx-2 flex items-center justify-between gap-4 rounded-lg px-2 py-1 text-white/80 transition-colors hover:text-white"
+        >
+          <span className="min-w-0">
+            <span className="block truncate font-sans text-sm leading-snug underline-offset-4 group-hover/open:underline">
+              {post.title}
+            </span>
+            <span className="block text-xs tabular-nums text-white/50">{fmtDate(post.date)}</span>
+          </span>
+          {isLink ? <ExternalLink className="h-6 w-6 shrink-0" /> : <ArrowUpRight className="h-6 w-6 shrink-0" />}
+        </PostLink>
       </div>
     </motion.div>
   )
