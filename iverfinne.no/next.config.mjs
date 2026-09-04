@@ -1,6 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // Each page's Notion work is bounded (see lib/notion.ts), but a cold build
+  // cache still means dozens of block walks per page; 60s was tight enough
+  // that prerenders were failing "after 3 attempts".
+  staticPageGenerationTimeout: 180,
   pageExtensions: ['js', 'jsx', 'ts', 'tsx', 'md', 'mdx'],
   
   images: {

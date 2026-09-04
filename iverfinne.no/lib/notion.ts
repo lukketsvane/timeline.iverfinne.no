@@ -11,8 +11,15 @@ import { unstable_cache } from "next/cache";
 // React cache() dedupes Notion calls within a single render pass; the
 // route-level revalidate=60 still caches the rendered output across requests.
 
+// A build is on a clock Next enforces per page (staticPageGenerationTimeout),
+// so build-time Notion work is bounded everywhere: shorter per-request
+// timeouts here, a smaller retry budget in withRetry, and an empty-list
+// fallback in getPublishedPosts. ISR fills the content in on first request.
+const IS_BUILD = process.env.NEXT_PHASE === "phase-production-build";
+
 const notion = new Client({
   auth: process.env.NOTION_API_KEY,
+  ...(IS_BUILD ? { timeoutMs: 15000 } : {}),
 });
 
 // Every unstable_cache entry that ultimately reads from Notion carries this
@@ -26,14 +33,14 @@ export const NOTION_CACHE_TAG = "notion-content";
 // the Retry-After header when Notion sends one — its rate-limit windows are
 // often tens of seconds, which the old fixed 2/4/8s backoff never outlasted,
 // so builds kept failing mid-prerender.
-async function withRetry<T>(fn: () => Promise<T>, maxRetries = 4): Promise<T> {
+async function withRetry<T>(fn: () => Promise<T>, maxRetries = IS_BUILD ? 2 : 4): Promise<T> {
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       return await fn();
     } catch (error: any) {
       if (error?.status === 429 && attempt < maxRetries) {
         const retryAfter = Number(error?.headers?.get?.("retry-after")) * 1000 || 0;
-        const delay = Math.min(Math.max(retryAfter, Math.pow(2, attempt + 1) * 1000), 30000);
+        const delay = Math.min(Math.max(retryAfter, Math.pow(2, attempt + 1) * 1000), IS_BUILD ? 4000 : 30000);
         console.warn(`Notion rate limited, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
         await new Promise(resolve => setTimeout(resolve, delay));
         continue;
@@ -568,7 +575,7 @@ export const getPublishedPosts = cache(async (): Promise<Post[]> => {
     // Ship an empty list instead: every consumer is ISR-backed and fills in
     // on the first request past its revalidate window. At runtime the error
     // still propagates.
-    if (process.env.NEXT_PHASE === "phase-production-build") {
+    if (IS_BUILD) {
       console.error("getPublishedPosts failed during build, prerendering an empty list:", error);
       return [];
     }
