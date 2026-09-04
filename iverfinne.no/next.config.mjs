@@ -1,9 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  // Each page's Notion work is bounded (see lib/notion.ts), but a cold build
-  // cache still means dozens of block walks per page; 60s was tight enough
-  // that prerenders were failing "after 3 attempts".
+  // Prerendering a page walks every post's blocks, and the Notion retry
+  // budget alone (four attempts, waits up to its 30s Retry-After) outlasts
+  // the 60s default — which is what "Failed to build ... after 3 attempts"
+  // looks like.
   staticPageGenerationTimeout: 180,
   pageExtensions: ['js', 'jsx', 'ts', 'tsx', 'md', 'mdx'],
   
