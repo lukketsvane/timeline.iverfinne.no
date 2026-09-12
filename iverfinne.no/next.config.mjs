@@ -3,8 +3,8 @@ const nextConfig = {
   reactStrictMode: true,
   // MDXRemote must share Next.js's React runtime when bundled by Turbopack.
   transpilePackages: ['next-mdx-remote'],
-  // Leave room for paced Notion requests during initial prerendering.
-  staticPageGenerationTimeout: 180,
+  // Allow paced archive reads plus full Retry-After cooldowns on cold builds.
+  staticPageGenerationTimeout: 600,
   pageExtensions: ['js', 'jsx', 'ts', 'tsx', 'md', 'mdx'],
   
   images: {

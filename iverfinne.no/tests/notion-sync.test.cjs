@@ -36,6 +36,32 @@ function transport(responses, extra = {}) {
 }
 const ok = () => Response.json({ ok: true });
 
+test('build client waits through a one-minute cooldown; runtime stays bounded', async () => {
+  const savedPhase = process.env.NEXT_PHASE;
+  try {
+    for (const build of [true, false]) {
+      if (build) process.env.NEXT_PHASE = 'phase-production-build';
+      else delete process.env.NEXT_PHASE;
+      let clientOptions;
+      let harness;
+      load('lib/notion-client.ts', {
+        '@notionhq/client': { Client: class { constructor(options) { clientOptions = options; } } },
+        './notion-transport': { createNotionFetch: options => {
+          harness = transport([new Response('', { status: 429, headers: { 'Retry-After': '60' } }), ok()], options);
+          return harness.send;
+        } },
+      });
+      const response = await clientOptions.fetch('https://api.notion.com/v1/pages/a');
+      assert.equal(response.status, build ? 200 : 429);
+      assert.deepEqual(harness.calls.map(call => call.at), build ? [0, 60000] : [0]);
+      assert.equal(clientOptions.timeoutMs, build ? 185000 : 60000);
+    }
+  } finally {
+    if (savedPhase === undefined) delete process.env.NEXT_PHASE;
+    else process.env.NEXT_PHASE = savedPhase;
+  }
+});
+
 test('concurrent SDK calls are paced, not burst-fired', async () => {
   const { send, calls } = transport([ok(), ok(), ok(), ok()]);
   await Promise.all(Array.from({ length: 4 }, () => send('https://api.notion.com/v1/pages/test')));

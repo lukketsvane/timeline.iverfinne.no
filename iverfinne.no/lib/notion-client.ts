@@ -4,10 +4,17 @@ import { createNotionFetch } from './notion-transport';
 export const NOTION_CACHE_TAG = 'notion-content';
 export const NOTION_REFRESH_SECONDS = 300;
 
+// Initial prerendering has no cached fallback and can wait through Notion's
+// minute-long cooldowns. Visitor requests retain the short retry budget.
+const isBuild = process.env.NEXT_PHASE === 'phase-production-build';
+
 export const notion = new Client({
   auth: process.env.NOTION_API_KEY,
-  timeoutMs: 60_000,
-  fetch: createNotionFetch() as NonNullable<ConstructorParameters<typeof Client>[0]>['fetch'],
+  timeoutMs: isBuild ? 185_000 : 60_000,
+  fetch: createNotionFetch({
+    budgetMs: isBuild ? 180_000 : 20_000,
+    intervalMs: isBuild ? 500 : 400,
+  }) as NonNullable<ConstructorParameters<typeof Client>[0]>['fetch'],
 });
 
 // Keep pagination atomic: a failed later page must fail the refresh, never
