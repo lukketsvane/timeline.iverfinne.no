@@ -532,6 +532,62 @@ export const getPublishedPosts = cache(async (): Promise<Post[]> => {
   }
 });
 
+// Metadata-only post list: the database rows and nothing else.
+//
+// getPublishedPosts fans one block-listing out per published post to collect
+// body media. The sitemap and the feed need none of it — just slug, type,
+// date, title and description — and paying for that scan cost /sitemap.xml a
+// 60s function timeout (103 posts is ~41s of Notion pacing before a single
+// image probe). Two database queries cover it instead.
+const getPublishedPostsLiteData = unstable_cache(async (): Promise<Post[]> => {
+  const databaseId = getDatabaseId();
+  try {
+    const response = await queryAllPages({
+      database_id: databaseId,
+      filter: {
+        or: [
+          { property: "Status", status: { equals: "Ferdig" } },
+          { property: "Status", status: { equals: "Complete" } }
+        ]
+      },
+      sorts: [{ property: "Dato", direction: "descending" }],
+    });
+
+    return response.results
+      .filter((page: any) => (page.properties?.Type?.select?.name || "").toLowerCase() !== "skissebok")
+      .map((page: any): Post => {
+        const props = getPageProperties(page);
+        return {
+          ...props,
+          content: "",
+          thumbnails: props.image ? [{ src: props.image, alt: props.title }] : [],
+        };
+      });
+  } catch (error) {
+    console.error("Notion API error (lite list):", error);
+    throw error;
+  }
+}, ["published-posts-lite"], {
+  revalidate: NOTION_REFRESH_SECONDS,
+  tags: [NOTION_CACHE_TAG],
+});
+
+let lastGoodLitePosts: Post[] | null = null;
+
+export const getPublishedPostsLite = cache(async (): Promise<Post[]> => {
+  try {
+    const posts = await getPublishedPostsLiteData();
+    lastGoodLitePosts = posts;
+    return posts;
+  } catch (error) {
+    if (lastGoodLitePosts) {
+      console.error("getPublishedPostsLite failed, serving last known good list:", error);
+      return lastGoodLitePosts;
+    }
+    throw error;
+  }
+});
+
 // ── Skissebok ───────────────────────────────────────────────────────────────
 // Sketchbook drawings live in the same Notion database as Type = "Skissebok".
 // Each row carries a Dato, a Format (page | spread), an Nr, and the drawing
