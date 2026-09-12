@@ -48,8 +48,13 @@ export default async function DynamicPage({ params }: { params: Promise<{ slug: 
     }
 
     // post.content is already populated by getPostBySlug — serialize it directly
-    // to avoid a second round of Notion API calls inside serializePostContent
-    const serialized = await serializeMarkdown(post.content)
+    // to avoid a second round of Notion API calls inside serializePostContent.
+    // Interaktiv posts are the exception: they render their body in an iframe
+    // and never touch `serialized`, and compiling one (100KB of HTML in, 2.2MB
+    // of MDX out for /interaktiv/formspraak) only burned render time and
+    // inflated the payload.
+    const serialized =
+      post.type === 'Interaktiv' ? undefined : await serializeMarkdown(post.content)
     const fullPost = { ...post, serialized }
 
     return <SlugPageClient post={JSON.parse(JSON.stringify(fullPost))} />
