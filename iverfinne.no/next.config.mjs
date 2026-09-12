@@ -1,10 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  // Prerendering a page walks every post's blocks, and the Notion retry
-  // budget alone (four attempts, waits up to its 30s Retry-After) outlasts
-  // the 60s default — which is what "Failed to build ... after 3 attempts"
-  // looks like.
+  // MDXRemote must share Next.js's React runtime when bundled by Turbopack.
+  transpilePackages: ['next-mdx-remote'],
+  // Leave room for paced Notion requests during initial prerendering.
   staticPageGenerationTimeout: 180,
   pageExtensions: ['js', 'jsx', 'ts', 'tsx', 'md', 'mdx'],
   
@@ -70,9 +69,12 @@ const nextConfig = {
 
   // Enable experimental features for better MDX support
   experimental: {
+    // Each worker has its own Notion queue. One prerender worker avoids
+    // multiplying the API rate across home, feed, sitemap and game pages.
+    cpus: 1,
+    staticGenerationMaxConcurrency: 1,
     // mdxRs: true
   }
 }
 
 export default nextConfig
-
