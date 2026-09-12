@@ -8,6 +8,7 @@ type TransportOptions = {
   random?: () => number;
   intervalMs?: number;
   budgetMs?: number;
+  queueCeilingMs?: number;
   maxRetries?: number;
 };
 
@@ -26,6 +27,7 @@ export function createNotionFetch(options: TransportOptions = {}): typeof fetch 
   const random = options.random ?? Math.random;
   const interval = options.intervalMs ?? 400;
   const budget = options.budgetMs ?? 20_000;
+  const queueCeiling = options.queueCeilingMs ?? Math.max(budget, 50_000);
   const retries = options.maxRetries ?? 3;
   let nextStart = 0;
   let cooldownUntil = 0;
@@ -66,9 +68,14 @@ export function createNotionFetch(options: TransportOptions = {}): typeof fetch 
   }
 
   return (input, init) => {
-    // Include time spent waiting in the queue in the request budget.
-    const deadline = now() + budget;
-    const result = queue.then(() => run(input, init, deadline));
+    // Two clocks, because they bound different things. The budget covers this
+    // request's own waiting — a shared cooldown, its retries — and starts when
+    // the request reaches the head of the queue, so a request is never doomed
+    // by the pacing of the ones ahead of it. The ceiling runs from the moment
+    // it was queued and caps the total, so a long fan-out still cannot keep a
+    // serverless function alive past its limit.
+    const ceiling = now() + queueCeiling;
+    const result = queue.then(() => run(input, init, Math.min(now() + budget, ceiling)));
     queue = result.then(() => undefined, () => undefined);
     return result;
   };

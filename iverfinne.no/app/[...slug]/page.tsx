@@ -23,9 +23,10 @@ export default async function DynamicPage({ params }: { params: Promise<{ slug: 
       )
     }
 
-    // Bare slug — find post and redirect to /type/slug
-    const posts = await getPublishedPosts()
-    const found = posts.find(p => p.slug === segments[0])
+    // Bare slug — find post and redirect to /type/slug. Looking the single
+    // post up directly costs one database query; loading the whole list here
+    // rescanned every published page's blocks just to resolve one redirect.
+    const found = await getPostBySlug(segments[0])
     if (found) {
       redirect(`/${found.type.toLowerCase()}/${found.slug}`)
     }
