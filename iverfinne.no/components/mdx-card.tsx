@@ -115,6 +115,8 @@ interface MDXCardProps {
   isExpanded: boolean
   onToggle: () => void
   serializedContent: MDXRemoteSerializeResult | null
+  contentError?: boolean
+  onRetry?: () => void
 }
 
 // Route NextImage widths through the resizing proxy for /api/notion-image
@@ -217,7 +219,7 @@ function extractOutgoingLinks(content: string, postUrl?: string): SocialLink[] {
   return links
 }
 
-export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCardProps) {
+export function MDXCard({ post, isExpanded, onToggle, serializedContent, contentError, onRetry }: MDXCardProps) {
   const [enlargedImageIndex, setEnlargedImageIndex] = useState<number | null>(null)
   const bookCover = post.type === "Bok" ? (post.image || post.icon || getFirstImageFromContent(post.content)) : null
   const projectThumb = post.type === "Prosjekt" ? (post.image || getFirstImageFromContent(post.content)) : null
@@ -685,7 +687,14 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent }: MDXCa
                     )}
                     onClick={(e) => e.stopPropagation()}
                   >
-                    {post.type === "Presentasjon" && figmaUrl ? (
+                    {!serializedContent ? (
+                      contentError ? (
+                        <p role="alert" className="text-sm text-muted-foreground">
+                          Kunne ikkje hente innhaldet.{' '}
+                          <button type="button" onClick={onRetry} className="underline">Prøv igjen</button>
+                        </p>
+                      ) : <p role="status" className="text-sm text-muted-foreground">Hentar innhald…</p>
+                    ) : post.type === "Presentasjon" && figmaUrl ? (
                       <div className="aspect-video w-full rounded-lg overflow-hidden">
                         <iframe
                           src={figmaUrl}

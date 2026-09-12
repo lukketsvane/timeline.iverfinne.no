@@ -1,12 +1,10 @@
 import { NextRequest } from 'next/server'
-import { Client } from '@notionhq/client'
 import { unstable_cache } from 'next/cache'
-import { NOTION_CACHE_TAG } from '@/lib/notion'
+import { notion } from '@/lib/notion-client'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
 
-const notion = new Client({ auth: process.env.NOTION_API_KEY })
 
 // Notion's signed S3 URLs live for ~1h. Caching the resolved URL for 29min
 // means at most two Notion API calls per image per hour — instead of one per
@@ -20,7 +18,7 @@ const resolveBlockFileUrl = unstable_cache(
     return data.type === 'external' ? data.external.url : data.file.url
   },
   ['notion-image-block-url'],
-  { revalidate: 1740, tags: [NOTION_CACHE_TAG] }
+  { revalidate: 1740 }
 )
 
 const resolvePageImageUrl = unstable_cache(
@@ -46,7 +44,7 @@ const resolvePageImageUrl = unstable_cache(
     return imageUrl ?? null
   },
   ['notion-image-page-url'],
-  { revalidate: 1740, tags: [NOTION_CACHE_TAG] }
+  { revalidate: 1740 }
 )
 
 // Allowed hostnames for the URL-based image proxy to prevent SSRF

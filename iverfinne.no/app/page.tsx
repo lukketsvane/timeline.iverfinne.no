@@ -1,6 +1,4 @@
-// Freshness comes from the Notion webhook (revalidateTag + revalidatePath);
-// this window is only the fallback, so it can be generous — short windows
-// used to re-render into a rate-limited Notion API and crash the page.
+// Automatic ISR refresh; Make and webhooks are optional.
 export const revalidate = 300
 // Cold-cache regenerations fan out per-post Notion calls + dimension probes;
 // give them room beyond the 10s default so ISR never times out.
