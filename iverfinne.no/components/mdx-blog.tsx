@@ -190,7 +190,7 @@ export default function MDXBlog({ initialPosts = [], initialType, initialView, i
   }, [posts])
 
   const inflightRef = useRef<Set<string>>(new Set())
-  const prefetchStartedRef = useRef(false)
+  const [contentErrors, setContentErrors] = useState<Set<string>>(new Set())
 
   // The header logo is a short video that starts and ends on the same fully
   // coloured frame as its poster, so hovering or tapping plays the animation
@@ -213,7 +213,6 @@ export default function MDXBlog({ initialPosts = [], initialType, initialView, i
 
   useEffect(() => {
     setPosts(initialPosts)
-    prefetchStartedRef.current = false
   }, [initialPosts])
 
   // Update selected types if initialType changes (via route navigation)
@@ -336,41 +335,20 @@ export default function MDXBlog({ initialPosts = [], initialType, initialView, i
   const ensureSerialized = useCallback(async (id: string, uid: string) => {
     if (inflightRef.current.has(id)) return
     inflightRef.current.add(id)
+    setContentErrors(prev => { const next = new Set(prev); next.delete(id); return next })
     try {
-      const res = await fetch(`/api/posts/${id}`)
-      if (res.ok) {
-        const data = await res.json()
-        if (data.source) {
-          setPosts(prev => prev.map(p => (p.uid === uid ? { ...p, serialized: data.source, content: data.content ?? p.content } : p)))
-        }
-      }
+      const res = await fetch(`/api/posts/${id}`, { signal: AbortSignal.timeout(55000) })
+      if (!res.ok) throw new Error(`Content request failed: ${res.status}`)
+      const data = await res.json()
+      if (!data.source) throw new Error('Missing post content')
+      setPosts(prev => prev.map(p => (p.uid === uid ? { ...p, serialized: data.source, content: data.content ?? p.content } : p)))
     } catch (e) {
+      setContentErrors(prev => new Set(prev).add(id))
       console.error("Failed to fetch post content", e)
     } finally {
       inflightRef.current.delete(id)
     }
   }, [])
-
-  // Prefetch every post's content in the background so expanding is instant and
-  // never shows a spinner. Runs once per list, throttled to spare the Notion API.
-  useEffect(() => {
-    if (prefetchStartedRef.current || posts.length === 0) return
-    prefetchStartedRef.current = true
-    const pending = posts.filter(p => p.id && !p.serialized)
-    if (pending.length === 0) return
-    let cancelled = false
-    let i = 0
-    const worker = async () => {
-      while (!cancelled && i < pending.length) {
-        const p = pending[i++]
-        await ensureSerialized(p.id!, p.uid)
-      }
-    }
-    const t = setTimeout(() => {
-      for (let w = 0; w < 3; w++) worker()
-    }, 200)
-    return () => { cancelled = true; clearTimeout(t) }
-  }, [posts, ensureSerialized])
 
   const handlePostToggle = (uid: string) => {
     setExpandedPosts(prev => {
@@ -687,6 +665,8 @@ export default function MDXBlog({ initialPosts = [], initialType, initialView, i
                       isExpanded={expandedPosts.has(post.uid)}
                       onToggle={() => handlePostToggle(post.uid)}
                       serializedContent={post.serialized || null}
+                      contentError={!!post.id && contentErrors.has(post.id)}
+                      onRetry={() => { if (post.id) ensureSerialized(post.id, post.uid) }}
                     />
                   )}
                 </div>

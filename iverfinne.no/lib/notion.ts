@@ -1,5 +1,4 @@
 // Notion API client library
-import { Client } from "@notionhq/client";
 import { NotionToMarkdown } from "notion-to-md";
 import { serialize } from "next-mdx-remote/serialize";
 import type { MDXRemoteSerializeResult } from "next-mdx-remote";
@@ -8,45 +7,11 @@ import rehypePrismPlus from "rehype-prism-plus";
 import { Post } from "@/types/post";
 import { cache } from "react";
 import { unstable_cache } from "next/cache";
-// React cache() dedupes Notion calls within a single render pass; the
-// route-level revalidate=60 still caches the rendered output across requests.
+import { notion, NOTION_CACHE_TAG, NOTION_REFRESH_SECONDS, queryAllPages } from "./notion-client";
+export { NOTION_CACHE_TAG } from "./notion-client";
 
-// Set during `next build`; the post-list fetch falls back to an empty list
-// rather than failing the deploy when Notion is unreachable then.
-const IS_BUILD = process.env.NEXT_PHASE === "phase-production-build";
-
-const notion = new Client({
-  auth: process.env.NOTION_API_KEY,
-});
-
-// Every unstable_cache entry that ultimately reads from Notion carries this
-// tag, so the Notion webhook / manual revalidate route can purge the whole
-// data layer at once. TTLs below are deliberately long — freshness comes from
-// the webhook, not from short revalidation windows (which used to hammer the
-// Notion API into 429s and take the whole site down with it).
-export const NOTION_CACHE_TAG = "notion-content";
-
-// Retry wrapper for Notion API calls that handles 429 rate limits. Honours
-// the Retry-After header when Notion sends one — its rate-limit windows are
-// often tens of seconds, which the old fixed 2/4/8s backoff never outlasted,
-// so builds kept failing mid-prerender.
-async function withRetry<T>(fn: () => Promise<T>, maxRetries = 4): Promise<T> {
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    try {
-      return await fn();
-    } catch (error: any) {
-      if (error?.status === 429 && attempt < maxRetries) {
-        const retryAfter = Number(error?.headers?.get?.("retry-after")) * 1000 || 0;
-        const delay = Math.min(Math.max(retryAfter, Math.pow(2, attempt + 1) * 1000), 30000);
-        console.warn(`Notion rate limited, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
-        await new Promise(resolve => setTimeout(resolve, delay));
-        continue;
-      }
-      throw error;
-    }
-  }
-  throw new Error("Unreachable");
-}
+// Freshness is request-driven: no Make polling or webhook is required.
+// Throwing on failed refreshes lets Next keep its persistent last good data.
 
 // Caps how many of a given async call run at once — getPublishedPosts fans out
 // one block-listing per post, and an uncapped Promise.all would burst-fire the
@@ -121,12 +86,10 @@ n2m.setCustomTransformer("callout", async (block: any) => {
 
   let childContent = "";
   if (block.has_children) {
-    try {
-      const children = await withRetry(() => notion.blocks.children.list({ block_id: block.id }));
-      const childMd = await n2m.blocksToMarkdown(children.results);
-      const childStr = n2m.toMarkdownString(childMd);
-      childContent = childStr.parent || "";
-    } catch { /* ignore child fetch errors */ }
+    const children = await listAllChildren(block.id);
+    const childMd = await n2m.blocksToMarkdown(children);
+    const childStr = n2m.toMarkdownString(childMd);
+    childContent = childStr.parent || "";
   }
 
   const content = [text, childContent].filter(Boolean).join("\n\n");
@@ -149,12 +112,10 @@ for (const level of [1, 2, 3] as const) {
     if (heading.is_toggleable) {
       let childContent = "";
       if (block.has_children) {
-        try {
-          const children = await withRetry(() => notion.blocks.children.list({ block_id: block.id }));
-          const childMd = await n2m.blocksToMarkdown(children.results);
-          const childStr = n2m.toMarkdownString(childMd);
-          childContent = childStr.parent || "";
-        } catch { /* ignore */ }
+        const children = await listAllChildren(block.id);
+        const childMd = await n2m.blocksToMarkdown(children);
+        const childStr = n2m.toMarkdownString(childMd);
+        childContent = childStr.parent || "";
       }
       return `<details>\n<summary>${"#".repeat(level)} ${text}</summary>\n\n${childContent}\n\n</details>`;
     }
@@ -465,7 +426,7 @@ const fetchOgMetadataCached = unstable_cache(
 const getPublishedPostsUncached = async (): Promise<Post[]> => {
   const databaseId = getDatabaseId();
   try {
-    const response = await withRetry(() => notion.databases.query({
+    const response = await queryAllPages({
       database_id: databaseId,
       filter: {
         or: [
@@ -479,7 +440,7 @@ const getPublishedPostsUncached = async (): Promise<Post[]> => {
           direction: "descending",
         },
       ],
-    }));
+    });
 
     // Skissebok rows live in the same database but are drawings, not posts —
     // keep them out of the timeline and gallery.
@@ -491,14 +452,14 @@ const getPublishedPostsUncached = async (): Promise<Post[]> => {
     const limitBodyMedia = createLimiter(4);
 
     const posts = await Promise.all(visible
-      .map(async (page: any): Promise<Post | null> => {
+      .map(async (page: any): Promise<Post> => {
         try {
           const props = getPageProperties(page);
 
           // Every post gets its body images/models collected, so the gallery
           // can show in-post media immediately. Cached per last_edited_time.
           const bodyMedia = await limitBodyMedia(() =>
-            fetchBodyMediaCached(page.id, props.title, page.last_edited_time || "")
+            fetchBodyMediaCached(page, props.title)
           );
 
           let thumbnails = props.image ? [{ src: props.image, alt: props.title }] : [];
@@ -521,7 +482,8 @@ const getPublishedPostsUncached = async (): Promise<Post[]> => {
 
           return {
             ...props,
-            content: "",
+            content: bodyMedia.links?.join("\n") || "",
+            image: props.image || (["Bok", "Prosjekt"].includes(props.type) ? bodyMedia.images[0]?.src : undefined),
             thumbnails,
             bodyImages: bodyMedia.images,
             bodyModels: bodyMedia.models,
@@ -532,11 +494,11 @@ const getPublishedPostsUncached = async (): Promise<Post[]> => {
           };
         } catch (e) {
           console.error(`Error processing Notion page ${page.id}:`, e);
-          return null;
+          throw e;
         }
       }));
 
-    return posts.filter((post): post is Post => post !== null);
+    return posts;
   } catch (error: any) {
     console.error("Notion API error:", error);
     throw error;
@@ -547,7 +509,7 @@ const getPublishedPostsUncached = async (): Promise<Post[]> => {
 // /[...slug] type pages, sitemap, feed, /api/posts) shares one copy instead
 // of each firing its own database query + body-media fan-out at Notion.
 const getPublishedPostsData = unstable_cache(getPublishedPostsUncached, ["published-posts"], {
-  revalidate: 300,
+  revalidate: NOTION_REFRESH_SECONDS,
   tags: [NOTION_CACHE_TAG],
 });
 
@@ -566,16 +528,6 @@ export const getPublishedPosts = cache(async (): Promise<Post[]> => {
       console.error("getPublishedPosts failed, serving last known good list:", error);
       return lastGoodPosts;
     }
-    // A build starts with no last-known-good copy, so a Notion rate limit
-    // during prerender took the whole deploy down with it (the feed and the
-    // sitemap fetch the same list, and there is no cache to fall back on).
-    // Ship an empty list instead: every consumer is ISR-backed and fills in
-    // on the first request past its revalidate window. At runtime the error
-    // still propagates.
-    if (IS_BUILD) {
-      console.error("getPublishedPosts failed during build, prerendering an empty list:", error);
-      return [];
-    }
     throw error;
   }
 });
@@ -586,15 +538,10 @@ export const getPublishedPosts = cache(async (): Promise<Post[]> => {
 // itself (a Teikning/Bilete file property, else the page cover).
 export type SkissebokDrawing = { date: string; format: "page" | "spread"; nr: number; src: string };
 
-export const getSkissebokDrawings = cache(async (): Promise<SkissebokDrawing[]> => {
-  let databaseId: string;
+const getSkissebokDrawingsData = unstable_cache(async (): Promise<SkissebokDrawing[]> => {
+  const databaseId = getDatabaseId();
   try {
-    databaseId = getDatabaseId();
-  } catch {
-    return [];
-  }
-  try {
-    const response = await withRetry(() => notion.databases.query({
+    const response = await queryAllPages({
       database_id: databaseId,
       filter: {
         and: [
@@ -606,7 +553,7 @@ export const getSkissebokDrawings = cache(async (): Promise<SkissebokDrawing[]> 
         ],
       },
       sorts: [{ property: "Dato", direction: "descending" }],
-    }));
+    });
 
     return response.results
       .map((page: any): SkissebokDrawing | null => {
@@ -638,9 +585,10 @@ export const getSkissebokDrawings = cache(async (): Promise<SkissebokDrawing[]> 
       .filter((d): d is SkissebokDrawing => d !== null);
   } catch (error) {
     console.error("Notion skissebok error:", error);
-    return [];
+    throw error;
   }
-});
+}, ["skissebok-drawings"], { revalidate: NOTION_REFRESH_SECONDS, tags: [NOTION_CACHE_TAG] });
+export const getSkissebokDrawings = cache(getSkissebokDrawingsData);
 
 export async function getPostContent(pageId: string): Promise<string> {
   const mdblocks = await n2m.pageToMarkdown(pageId);
@@ -648,11 +596,11 @@ export async function getPostContent(pageId: string): Promise<string> {
   return proxyMarkdownImages(mdObject.parent || "");
 }
 
-// pageToMarkdown recursively lists block children — dozens of Notion calls
-// for a text-heavy page — so a post's markdown must never be rebuilt more
-// than once an hour across all visitors.
+// Share one markdown cache between expanded cards and standalone pages.
+// Time-based refresh is the primary publishing mechanism, including edits
+// inside a page that Make's database watcher might never have noticed.
 export const getPostContentCached = unstable_cache(getPostContent, ["post-content"], {
-  revalidate: 3600,
+  revalidate: NOTION_REFRESH_SECONDS,
   tags: [NOTION_CACHE_TAG],
 });
 
@@ -661,12 +609,12 @@ export const getPostContentCached = unstable_cache(getPostContent, ["post-conten
 // visits.
 export const getSerializedPost = unstable_cache(
   async (pageId: string) => {
-    const content = await getPostContent(pageId);
+    const content = await getPostContentCached(pageId);
     const source = await serializeMarkdown(content);
     return { content, source };
   },
   ["post-serialized"],
-  { revalidate: 3600, tags: [NOTION_CACHE_TAG] }
+  { revalidate: NOTION_REFRESH_SECONDS, tags: [NOTION_CACHE_TAG] }
 );
 
 // Shared MDX serialization — single source of truth for all serialize calls
@@ -701,6 +649,7 @@ export async function serializePostContent(post: Post): Promise<Post & { seriali
 // header bytes per image) so frames can use real aspect ratios immediately.
 
 export type BodyMedia = {
+  links?: string[];
   images: { src: string; alt: string }[];
   models: string[];
   // Set when the body is nothing but (blank paragraphs and) one .glb file —
@@ -746,23 +695,26 @@ function glbFileBlockName(b: any): string {
   );
 }
 
-async function listAllChildren(blockId: string, maxPages = 3): Promise<any[]> {
+async function listAllChildren(blockId: string): Promise<any[]> {
   const results: any[] = [];
   let cursor: string | undefined;
-  for (let i = 0; i < maxPages; i++) {
-    const res: any = await withRetry(() =>
-      notion.blocks.children.list({ block_id: blockId, page_size: 100, start_cursor: cursor })
-    );
+  const seen = new Set<string>();
+  do {
+    const res: any = await notion.blocks.children.list({ block_id: blockId, page_size: 100, start_cursor: cursor });
     results.push(...res.results);
-    if (!res.has_more || !res.next_cursor) break;
+    if (!res.has_more) break;
+    if (!res.next_cursor || seen.has(res.next_cursor)) throw new Error("Invalid Notion block cursor");
+    seen.add(res.next_cursor);
     cursor = res.next_cursor;
-  }
+  } while (cursor);
   return results;
 }
 
-async function fetchBodyMedia(pageId: string, fallbackAlt: string): Promise<BodyMedia> {
+async function fetchBodyMedia(page: any, fallbackAlt: string): Promise<BodyMedia> {
+  const pageId = page.id;
   const images: { src: string; alt: string }[] = [];
   const models: string[] = [];
+  const links = new Set<string>();
   // Raw (short-lived) file URLs per proxy src, used only for probing below.
   const rawUrls = new Map<string, string | undefined>();
   // Recursion budget: a handful of extra child-list calls per post, so deeply
@@ -773,7 +725,13 @@ async function fetchBodyMedia(pageId: string, fallbackAlt: string): Promise<Body
   const collect = async (parentId: string, depth: number): Promise<any[]> => {
     const blocks = await listAllChildren(parentId);
     for (const b of blocks) {
-      const richText = (b as any)[b.type]?.rich_text;
+      const data = (b as any)[b.type];
+      const richText = data?.rich_text;
+      if (data?.url) links.add(data.url);
+      for (const t of richText || []) {
+        if (t.href || t.text?.link?.url) links.add(t.href || t.text.link.url);
+        for (const match of (t.plain_text || "").matchAll(/https?:\/\/[^\s<>]+/g)) links.add(match[0]);
+      }
       if (Array.isArray(richText) && richText.length) {
         words += richText
           .map((t: any) => t.plain_text || "")
@@ -790,32 +748,22 @@ async function fetchBodyMedia(pageId: string, fallbackAlt: string): Promise<Body
       }
       if (b.has_children && depth < 2 && CONTAINER_BLOCK_TYPES.has(b.type) && budget > 0) {
         budget--;
-        try {
-          await collect(b.id, depth + 1);
-        } catch { /* nested fetch errors just mean fewer images */ }
+        await collect(b.id, depth + 1);
       }
     }
     return blocks;
   };
 
-  let rootBlocks: any[] = [];
-  try {
-    rootBlocks = await collect(pageId, 0);
-  } catch {
-    return { images: [], models: [], dims: {}, words: 0 };
-  }
+  const rootBlocks = await collect(pageId, 0);
 
-  // The page cover and sosialbilete also show in the gallery — fetch the page
-  // once so their dimensions can be probed alongside the body images.
-  try {
-    const page: any = await withRetry(() => notion.pages.retrieve({ page_id: pageId }));
-    if (page?.cover) rawUrls.set(proxyPageImage(pageId, "cover"), fileUrlOf(page.cover));
-    const sosialProp = Object.entries(page?.properties || {}).find(
-      ([k]) => k.toLowerCase() === "sosialbilete"
-    )?.[1] as any;
-    const sosialFile = sosialProp?.files?.[0];
-    if (sosialFile) rawUrls.set(proxyPageProp(pageId, "sosialbilete"), fileUrlOf(sosialFile));
-  } catch { /* covers just miss their dims */ }
+  // The database query already supplied covers and file properties. Reuse
+  // them instead of making an extra pages.retrieve request for every post.
+  if (page?.cover) rawUrls.set(proxyPageImage(pageId, "cover"), fileUrlOf(page.cover));
+  const sosialProp = Object.entries(page?.properties || {}).find(
+    ([k]) => k.toLowerCase() === "sosialbilete"
+  )?.[1] as any;
+  const sosialFile = sosialProp?.files?.[0];
+  if (sosialFile) rawUrls.set(proxyPageProp(pageId, "sosialbilete"), fileUrlOf(sosialFile));
 
   // Probe dimensions a few at a time (each reads only the image header).
   const dims: Record<string, { w: number; h: number }> = {};
@@ -842,20 +790,19 @@ async function fetchBodyMedia(pageId: string, fallbackAlt: string): Promise<Body
     break;
   }
 
-  return { images, models, modelOnlySrc, dims, words };
+  return { images, models, modelOnlySrc, dims, words, links: [...links] };
 }
 
-// Cache keyed by page id + last_edited_time: a page that hasn't changed reuses
-// its cached media for an hour, so steady-state regenerations barely touch the
-// Notion API. The extra parameter exists purely to vary the cache key.
-// Key bumped to -v2 when `words` was added — persisted entries with the old
-// shape would otherwise serve readTime-less posts until they expire.
-const fetchBodyMediaCached = unstable_cache(
-  async (pageId: string, fallbackAlt: string, _lastEdited: string) =>
-    fetchBodyMedia(pageId, fallbackAlt),
-  ["body-media-v2"],
-  { revalidate: 3600 }
-);
+// Changed pages get new cache keys immediately; unchanged bodies need only
+// one daily fallback scan. The signed URLs in `page` are deliberately excluded
+// from the key, so refreshing the list does not invalidate every body scan.
+function fetchBodyMediaCached(page: any, fallbackAlt: string) {
+  return unstable_cache(
+    () => fetchBodyMedia(page, fallbackAlt),
+    ["body-media-v3", page.id, page.last_edited_time || "", fallbackAlt],
+    { revalidate: 86400 }
+  )();
+}
 
 // Shared Bilete thumbnail extraction
 async function fetchBileteThumbnails(
@@ -864,8 +811,8 @@ async function fetchBileteThumbnails(
   fallbackImage?: string
 ): Promise<{ src: string; alt: string }[]> {
   let thumbnails = fallbackImage ? [{ src: fallbackImage, alt: fallbackTitle }] : [];
-  const blocks = await withRetry(() => notion.blocks.children.list({ block_id: pageId }));
-  const images = blocks.results
+  const blocks = await listAllChildren(pageId);
+  const images = blocks
     .filter((b: any) => b.type === 'image')
     .map((b: any) => ({
       src: proxyBlockImage(b.id),
@@ -877,7 +824,7 @@ async function fetchBileteThumbnails(
 
 export async function getPostIdBySlug(slug: string): Promise<string | null> {
     const databaseId = getDatabaseId();
-    const response = await withRetry(() => notion.databases.query({
+    const response = await notion.databases.query({
         database_id: databaseId,
         filter: {
             and: [
@@ -890,7 +837,7 @@ export async function getPostIdBySlug(slug: string): Promise<string | null> {
                 { property: "Slug", rich_text: { equals: slug } }
             ]
         }
-    }));
+    });
     if (response.results.length > 0) return response.results[0].id;
     return null;
 }
@@ -898,7 +845,7 @@ export async function getPostIdBySlug(slug: string): Promise<string | null> {
 const getPostBySlugData = unstable_cache(
   async (slug: string): Promise<Post | null> => {
     const databaseId = getDatabaseId();
-    const response = await withRetry(() => notion.databases.query({
+    const response = await notion.databases.query({
       database_id: databaseId,
       filter: {
         and: [
@@ -911,7 +858,7 @@ const getPostBySlugData = unstable_cache(
           { property: "Slug", rich_text: { equals: slug } }
         ]
       }
-    }));
+    });
     if (response.results.length === 0) return null;
     const page = response.results[0];
     const props = getPageProperties(page);
@@ -927,7 +874,7 @@ const getPostBySlugData = unstable_cache(
     };
   },
   ["post-by-slug"],
-  { revalidate: 3600, tags: [NOTION_CACHE_TAG] }
+  { revalidate: NOTION_REFRESH_SECONDS, tags: [NOTION_CACHE_TAG] }
 );
 
 // Same stale-beats-crash fallback as getPublishedPosts, per slug.

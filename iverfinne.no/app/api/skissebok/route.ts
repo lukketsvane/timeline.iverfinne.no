@@ -10,6 +10,6 @@ export async function GET() {
     return NextResponse.json({ drawings })
   } catch (error) {
     console.error('Error fetching skissebok drawings:', error)
-    return NextResponse.json({ drawings: [] })
+    return NextResponse.json({ error: 'Could not refresh drawings' }, { status: 503, headers: { 'Cache-Control': 'no-store' } })
   }
 }

@@ -10,12 +10,7 @@ function escapeXml(s: string): string {
 }
 
 export async function GET() {
-  let posts: Awaited<ReturnType<typeof getPublishedPosts>> = []
-  try {
-    posts = await getPublishedPosts()
-  } catch {
-    posts = []
-  }
+  const posts = await getPublishedPosts()
 
   const items = posts
     .map((p) => {
