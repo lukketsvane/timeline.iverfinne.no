@@ -1,4 +1,4 @@
-// Webhook-driven revalidation keeps posts fresh; this is only the fallback.
+// Automatic ISR refresh; Make and webhooks are optional.
 export const revalidate = 300
 export const maxDuration = 60
 

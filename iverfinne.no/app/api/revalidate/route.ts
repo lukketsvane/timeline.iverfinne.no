@@ -1,27 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { revalidatePath, revalidateTag } from 'next/cache'
-import { NOTION_CACHE_TAG } from '@/lib/notion'
-
-function validateSecret(secret: string | null): boolean {
-  return secret === process.env.REVALIDATION_SECRET
-}
+import { refreshNotion, validateSecret } from '@/lib/revalidation'
 
 function doRevalidate(path: string | null) {
-  // Data cache first (post list, per-post content, image URLs), then the
-  // route cache — so the re-render sees fresh Notion data.
-  revalidateTag(NOTION_CACHE_TAG)
-  if (path) {
-    revalidatePath(path)
-  } else {
-    revalidatePath('/', 'layout')
-  }
+  refreshNotion()
   return path || '/'
 }
 
 // GET: backward-compatible with Make.com polling
 // Usage: GET /api/revalidate?secret=...&path=/skriving/my-post (path optional)
 export async function GET(request: NextRequest) {
-  const secret = request.nextUrl.searchParams.get('secret')
+  const secret = request.headers.get('authorization')?.replace(/^Bearer /i, '')
+    || request.nextUrl.searchParams.get('secret')
   if (!validateSecret(secret)) {
     return NextResponse.json({ error: 'Invalid secret' }, { status: 401 })
   }
@@ -39,13 +28,19 @@ export async function GET(request: NextRequest) {
 // POST: alternative for programmatic use
 // Usage: POST /api/revalidate with JSON body { secret, path? }
 export async function POST(request: NextRequest) {
+  let body: { secret?: unknown; path?: string } | null
   try {
-    const body = await request.json()
-    if (!validateSecret(body.secret)) {
+    body = await request.json()
+  } catch {
+    return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
+  }
+  try {
+    const secret = request.headers.get('authorization')?.replace(/^Bearer /i, '') || body?.secret
+    if (!validateSecret(secret)) {
       return NextResponse.json({ error: 'Invalid secret' }, { status: 401 })
     }
 
-    const revalidated = doRevalidate(body.path || null)
+    const revalidated = doRevalidate(typeof body?.path === 'string' ? body.path : null)
 
     return NextResponse.json({
       revalidated: true,
@@ -53,6 +48,6 @@ export async function POST(request: NextRequest) {
       timestamp: new Date().toISOString(),
     })
   } catch {
-    return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
+    return NextResponse.json({ error: 'Revalidation failed' }, { status: 500 })
   }
 }

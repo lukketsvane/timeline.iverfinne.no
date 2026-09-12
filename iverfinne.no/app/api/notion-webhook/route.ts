@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { revalidatePath, revalidateTag } from 'next/cache'
-import { NOTION_CACHE_TAG } from '@/lib/notion'
+import { refreshNotion, validateSecret } from '@/lib/revalidation'
 
 export async function POST(request: NextRequest) {
   try {
@@ -14,7 +13,7 @@ export async function POST(request: NextRequest) {
     // Validate secret via query param or x-revalidate-secret header
     const secret = request.nextUrl.searchParams.get('secret')
       || request.headers.get('x-revalidate-secret')
-    if (secret !== process.env.REVALIDATION_SECRET) {
+    if (!validateSecret(secret)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -22,11 +21,7 @@ export async function POST(request: NextRequest) {
     const entityId = body.data?.id || body.entity?.id || 'unknown'
     console.log('[webhook] received:', eventType, 'entity:', entityId)
 
-    // Purge the Notion data-cache entries (post list, per-post content,
-    // resolved image URLs) before the route cache, so re-rendered pages pull
-    // fresh data instead of the hour-long cached copies.
-    revalidateTag(NOTION_CACHE_TAG)
-    revalidatePath('/', 'layout')
+    refreshNotion()
 
     return NextResponse.json({
       ok: true,
@@ -37,10 +32,10 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('[webhook] Error:', error)
     return NextResponse.json({
-      ok: true,
+      ok: false,
       error: process.env.NODE_ENV !== 'production' ? String(error) : undefined,
       timestamp: new Date().toISOString()
-    }, { status: 200 })
+    }, { status: 500 })
   }
 }
 
