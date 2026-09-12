@@ -41,7 +41,9 @@ export default async function DynamicPage({ params }: { params: Promise<{ slug: 
       notFound()
     }
 
-    const post = await getPostBySlug(slugSeg)
+    // Pass the type: two posts can share a slug (/lenkje/piknik vs
+    // /prosjekt/piknik), and the URL says which one is meant.
+    const post = await getPostBySlug(slugSeg, typeSeg)
 
     if (!post || post.type.toLowerCase() !== typeSeg.toLowerCase()) {
       notFound()

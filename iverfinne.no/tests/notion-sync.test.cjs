@@ -192,6 +192,55 @@ test('revalidation fails closed without a secret and only marks content stale', 
   }
 });
 
+// Notion prose is not MDX: a bare "<" used to crash the whole post page.
+function mdxLibrary() {
+  return load('lib/notion.ts', {
+    './notion-client': { NOTION_CACHE_TAG: 'notion-content', NOTION_REFRESH_SECONDS: 300, queryAllPages: async () => ({ results: [] }), notion: {} },
+    'next/cache': { unstable_cache: fn => fn },
+    react: { cache: fn => fn },
+    'notion-to-md': { NotionToMarkdown: class { setCustomTransformer() {} } },
+    'next-mdx-remote/serialize': { serialize: async content => ({ content }) },
+    'remark-gfm': () => {}, 'rehype-prism-plus': () => {},
+  });
+}
+
+test('stray "<" in prose is escaped; real tags, autolinks and code are not', () => {
+  const { escapeStrayAngleBrackets: esc } = mdxLibrary();
+
+  // The two shapes that actually took production down.
+  assert.equal(esc('Chi-kvadrat: p<10⁻⁸ er sterkt.'), 'Chi-kvadrat: p&lt;10⁻⁸ er sterkt.');
+  assert.equal(esc('kombinert < material'), 'kombinert &lt; material');
+  assert.equal(esc('<empty–block/>'), '&lt;empty–block/>');
+
+  // Everything our own block transformers emit must survive untouched.
+  for (const tag of [
+    '<Callout icon="📖" type="blue_background">', '</Callout>',
+    '<ModelViewer src="/api/notion-image?block=1" alt="a.glb" disableZoom disablePan />',
+    '<MathBlock expression="x^2" />', '<details>', '</details>', '<summary>### Referansar</summary>',
+    '<br>', '<https://example.com>', '<mailto:nokon@example.com>',
+  ]) {
+    assert.equal(esc(tag), tag, tag);
+  }
+
+  // Code keeps its angle brackets verbatim — MDX parses no JSX there.
+  assert.equal(esc('```js\nif (a<1 && b<2) {}\n```'), '```js\nif (a<1 && b<2) {}\n```');
+  assert.equal(esc('inline `a<1` og tekst p<2'), 'inline `a<1` og tekst p&lt;2');
+});
+
+test('the real MDX compiler accepts what the escaper produces', async () => {
+  const { serialize } = require('next-mdx-remote/serialize');
+  const { escapeStrayAngleBrackets: esc } = mdxLibrary();
+  const brokenInProduction = [
+    'Chi–kvadrat: χ²=103,4, dof=36, p<10⁻⁸. Sterk konfoundering.',
+    '– **Kombinert > enkle sett** (tidlegare: kombinert < material)',
+    '<empty–block/>',
+  ].join('\n\n');
+
+  await assert.rejects(serialize(brokenInProduction, { mdxOptions: { format: 'mdx' } }), /compiling MDX/);
+  const result = await serialize(esc(brokenInProduction), { mdxOptions: { format: 'mdx' } });
+  assert.ok(result.compiledSource.length > 0);
+});
+
 function contentLibrary(failBody) {
   const page = id => ({
     id, created_time: '2026-09-12T00:00:00Z', last_edited_time: '2026-09-12T00:00:00Z',
