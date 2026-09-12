@@ -1,6 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // MDXRemote must share Next.js's React runtime when bundled by Turbopack.
+  transpilePackages: ['next-mdx-remote'],
   // Leave room for paced Notion requests during initial prerendering.
   staticPageGenerationTimeout: 180,
   pageExtensions: ['js', 'jsx', 'ts', 'tsx', 'md', 'mdx'],
