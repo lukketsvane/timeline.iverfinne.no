@@ -20,7 +20,7 @@ type Props = {
 async function postFor(typeSeg: string, slugSeg: string): Promise<Post | null> {
   if (!VALID_TYPES.includes(typeSeg.toLowerCase())) return null
   try {
-    const post = await getPostBySlug(slugSeg)
+    const post = await getPostBySlug(slugSeg, typeSeg)
     if (!post || post.type.toLowerCase() !== typeSeg.toLowerCase()) return null
     return post
   } catch (error) {
