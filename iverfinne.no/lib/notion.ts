@@ -631,8 +631,36 @@ export const getSerializedPost = unstable_cache(
   { revalidate: NOTION_REFRESH_SECONDS, tags: [NOTION_CACHE_TAG] }
 );
 
+// Notion bodies are prose, not MDX. A bare "<" in running text — p<10⁻⁸,
+// "kombinert < material", a stray <empty–block/> — makes the MDX parser try to
+// read a JSX tag and throw, which took the whole post page down with
+// "Application error: a server-side exception has occurred". Escape every "<"
+// that cannot start a real tag. The ones our own block transformers emit
+// (<Callout>, <ModelViewer />, <details>, <summary>, <MathBlock />) and plain
+// HTML match the tag shape and pass through untouched, as do Markdown
+// autolinks (<https://…>, <mailto:…>). Code is left exactly as written —
+// fenced and inline spans are skipped, since MDX parses no JSX inside them.
+const LOOKS_LIKE_TAG = /^<\/?[A-Za-z][A-Za-z0-9._-]*(?:[\s/>]|$)/;
+const LOOKS_LIKE_AUTOLINK = /^<[A-Za-z][A-Za-z0-9+.-]*:[^\s<>]*>/;
+
+export function escapeStrayAngleBrackets(markdown: string): string {
+  // Odd indices are the captured code spans; they pass through verbatim.
+  return markdown
+    .split(/(```[\s\S]*?```|`[^`\n]*`)/g)
+    .map((part, i) =>
+      i % 2 === 1
+        ? part
+        : part.replace(/</g, (match, offset: number, whole: string) => {
+            const rest = whole.slice(offset);
+            return LOOKS_LIKE_TAG.test(rest) || LOOKS_LIKE_AUTOLINK.test(rest) ? match : "&lt;";
+          })
+    )
+    .join("");
+}
+
 // Shared MDX serialization — single source of truth for all serialize calls
-export async function serializeMarkdown(content: string): Promise<MDXRemoteSerializeResult> {
+export async function serializeMarkdown(rawContent: string): Promise<MDXRemoteSerializeResult> {
+  const content = escapeStrayAngleBrackets(rawContent);
   return serialize(content, {
     mdxOptions: {
       remarkPlugins: [remarkGfm],
@@ -860,7 +888,7 @@ export async function getPostIdBySlug(slug: string): Promise<string | null> {
     return null;
 }
 
-async function findPublishedPageByDerivedSlug(slug: string): Promise<any | null> {
+async function findPublishedPageByDerivedSlug(slug: string, type?: string): Promise<any | null> {
   const databaseId = getDatabaseId();
   const response = await queryAllPages({
     database_id: databaseId,
@@ -874,15 +902,20 @@ async function findPublishedPageByDerivedSlug(slug: string): Promise<any | null>
 
   const normalizedSlug = slug.toLowerCase();
   const page = response.results.find((result: any) => {
-    const derivedSlug = getPageProperties(result).slug?.toLowerCase();
-    return derivedSlug === normalizedSlug;
+    const props = getPageProperties(result);
+    if (props.slug?.toLowerCase() !== normalizedSlug) return false;
+    return !type || props.type.toLowerCase() === type;
   });
 
   return page || null;
 }
 
+// Two posts may share a slug under different types (/lenkje/piknik and
+// /prosjekt/piknik both exist). Taking the first row back then meant one of
+// each pair resolved to the wrong type and 404'd, so the type the URL asks
+// for picks the row.
 const getPostBySlugData = unstable_cache(
-  async (slug: string): Promise<Post | null> => {
+  async (slug: string, type?: string): Promise<Post | null> => {
     const databaseId = getDatabaseId();
     const response = await notion.databases.query({
       database_id: databaseId,
@@ -898,7 +931,13 @@ const getPostBySlugData = unstable_cache(
         ]
       }
     });
-    const page: any = response.results[0] || await findPublishedPageByDerivedSlug(slug);
+    const wanted = type?.toLowerCase();
+    const matchesType = (candidate: any) =>
+      !wanted || getPageProperties(candidate).type.toLowerCase() === wanted;
+    const page: any =
+      response.results.find(matchesType) ||
+      (wanted ? undefined : response.results[0]) ||
+      await findPublishedPageByDerivedSlug(slug, wanted);
     if (!page) return null;
     const props = getPageProperties(page);
     const content = await getPostContentByVersion(page.id, page.last_edited_time);
@@ -919,13 +958,14 @@ const getPostBySlugData = unstable_cache(
 // Same stale-beats-crash fallback as getPublishedPosts, per slug.
 const lastGoodPostBySlug = new Map<string, Post | null>();
 
-export const getPostBySlug = cache(async (slug: string): Promise<Post | null> => {
+export const getPostBySlug = cache(async (slug: string, type?: string): Promise<Post | null> => {
+  const key = type ? `${type.toLowerCase()}/${slug}` : slug;
   try {
-    const post = await getPostBySlugData(slug);
-    lastGoodPostBySlug.set(slug, post);
+    const post = await getPostBySlugData(slug, type);
+    lastGoodPostBySlug.set(key, post);
     return post;
   } catch (error) {
-    const lastGood = lastGoodPostBySlug.get(slug);
+    const lastGood = lastGoodPostBySlug.get(key);
     if (lastGood !== undefined) {
       console.error(`getPostBySlug(${slug}) failed, serving last known good:`, error);
       return lastGood;
