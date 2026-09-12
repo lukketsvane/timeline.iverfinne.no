@@ -604,6 +604,20 @@ export const getPostContentCached = unstable_cache(getPostContent, ["post-conten
   tags: [NOTION_CACHE_TAG],
 });
 
+// Same markdown, keyed by the page's last_edited_time. Callers that already
+// hold the database row (which the 5-minute list/slug refresh re-reads anyway)
+// get a new cache key the moment a page is edited, so the conversion — several
+// Notion block listings per post — no longer re-runs every five minutes just
+// to produce byte-identical output. That repeated work is what pushed the
+// integration over Notion's rate limit.
+function getPostContentByVersion(pageId: string, lastEditedTime: string) {
+  return unstable_cache(
+    () => getPostContent(pageId),
+    ["post-content-v2", pageId, lastEditedTime || ""],
+    { revalidate: 86400, tags: [NOTION_CACHE_TAG] }
+  )();
+}
+
 // Full payload for /api/posts/[id]: markdown + serialized MDX, cached as one
 // unit so the client's prefetch-everything loop costs Notion nothing on repeat
 // visits.
@@ -884,10 +898,10 @@ const getPostBySlugData = unstable_cache(
         ]
       }
     });
-    const page = response.results[0] || await findPublishedPageByDerivedSlug(slug);
+    const page: any = response.results[0] || await findPublishedPageByDerivedSlug(slug);
     if (!page) return null;
     const props = getPageProperties(page);
-    const content = await getPostContentCached(page.id);
+    const content = await getPostContentByVersion(page.id, page.last_edited_time);
     let thumbnails = props.image ? [{ src: props.image, alt: props.title }] : [];
     if (props.type === "Bilete") {
       thumbnails = await fetchBileteThumbnails(page.id, props.title, props.image);

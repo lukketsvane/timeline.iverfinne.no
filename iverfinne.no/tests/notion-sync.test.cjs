@@ -79,6 +79,22 @@ test('long Retry-After is never capped; queued requests share the cooldown', asy
   assert.equal((await send('https://api.notion.com/v1/pages/b')).status, 429);
   assert.equal(calls.length, 1);
 });
+test('queue pacing alone never synthesizes a cooldown', async () => {
+  // Four requests, paced 400ms apart, against a 1s budget: the last one only
+  // reaches the head of the queue at 1200ms. Charging that wait to its own
+  // budget used to fail it before it was ever sent, which is how one slow
+  // fan-out turned into an "Application error" page.
+  const { send, calls } = transport([ok(), ok(), ok(), ok()], { budgetMs: 1000 });
+  const statuses = await Promise.all(Array.from({ length: 4 }, () => send('https://api.notion.com/v1/pages/test')));
+  assert.deepEqual(statuses.map(r => r.status), [200, 200, 200, 200]);
+  assert.deepEqual(calls.map(c => c.at), [0, 400, 800, 1200]);
+});
+test('the queue ceiling still bounds a request that waits too long to start', async () => {
+  const { send, calls } = transport([ok(), ok()], { budgetMs: 5000, queueCeilingMs: 500 });
+  const statuses = await Promise.all(Array.from({ length: 3 }, () => send('https://api.notion.com/v1/pages/test')));
+  assert.deepEqual(statuses.map(r => r.status), [200, 200, 429]);
+  assert.equal(calls.length, 2);
+});
 test('Retry-After accepts HTTP dates and rejects invalid values', () => {
   assert.equal(retryAfterMs('Thu, 01 Jan 1970 00:00:12 GMT', 2000), 10000);
   assert.equal(retryAfterMs('bad', 0), 0);
