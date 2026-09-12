@@ -1,9 +1,9 @@
-import { getPublishedPosts } from '@/lib/notion'
+import { getPublishedPostsLite } from '@/lib/notion'
 
 // Revalidate hourly — the feed doesn't need realtime freshness.
 export const revalidate = 3600
-// Same reason as the sitemap: a cold regeneration scans every post's blocks
-// and cannot fit in the default 10s function budget.
+// Same as the sitemap: the feed needs only the database rows, not a scan of
+// every post's blocks.
 export const maxDuration = 60
 
 const SITE = 'https://iverfinne.no'
@@ -15,9 +15,9 @@ function escapeXml(s: string): string {
 export async function GET() {
   // An empty channel beats a 500 — readers keep the feed subscribed and the
   // next revalidation refills it.
-  let posts: Awaited<ReturnType<typeof getPublishedPosts>> = []
+  let posts: Awaited<ReturnType<typeof getPublishedPostsLite>> = []
   try {
-    posts = await getPublishedPosts()
+    posts = await getPublishedPostsLite()
   } catch (error) {
     console.error('feed: post list unavailable, emitting an empty channel:', error)
   }
