@@ -839,7 +839,32 @@ export async function getPostIdBySlug(slug: string): Promise<string | null> {
         }
     });
     if (response.results.length > 0) return response.results[0].id;
+
+    const fallbackPage = await findPublishedPageByDerivedSlug(slug);
+    if (fallbackPage) return fallbackPage.id;
+
     return null;
+}
+
+async function findPublishedPageByDerivedSlug(slug: string): Promise<any | null> {
+  const databaseId = getDatabaseId();
+  const response = await queryAllPages({
+    database_id: databaseId,
+    filter: {
+      or: [
+        { property: "Status", status: { equals: "Ferdig" } },
+        { property: "Status", status: { equals: "Complete" } }
+      ]
+    }
+  });
+
+  const normalizedSlug = slug.toLowerCase();
+  const page = response.results.find((result: any) => {
+    const derivedSlug = getPageProperties(result).slug?.toLowerCase();
+    return derivedSlug === normalizedSlug;
+  });
+
+  return page || null;
 }
 
 const getPostBySlugData = unstable_cache(
@@ -859,8 +884,8 @@ const getPostBySlugData = unstable_cache(
         ]
       }
     });
-    if (response.results.length === 0) return null;
-    const page = response.results[0];
+    const page = response.results[0] || await findPublishedPageByDerivedSlug(slug);
+    if (!page) return null;
     const props = getPageProperties(page);
     const content = await getPostContentCached(page.id);
     let thumbnails = props.image ? [{ src: props.image, alt: props.title }] : [];
