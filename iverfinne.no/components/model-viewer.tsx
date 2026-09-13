@@ -6,24 +6,38 @@ interface ModelViewerProps {
   src: string
   alt?: string
   poster?: string
+  className?: string
+  // Accepted and ignored: zoom and pan are never possible here at all.
+  // model-viewer's own camera-controls stay off so the element never takes
+  // pointer events, and the orbit is clamped to yaw. Callers (including the
+  // MDX that Notion generates) still pass these, so they stay in the type.
   disableZoom?: boolean
   disablePan?: boolean
-  className?: string
 }
 
 // The <model-viewer> element type lives in types/custom-elements.d.ts.
 
-// Camera distance: 100% = model-viewer's auto framing. >100% zooms out so the
-// object gets breathing room instead of filling the frame edge to edge.
-const RADIUS = '130%'
+// The camera never moves on its own. Not on load, not on scroll, not on
+// resize, not on a re-render — only a deliberate horizontal drag turns it.
+//
+// <model-viewer> auto-frames by default: `camera-target` resolves to the
+// model's bounding-box centre and a `%` radius resolves against the framing
+// distance it computes, and it recomputes both whenever the model loads or
+// the element resizes. That is the automatic centring and zooming. We let it
+// resolve those numbers exactly once, then pin them as explicit metre values
+// so nothing can ever recompute them again.
 const PITCH = '75deg'
+// Starting distance, as a share of model-viewer's one-shot framing distance.
+// >100% leaves breathing room instead of filling the frame edge to edge.
+const FRAMING = 1.3
 
 export function ModelViewer({ src, alt, poster, className }: ModelViewerProps) {
   const viewerRef = useRef<any>(null)
-  // Single yaw accumulator. Scroll deltas and horizontal drags both nudge it,
-  // so the rotation is always relative — it never snaps to an absolute value
-  // and user rotation is never overridden.
+  // Yaw accumulator, moved by drags and by nothing else. Relative, so it
+  // never snaps to an absolute value and never overrides the user.
   const theta = useRef(0)
+  // Distance and target, in metres, once model-viewer has resolved them.
+  const pinned = useRef<{ radius: number } | null>(null)
   const drag = useRef({ active: false, lastX: 0 })
 
   useEffect(() => {
@@ -33,38 +47,41 @@ export function ModelViewer({ src, alt, poster, className }: ModelViewerProps) {
   const applyOrbit = () => {
     const el = viewerRef.current
     if (!el) return
+    const radius = pinned.current ? `${pinned.current.radius}m` : `${FRAMING * 100}%`
     // Attribute (not property) so it works whether or not the custom element
     // has upgraded yet.
-    el.setAttribute('camera-orbit', `${theta.current.toFixed(1)}deg ${PITCH} ${RADIUS}`)
+    el.setAttribute('camera-orbit', `${theta.current.toFixed(1)}deg ${PITCH} ${radius}`)
   }
 
-  // Scroll-driven rotation: each scrolled pixel nudges the yaw a little,
-  // starting from the face-on view. Delta-based, so scrolling away and back
-  // never resets what the user has rotated.
+  // Freeze the camera the moment the model is framed: read back the target
+  // and distance model-viewer computed, write them as fixed values, and
+  // clamp the orbit so only yaw can ever change.
   useEffect(() => {
-    let raf = 0
-    let lastY = window.scrollY
-    // Baseline yaw 90° puts the models face-on to the camera, with a little
-    // random spread (±12°) so multiple models don't stand perfectly aligned.
-    theta.current += 90 + (Math.random() - 0.5) * 24
-    const onScroll = () => {
-      cancelAnimationFrame(raf)
-      raf = requestAnimationFrame(() => {
-        const y = window.scrollY
-        // Keep the scroll influence gentle so long scrolls don't turn the
-        // models far away from face-on (~9° per 600px).
-        theta.current += (y - lastY) * 0.015
-        lastY = y
-        applyOrbit()
-      })
+    const el = viewerRef.current
+    if (!el) return
+
+    const freeze = () => {
+      if (pinned.current) return
+      const orbit = el.getCameraOrbit?.()
+      const target = el.getCameraTarget?.()
+      if (!orbit || !target) return
+
+      const radius = Number((orbit.radius * FRAMING).toFixed(4))
+      pinned.current = { radius }
+
+      // An explicit target: no more bounding-box recentring, ever.
+      el.setAttribute('camera-target', `${target.x}m ${target.y}m ${target.z}m`)
+      // Pitch and distance locked; yaw left free for drags.
+      el.setAttribute('min-camera-orbit', `-Infinity ${PITCH} ${radius}m`)
+      el.setAttribute('max-camera-orbit', `Infinity ${PITCH} ${radius}m`)
+      applyOrbit()
     }
-    applyOrbit()
-    window.addEventListener('scroll', onScroll, { passive: true })
-    return () => {
-      window.removeEventListener('scroll', onScroll)
-      cancelAnimationFrame(raf)
-    }
-  }, [])
+
+    el.addEventListener('load', freeze)
+    // A model already loaded before this effect ran still gets pinned.
+    freeze()
+    return () => el.removeEventListener('load', freeze)
+  }, [src])
 
   return (
     // The viewer must NEVER block vertical scrolling, so model-viewer's own
@@ -95,9 +112,10 @@ export function ModelViewer({ src, alt, poster, className }: ModelViewerProps) {
         src={src}
         alt={alt || 'A 3D model'}
         autoplay
-        camera-orbit={`0deg ${PITCH} ${RADIUS}`}
-        min-camera-orbit={`-Infinity ${PITCH} ${RADIUS}`}
-        max-camera-orbit={`Infinity ${PITCH} ${RADIUS}`}
+        camera-orbit={`0deg ${PITCH} ${FRAMING * 100}%`}
+        // 0 = the camera jumps straight to where it is told. Any higher and
+        // every change eases in, which reads as the camera drifting by itself.
+        interpolation-decay="0"
         shadow-intensity="0"
         environment-image="/env/two-directional.hdr"
         tone-mapping="neutral"
