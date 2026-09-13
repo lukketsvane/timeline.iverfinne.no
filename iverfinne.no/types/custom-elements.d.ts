@@ -22,6 +22,9 @@ declare module 'react' {
         'touch-action'?: string;
         'shadow-intensity'?: string;
         'interaction-prompt'?: string;
+        'camera-target'?: string;
+        'interpolation-decay'?: string;
+        bounds?: string;
       };
     }
   }
