@@ -427,7 +427,15 @@ const fetchOgMetadataCached = unstable_cache(
 // hard — scans still in flight when it passes are abandoned, not waited on —
 // so the ceiling is this plus the Lenkje OG fetches (~4s) and the render
 // itself, leaving ~20s of headroom under the routes' 60s maxDuration.
-const BODY_MEDIA_BUDGET_MS = Number(process.env.BODY_MEDIA_BUDGET_MS) || 35_000;
+//
+// The build is the exception and gets effectively no deadline: nobody is
+// waiting on it, there is no function limit, and it is the one pass that
+// should scan every post — that is what fills the 24h per-post caches, so
+// runtime renders come back both fast and complete. Capping the build at the
+// runtime budget cut it from ~4min to 59s and shipped a half-warm cache.
+const isBuild = process.env.NEXT_PHASE === "phase-production-build";
+export const BODY_MEDIA_BUDGET_MS =
+  Number(process.env.BODY_MEDIA_BUDGET_MS) || (isBuild ? 300_000 : 35_000);
 
 const EMPTY_BODY_MEDIA: BodyMedia = { images: [], models: [], dims: {}, words: 0, links: [] };
 
