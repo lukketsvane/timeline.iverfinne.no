@@ -282,6 +282,45 @@ test('body failure keeps the last COMPLETE list, including the failed post', asy
     else process.env.NOTION_DATABASE_ID = saved;
   }
 });
+test('a body scan that overruns its budget yields posts without media, not a timeout', async () => {
+  const savedDb = process.env.NOTION_DATABASE_ID;
+  const savedBudget = process.env.BODY_MEDIA_BUDGET_MS;
+  try {
+    process.env.NOTION_DATABASE_ID = 'fixture';
+    process.env.BODY_MEDIA_BUDGET_MS = '50';
+    const page = id => ({
+      id, created_time: '2026-09-12T00:00:00Z', last_edited_time: '2026-09-12T00:00:00Z',
+      properties: { Namn: { type: 'title', title: [{ plain_text: id }] }, Type: { select: { name: 'Prosjekt' } } },
+    });
+    const lib = load('lib/notion.ts', {
+      './notion-client': {
+        NOTION_CACHE_TAG: 'notion-content', NOTION_REFRESH_SECONDS: 300,
+        queryAllPages: async () => ({ results: [page('first'), page('second')] }),
+        // A scan that never comes back — the cold, rate-limited case.
+        notion: { blocks: { children: { list: () => new Promise(() => {}) } } },
+      },
+      'next/cache': { unstable_cache: fn => fn },
+      react: { cache: fn => fn },
+      'notion-to-md': { NotionToMarkdown: class { setCustomTransformer() {} } },
+      'next-mdx-remote/serialize': { serialize: async content => ({ content }) },
+      'remark-gfm': () => {}, 'rehype-prism-plus': () => {},
+    });
+
+    const started = Date.now();
+    const posts = await lib.getPublishedPosts();
+
+    // Every post is still published, with its row data intact.
+    assert.equal(posts.length, 2);
+    assert.deepEqual(posts.map(p => p.title), ['first', 'second']);
+    // Media is simply absent for this round; the per-post cache fills it in later.
+    assert.deepEqual(posts.map(p => p.bodyImages), [[], []]);
+    assert.deepEqual(posts.map(p => p.readTime), [0, 0]);
+    assert.ok(Date.now() - started < 5000, 'returned on the budget, not on the scan');
+  } finally {
+    if (savedDb === undefined) delete process.env.NOTION_DATABASE_ID; else process.env.NOTION_DATABASE_ID = savedDb;
+    if (savedBudget === undefined) delete process.env.BODY_MEDIA_BUDGET_MS; else process.env.BODY_MEDIA_BUDGET_MS = savedBudget;
+  }
+});
 test('a first-ever failed fetch throws instead of publishing empty/partial data', async () => {
   const saved = process.env.NOTION_DATABASE_ID;
   const log = console.error;

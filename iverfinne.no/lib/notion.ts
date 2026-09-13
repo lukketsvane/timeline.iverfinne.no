@@ -423,6 +423,28 @@ const fetchOgMetadataCached = unstable_cache(
   { revalidate: 3600 }
 );
 
+// How long a cold body-media fan-out may hold a page render. The deadline is
+// hard — scans still in flight when it passes are abandoned, not waited on —
+// so the ceiling is this plus the Lenkje OG fetches (~4s) and the render
+// itself, leaving ~20s of headroom under the routes' 60s maxDuration.
+const BODY_MEDIA_BUDGET_MS = Number(process.env.BODY_MEDIA_BUDGET_MS) || 35_000;
+
+const EMPTY_BODY_MEDIA: BodyMedia = { images: [], models: [], dims: {}, words: 0, links: [] };
+
+// Resolve when `work` settles or when the budget runs out, whichever is
+// first. A rejection still propagates, so a genuinely broken scan fails the
+// refresh exactly as before.
+function raceDeadline<T>(work: Promise<T>, ms: number): Promise<T | undefined> {
+  let timer: ReturnType<typeof setTimeout>;
+  const expiry = new Promise<undefined>((resolve) => {
+    timer = setTimeout(() => resolve(undefined), ms);
+  });
+  // Cleared as soon as the race settles, so the timer never outlives it —
+  // and it must stay referenced until then, or a stalled scan would let the
+  // event loop drain before the deadline ever fires.
+  return Promise.race([work, expiry]).finally(() => clearTimeout(timer));
+}
+
 const getPublishedPostsUncached = async (): Promise<Post[]> => {
   const databaseId = getDatabaseId();
   try {
@@ -451,16 +473,36 @@ const getPublishedPostsUncached = async (): Promise<Post[]> => {
     // One body scan per post, a few at a time (see createLimiter).
     const limitBodyMedia = createLimiter(4);
 
+    // A cold scan costs one Notion call per post, and the queue paces them
+    // 400ms apart: at 103 posts that is ~41s before a single image probe,
+    // which timed the home page out at 60s and served a visitor nothing.
+    // Give the scan a deadline instead. Posts it cannot reach keep every bit
+    // of their row data and simply carry no body media yet; each scan is
+    // cached on its own for 24h, so the next render picks up where this one
+    // stopped and the timeline is whole within a couple of requests. A warm
+    // cache — the normal case — never comes close to the deadline.
+    const mediaDeadline = Date.now() + BODY_MEDIA_BUDGET_MS;
+    const media: BodyMedia[] = visible.map(() => EMPTY_BODY_MEDIA);
+
+    const scans = Promise.all(
+      visible.map((page: any, index: number) =>
+        limitBodyMedia(async () => {
+          // Checked as the slot frees, not when the work was queued.
+          if (Date.now() >= mediaDeadline) return;
+          media[index] = await fetchBodyMediaCached(page, getPageProperties(page).title);
+        })
+      )
+    );
+    // A scan that fails after the deadline has passed must not surface as an
+    // unhandled rejection; one that fails before it still fails the refresh.
+    scans.catch(() => {});
+    await raceDeadline(scans, BODY_MEDIA_BUDGET_MS);
+
     const posts = await Promise.all(visible
-      .map(async (page: any): Promise<Post> => {
+      .map(async (page: any, index: number): Promise<Post> => {
         try {
           const props = getPageProperties(page);
-
-          // Every post gets its body images/models collected, so the gallery
-          // can show in-post media immediately. Cached per last_edited_time.
-          const bodyMedia = await limitBodyMedia(() =>
-            fetchBodyMediaCached(page, props.title)
-          );
+          const bodyMedia = media[index];
 
           let thumbnails = props.image ? [{ src: props.image, alt: props.title }] : [];
           if (props.type === "Bilete" && bodyMedia.images.length > 0) {
