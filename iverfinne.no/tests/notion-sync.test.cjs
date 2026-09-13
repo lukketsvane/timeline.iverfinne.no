@@ -321,6 +321,31 @@ test('a body scan that overruns its budget yields posts without media, not a tim
     if (savedBudget === undefined) delete process.env.BODY_MEDIA_BUDGET_MS; else process.env.BODY_MEDIA_BUDGET_MS = savedBudget;
   }
 });
+test('the build scans every post; only runtime renders get the short deadline', () => {
+  const savedPhase = process.env.NEXT_PHASE;
+  const savedBudget = process.env.BODY_MEDIA_BUDGET_MS;
+  const budget = () => mdxLibrary().BODY_MEDIA_BUDGET_MS;
+  try {
+    delete process.env.BODY_MEDIA_BUDGET_MS;
+
+    // A visitor's render must stay well inside the routes' 60s maxDuration.
+    delete process.env.NEXT_PHASE;
+    assert.equal(budget(), 35_000);
+
+    // The build has no function limit and is the pass that warms every
+    // per-post cache, so it must not be cut short.
+    process.env.NEXT_PHASE = 'phase-production-build';
+    assert.equal(budget(), 300_000);
+
+    // An explicit override wins over both.
+    process.env.BODY_MEDIA_BUDGET_MS = '50';
+    assert.equal(budget(), 50);
+  } finally {
+    if (savedPhase === undefined) delete process.env.NEXT_PHASE; else process.env.NEXT_PHASE = savedPhase;
+    if (savedBudget === undefined) delete process.env.BODY_MEDIA_BUDGET_MS; else process.env.BODY_MEDIA_BUDGET_MS = savedBudget;
+  }
+});
+
 test('a first-ever failed fetch throws instead of publishing empty/partial data', async () => {
   const saved = process.env.NOTION_DATABASE_ID;
   const log = console.error;
