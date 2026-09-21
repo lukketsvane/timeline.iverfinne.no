@@ -1,4 +1,4 @@
-name: Verify MAX FUGLESPRENGER roguelite plants
+name: Verify canonical MAX FUGLESPRENGER
 on:
   push:
     branches: [nightgarden-prod-runner-20260921]
@@ -8,59 +8,50 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     steps:
+      - name: Verify canonical GitHub source is live
+        run: |
+          set -euo pipefail
+          curl -fsS --retry 6 --retry-delay 2 -D /tmp/headers https://max.iverfinne.no/ -o /tmp/page
+          grep -qi '^x-max-source: github:lukketsvane/max.iverfinne.no@main' /tmp/headers
+          grep -q '<title>MAX FUGLESPRENGER</title>' /tmp/page
+          grep -q 'id="perkMenu"' /tmp/page
+          grep -q '#gameTitle,#blastHud,#gardenHud,#gardenHint,#roundHud{display:none!important}' /tmp/page
+          echo "CANONICAL_REPO_LIVE"
       - run: |
           npm init -y >/dev/null 2>&1
           npm install playwright@latest
           npx playwright install --with-deps chromium
-      - run: |
+      - name: iPhone 16e smoke test
+        run: |
           cat > verify.cjs <<'JS'
           const { chromium } = require('playwright');
           (async()=>{
             const browser=await chromium.launch({headless:true});
-            const context=await browser.newContext({viewport:{width:390,height:844},hasTouch:true,isMobile:true,deviceScaleFactor:3});
+            const context=await browser.newContext({
+              viewport:{width:390,height:844},
+              hasTouch:true,isMobile:true,deviceScaleFactor:3
+            });
             const page=await context.newPage();
             const errors=[];
             page.on('pageerror',e=>errors.push('PAGE '+e.message));
             page.on('console',m=>{if(m.type()==='error')errors.push('CONSOLE '+m.text())});
-            let res=await page.goto('https://max.iverfinne.no/',{waitUntil:'domcontentloaded',timeout:120000});
+            const res=await page.goto('https://max.iverfinne.no/',{waitUntil:'domcontentloaded',timeout:120000});
             if(!res||res.status()!==200)throw new Error('HTTP '+(res&&res.status()));
-            await page.evaluate(()=>localStorage.clear());
-            await page.reload({waitUntil:'domcontentloaded',timeout:120000});
             await page.waitForTimeout(2200);
-            if((await page.title())!=='MAX FUGLESPRENGER')throw new Error('bad title');
-            const vis=await page.evaluate(()=>({
-              title:getComputedStyle(document.querySelector('#gameTitle')).display,
-              blast:getComputedStyle(document.querySelector('#blastHud')).display,
-              garden:getComputedStyle(document.querySelector('#gardenHud')).display,
-              round:getComputedStyle(document.querySelector('#roundHud')).display,
-              perk:getComputedStyle(document.querySelector('#perkMenu')).display,
-              intro:localStorage.getItem('max-fuglesprenger-rogue-intro-v6')
-            }));
-            if(vis.title!=='none'||vis.blast!=='none'||vis.garden!=='none'||vis.round!=='none')throw new Error('text HUD visible '+JSON.stringify(vis));
-            if(!vis.intro)throw new Error('v6 reset did not initialize');
-
-            await page.keyboard.down('ArrowRight'); await page.waitForTimeout(1100); await page.keyboard.up('ArrowRight');
-            await page.waitForTimeout(900);
-            await page.keyboard.down('ArrowDown'); await page.waitForTimeout(500); await page.keyboard.up('ArrowDown');
-            await page.waitForTimeout(1600);
-
-            const state=await page.evaluate(()=>({
-              save:localStorage.getItem('max-fuglesprenger-rogue-v6'),
-              meta:localStorage.getItem('max-fuglesprenger-meta-v1'),
-              canvas:[document.querySelector('#c').width,document.querySelector('#c').height]
-            }));
-            console.log('UI',JSON.stringify(vis));
-            console.log('STATE',JSON.stringify(state));
+            if((await page.title())!=='MAX FUGLESPRENGER')throw new Error('wrong title');
+            const hidden=await page.evaluate(()=>{
+              const ids=['gameTitle','blastHud','gardenHud','gardenHint','roundHud'];
+              return ids.every(id=>getComputedStyle(document.getElementById(id)).display==='none');
+            });
+            if(!hidden)throw new Error('text HUD visible');
+            await page.keyboard.down('ArrowRight');
+            await page.waitForTimeout(700);
+            await page.keyboard.up('ArrowRight');
+            await page.keyboard.press('ArrowUp');
+            await page.waitForTimeout(700);
             console.log('ERRORS',JSON.stringify(errors));
             if(errors.length)throw new Error(errors.join('\n'));
-            await page.screenshot({path:'fuglesprenger-roguelite.png'});
             await browser.close();
           })().catch(e=>{console.error(e);process.exit(1)});
           JS
           node verify.cjs
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: fuglesprenger-roguelite-verification
-          path: fuglesprenger-roguelite.png
-          if-no-files-found: ignore
