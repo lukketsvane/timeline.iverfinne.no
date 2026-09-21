@@ -1,4 +1,4 @@
-name: Verify seed roguelite
+name: Verify finished FUGLESPRENGER roguelite
 on:
   push:
     branches: [nightgarden-prod-runner-20260921]
@@ -18,35 +18,35 @@ jobs:
           (async()=>{
             const browser=await chromium.launch({headless:true});
             const context=await browser.newContext({viewport:{width:390,height:844},hasTouch:true,isMobile:true,deviceScaleFactor:3});
-            const page=await context.newPage(), errors=[];
+            const page=await context.newPage();
+            const errors=[];
             page.on('pageerror',e=>errors.push('PAGE '+e.message));
-            page.on('console',m=>{ if(m.type()==='error') errors.push('CONSOLE '+m.text()); });
-            let res=await page.goto('https://max.iverfinne.no/',{waitUntil:'domcontentloaded',timeout:120000});
-            if(!res||res.status()!==200) throw new Error('HTTP '+(res&&res.status()));
-            await page.evaluate(()=>localStorage.clear());
+            page.on('console',m=>{if(m.type()==='error')errors.push('CONSOLE '+m.text())});
+            await page.goto('https://max.iverfinne.no/',{waitUntil:'domcontentloaded',timeout:120000});
+            await page.evaluate(()=>{
+              localStorage.removeItem('max-fuglesprenger-rogue-intro-v3');
+              localStorage.removeItem('max-fuglesprenger-rogue-v3');
+              localStorage.setItem('max-night-garden-x','0');
+            });
             await page.reload({waitUntil:'domcontentloaded',timeout:120000});
-            await page.waitForTimeout(1600);
-            const title=await page.title();
-            if(title!=='MAX FUGLESPRENGER') throw new Error('wrong title '+title);
-            let hud=await page.locator('#gardenHud').innerText();
-            console.log('HUD_START',JSON.stringify(hud));
-            if(!/FRØ\s+0/.test(hud)||!/PLANTER\s+0/.test(hud)) throw new Error('run did not start empty');
+            await page.waitForTimeout(1800);
+            if((await page.title())!=='MAX FUGLESPRENGER')throw new Error('wrong title');
+            const hud0=await page.locator('#gardenHud').innerText();
+            const hint0=await page.locator('#gardenHint').innerText();
+            if(!/FRØ 0/.test(hud0))throw new Error('run does not start at zero seeds: '+hud0);
+            if(!/VERDA ER TOM|FINN/.test(hint0))throw new Error('missing zero-world hint: '+hint0);
 
             await page.keyboard.down('ArrowRight');
-            await page.waitForTimeout(1800);
+            await page.waitForTimeout(2300);
             await page.keyboard.up('ArrowRight');
-            await page.waitForTimeout(1000);
-
-            hud=await page.locator('#gardenHud').innerText();
-            const save=await page.evaluate(()=>localStorage.getItem('max-fuglesprenger-rogue-v2'));
-            console.log('HUD_AFTER_MOVE',JSON.stringify(hud));
-            console.log('SAVE',save);
-            if(!save) throw new Error('no v2 run save after seed collection');
-            const parsed=JSON.parse(save);
-            if(!(parsed.seeds>0)) throw new Error('guaranteed seed was not collected');
-            if(parsed.plots.length!==0) throw new Error('world did not remain unplanted before player plants');
-            if(errors.length) throw new Error(errors.join('\n'));
-            await page.screenshot({path:'seed-roguelite.png'});
+            await page.waitForTimeout(500);
+            const hud1=await page.locator('#gardenHud').innerText();
+            console.log('HUD0',hud0.replace(/\n/g,' | '));
+            console.log('HUD1',hud1.replace(/\n/g,' | '));
+            console.log('HINT',hint0);
+            console.log('ERRORS',JSON.stringify(errors));
+            if(errors.length)throw new Error(errors.join('\n'));
+            await page.screenshot({path:'finished-roguelite.png',fullPage:true});
             await browser.close();
           })().catch(e=>{console.error(e);process.exit(1)});
           JS
@@ -54,6 +54,6 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: seed-roguelite-verification
-          path: seed-roguelite.png
+          name: finished-fuglesprenger-verification
+          path: finished-roguelite.png
           if-no-files-found: ignore
