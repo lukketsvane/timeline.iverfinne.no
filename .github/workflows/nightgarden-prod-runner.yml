@@ -15,4 +15,4 @@ jobs:
           grep -o '<title>[^<]*</title>' /tmp/page | head -1
           wc -c /tmp/page
           grep -q 'Max in the Night Garden' /tmp/page
-          echo LIVE_OK
+          echo LIVE_OK_HOST_RULE
