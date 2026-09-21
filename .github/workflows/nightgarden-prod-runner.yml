@@ -1,26 +1,73 @@
-name: Inspect Claude artifact frame
+name: Inspect Claude artifact in browser
 on:
   push:
     branches: [nightgarden-prod-runner-20260921]
     paths:
       - '.github/workflows/nightgarden-prod-runner.yml'
+permissions:
+  contents: read
 jobs:
   inspect:
     runs-on: ubuntu-latest
     steps:
-      - name: Fetch frame API
+      - name: Install Playwright
         run: |
-          set -euo pipefail
-          UUID="1697c4e9-61bc-424f-b5d0-9492d8dd1d3b"
-          URL="https://claude.ai/api/frame/$UUID?via=user_open&bk=initial"
-          curl -L --compressed -sS             -A "Mozilla/5.0"             -H "X-Frame-CP: go"             -H "X-Frame-Platform: web"             -H "X-Frame-Surface: standalone"             -H "X-Frame-Client-Version: 1789877314"             -D /tmp/headers "$URL" -o /tmp/frame || true
-          echo "=== headers ==="
-          cat /tmp/headers
-          echo "=== size/type ==="
-          wc -c /tmp/frame
-          file /tmp/frame
-          echo "=== first 30000 chars ==="
-          head -c 30000 /tmp/frame
-          echo
-          echo "=== strings/url clues ==="
-          strings /tmp/frame | grep -E 'plate|plant|sprite|asset|png|webp|svg|data:image|<html|<style|<script|background|root|leaf|flower' | head -300 || true
+          npm init -y >/dev/null 2>&1
+          npm install playwright@latest
+          npx playwright install --with-deps chromium
+      - name: Open Claude artifact
+        run: |
+          cat > /tmp/read-artifact.js <<'JS'
+          const { chromium } = require('playwright');
+          const fs = require('fs');
+          (async()=>{
+            const browser = await chromium.launch({headless:true});
+            const context = await browser.newContext({
+              viewport:{width:1440,height:1200},
+              userAgent:'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36'
+            });
+            const page = await context.newPage();
+            page.on('console', m=>console.log('CONSOLE',m.type(),m.text().slice(0,1000)));
+            page.on('response', async r=>{
+              const u=r.url();
+              if(u.includes('/api/frame/') || u.includes('claudeusercontent.com')){
+                console.log('RESP',r.status(),r.headers()['content-type']||'',u);
+                if(u.includes('/api/frame/')){
+                  try {
+                    const b=await r.body();
+                    fs.writeFileSync('/tmp/frame-response.bin',b);
+                    console.log('SAVED_FRAME_RESPONSE',b.length);
+                  } catch(e){ console.log('FRAME_BODY_ERR',String(e)); }
+                }
+              }
+            });
+            await page.goto('https://claude.ai/code/artifact/3np6QXb9PLJFETWm1Cswxn',{waitUntil:'domcontentloaded',timeout:120000});
+            for(let i=0;i<10;i++){
+              await page.waitForTimeout(3000);
+              console.log('TICK',i,'url',page.url(),'title',await page.title());
+              const frames=page.frames();
+              console.log('FRAMES',frames.length);
+              for(const [j,f] of frames.entries()){
+                let txt='', html='';
+                try{txt=(await f.locator('body').innerText({timeout:3000})).slice(0,8000)}catch{}
+                try{html=(await f.content()).slice(0,30000)}catch{}
+                console.log('FRAME',j,'URL',f.url());
+                console.log('TEXT',txt.replace(/\n/g,' | ').slice(0,8000));
+                if(j>0 && html){
+                  fs.writeFileSync('/tmp/frame-'+j+'.html',html);
+                }
+              }
+            }
+            await page.screenshot({path:'/tmp/artifact.png',fullPage:true});
+            await browser.close();
+          })().catch(e=>{console.error(e);process.exit(1)});
+          JS
+          node /tmp/read-artifact.js
+      - uses: actions/upload-artifact@v4
+        with:
+          name: claude-artifact-inspection
+          path: |
+            /tmp/artifact.png
+            /tmp/frame-*.html
+            /tmp/frame-response.bin
+          if-no-files-found: ignore
