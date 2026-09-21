@@ -1,4 +1,4 @@
-name: Verify infinite Figma garden
+name: Verify MAX FUGLESPRENGER roguelite
 on:
   push:
     branches: [nightgarden-prod-runner-20260921]
@@ -9,16 +9,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: |
-          set -euo pipefail
-          curl -fsS --retry 6 --retry-delay 2 https://max.iverfinne.no/ -o /tmp/page
-          grep -q '<title>MAX FUGLESPRENGER</title>' /tmp/page
-          grep -q 'GARDEN_FIG_FORMS' /tmp/page
-          grep -q 'function drawGrowingFigmaPlant' /tmp/page
-          grep -q 'function updateHoldWater' /tmp/page
-          grep -q 'waterHold' /tmp/page
-          grep -q "WILD_PLANTS=false" /tmp/page
-          echo SOURCE_OK
-      - run: |
           npm init -y >/dev/null 2>&1
           npm install playwright@latest
           npx playwright install --with-deps chromium
@@ -27,39 +17,43 @@ jobs:
           const { chromium } = require('playwright');
           (async()=>{
             const browser=await chromium.launch({headless:true});
-            const context=await browser.newContext({
-              viewport:{width:390,height:844},
-              hasTouch:true,isMobile:true,deviceScaleFactor:3
-            });
-            const page=await context.newPage(),errors=[];
+            const context=await browser.newContext({viewport:{width:390,height:844},hasTouch:true,isMobile:true,deviceScaleFactor:3});
+            const page=await context.newPage();
+            const errors=[];
             page.on('pageerror',e=>errors.push('PAGE '+e.message));
             page.on('console',m=>{if(m.type()==='error')errors.push('CONSOLE '+m.text())});
-            const res=await page.goto('https://max.iverfinne.no/',{waitUntil:'domcontentloaded',timeout:120000});
+            let res=await page.goto('https://max.iverfinne.no/',{waitUntil:'domcontentloaded',timeout:120000});
             if(!res||res.status()!==200)throw new Error('HTTP '+(res&&res.status()));
-            await page.waitForTimeout(3000);
-            if((await page.title())!=='MAX FUGLESPRENGER')throw new Error('title');
-            const ui=await page.evaluate(()=>({
+            await page.evaluate(()=>localStorage.clear());
+            await page.reload({waitUntil:'domcontentloaded',timeout:120000});
+            await page.waitForTimeout(2200);
+            if((await page.title())!=='MAX FUGLESPRENGER')throw new Error('bad title');
+            const vis=await page.evaluate(()=>({
               title:getComputedStyle(document.querySelector('#gameTitle')).display,
               blast:getComputedStyle(document.querySelector('#blastHud')).display,
               garden:getComputedStyle(document.querySelector('#gardenHud')).display,
-              hint:getComputedStyle(document.querySelector('#gardenHint')).display,
               round:getComputedStyle(document.querySelector('#roundHud')).display,
-              perkBottom:getComputedStyle(document.querySelector('#perkMenu')).bottom,
+              perk:getComputedStyle(document.querySelector('#perkMenu')).display,
+              intro:localStorage.getItem('max-fuglesprenger-rogue-intro-v6')
+            }));
+            if(vis.title!=='none'||vis.blast!=='none'||vis.garden!=='none'||vis.round!=='none')throw new Error('text HUD visible '+JSON.stringify(vis));
+            if(!vis.intro)throw new Error('v6 reset did not initialize');
+
+            await page.keyboard.down('ArrowRight'); await page.waitForTimeout(1100); await page.keyboard.up('ArrowRight');
+            await page.waitForTimeout(900);
+            await page.keyboard.down('ArrowDown'); await page.waitForTimeout(500); await page.keyboard.up('ArrowDown');
+            await page.waitForTimeout(1600);
+
+            const state=await page.evaluate(()=>({
+              save:localStorage.getItem('max-fuglesprenger-rogue-v6'),
+              meta:localStorage.getItem('max-fuglesprenger-meta-v1'),
               canvas:[document.querySelector('#c').width,document.querySelector('#c').height]
             }));
-            console.log('UI',JSON.stringify(ui));
-            if([ui.title,ui.blast,ui.garden,ui.hint,ui.round].some(x=>x!=='none'))throw new Error('text HUD visible');
-
-            // Exercise movement/touch paths on the iPhone-sized viewport.
-            await page.keyboard.down('ArrowRight');await page.waitForTimeout(1500);await page.keyboard.up('ArrowRight');
-            await page.keyboard.press('ArrowUp');await page.waitForTimeout(700);
-            const b=await page.locator('#stage').boundingBox();if(!b)throw new Error('stage');
-            await page.mouse.move(b.x+b.width*.56,b.y+b.height*.66);
-            await page.mouse.down();await page.waitForTimeout(900);await page.mouse.up();
-            await page.waitForTimeout(1000);
+            console.log('UI',JSON.stringify(vis));
+            console.log('STATE',JSON.stringify(state));
             console.log('ERRORS',JSON.stringify(errors));
             if(errors.length)throw new Error(errors.join('\n'));
-            await page.screenshot({path:'fuglesprenger-garden.png'});
+            await page.screenshot({path:'fuglesprenger-roguelite.png'});
             await browser.close();
           })().catch(e=>{console.error(e);process.exit(1)});
           JS
@@ -67,6 +61,6 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: fuglesprenger-garden-verification
-          path: fuglesprenger-garden.png
+          name: fuglesprenger-roguelite-verification
+          path: fuglesprenger-roguelite.png
           if-no-files-found: ignore
