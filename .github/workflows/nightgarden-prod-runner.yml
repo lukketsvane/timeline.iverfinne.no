@@ -1,4 +1,4 @@
-name: Verify max live
+name: Verify max live in browser
 on:
   push:
     branches: [nightgarden-prod-runner-20260921]
@@ -8,13 +8,40 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     steps:
-      - run: |
-          set -euo pipefail
-          curl -fsS --retry 4 --retry-delay 3 -D /tmp/headers https://max.iverfinne.no -o /tmp/page
-          echo "STATUS"
-          head -20 /tmp/headers
-          echo "TITLE"
-          grep -o '<title>[^<]*</title>' /tmp/page | head -1
-          echo "BYTES"
-          wc -c /tmp/page
-          grep -q 'Max in the Night Garden' /tmp/page
+      - name: Install browser
+        run: |
+          npm init -y >/dev/null 2>&1
+          npm install playwright@latest >/dev/null 2>&1
+          npx playwright install --with-deps chromium >/dev/null 2>&1
+      - name: Verify
+        run: |
+          cat > verify.cjs <<'JS'
+          const { chromium } = require('playwright');
+          (async()=>{
+            const browser = await chromium.launch({headless:true});
+            const context = await browser.newContext({
+              viewport:{width:390,height:844},
+              deviceScaleFactor:2,
+              isMobile:true,
+              hasTouch:true,
+              userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1'
+            });
+            const page = await context.newPage();
+            await page.goto('https://max.iverfinne.no', {waitUntil:'domcontentloaded', timeout:120000});
+            for(let i=0;i<20;i++){
+              await page.waitForTimeout(3000);
+              const title=await page.title();
+              const body=(await page.textContent('body').catch(()=>''))||'';
+              console.log('STEP',i,'TITLE',title,'URL',page.url(),'BODY',body.slice(0,180));
+              if(title.includes('Max in the Night Garden') || body.includes('Max in the Night Garden')) {
+                console.log('LIVE_OK');
+                await browser.close();
+                process.exit(0);
+              }
+            }
+            await page.screenshot({path:'verify.png',fullPage:true});
+            await browser.close();
+            process.exit(1);
+          })();
+          JS
+          node verify.cjs
