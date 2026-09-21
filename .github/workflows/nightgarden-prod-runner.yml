@@ -1,4 +1,4 @@
-name: Inspect Claude artifact
+name: Inspect Claude artifact frame
 on:
   push:
     branches: [nightgarden-prod-runner-20260921]
@@ -8,21 +8,19 @@ jobs:
   inspect:
     runs-on: ubuntu-latest
     steps:
-      - name: Fetch artifact pages
+      - name: Fetch frame API
         run: |
           set -euo pipefail
-          for u in             "https://claude.ai/artifact/3np6QXb9PLJFETWm1Cswxn"             "https://claude.ai/code/artifact/3np6QXb9PLJFETWm1Cswxn"
-          do
-            echo "=== $u ==="
-            curl -L --compressed -A "Mozilla/5.0" -sS -D /tmp/headers "$u" -o /tmp/page || true
-            head -40 /tmp/headers || true
-            echo "--- size ---"
-            wc -c /tmp/page || true
-            echo "--- title ---"
-            grep -o '<title>[^<]*</title>' /tmp/page | head -3 || true
-            echo "--- artifact/api/url clues ---"
-            grep -Eo 'https?://[^"<> ]+|/api/[^"<> ]+|claudeusercontent[^"<> ]+' /tmp/page | head -120 || true
-            echo "--- body sample ---"
-            head -c 12000 /tmp/page | sed 's/></>\n</g' | head -160 || true
-            echo
-          done
+          UUID="1697c4e9-61bc-424f-b5d0-9492d8dd1d3b"
+          URL="https://claude.ai/api/frame/$UUID?via=user_open&bk=initial"
+          curl -L --compressed -sS             -A "Mozilla/5.0"             -H "X-Frame-CP: go"             -H "X-Frame-Platform: web"             -H "X-Frame-Surface: standalone"             -H "X-Frame-Client-Version: 1789877314"             -D /tmp/headers "$URL" -o /tmp/frame || true
+          echo "=== headers ==="
+          cat /tmp/headers
+          echo "=== size/type ==="
+          wc -c /tmp/frame
+          file /tmp/frame
+          echo "=== first 30000 chars ==="
+          head -c 30000 /tmp/frame
+          echo
+          echo "=== strings/url clues ==="
+          strings /tmp/frame | grep -E 'plate|plant|sprite|asset|png|webp|svg|data:image|<html|<style|<script|background|root|leaf|flower' | head -300 || true
