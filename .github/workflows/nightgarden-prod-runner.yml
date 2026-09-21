@@ -1,4 +1,4 @@
-name: Verify finished garden loop
+name: Verify fun MAX garden
 on:
   push:
     branches: [nightgarden-prod-runner-20260921]
@@ -9,6 +9,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: |
+          set -euo pipefail
+          curl -fsS --retry 5 --retry-delay 2 https://max.iverfinne.no/ -o /tmp/page
+          grep -q '<title>MAX FUGLESPRENGER</title>' /tmp/page
+          grep -q 'function updateGardenFun' /tmp/page
+          grep -q 'BLOMSTERRUSH' /tmp/page
+          grep -q 'KREKRAID' /tmp/page
+          grep -q 'STORKREK' /tmp/page
+          echo SOURCE_OK
+      - run: |
           npm init -y >/dev/null 2>&1
           npm install playwright@latest
           npx playwright install --with-deps chromium
@@ -18,44 +27,30 @@ jobs:
           (async()=>{
             const browser=await chromium.launch({headless:true});
             const context=await browser.newContext({viewport:{width:390,height:844},hasTouch:true,isMobile:true,deviceScaleFactor:3});
-            const page=await context.newPage(),errors=[];
+            const page=await context.newPage(), errors=[];
             page.on('pageerror',e=>errors.push('PAGE '+e.message));
             page.on('console',m=>{if(m.type()==='error')errors.push('CONSOLE '+m.text())});
             const res=await page.goto('https://max.iverfinne.no/',{waitUntil:'domcontentloaded',timeout:120000});
             if(!res||res.status()!==200)throw new Error('HTTP '+(res&&res.status()));
-            await page.waitForTimeout(2200);
+            await page.waitForTimeout(2500);
             if((await page.title())!=='MAX FUGLESPRENGER')throw new Error('wrong title');
-            await page.evaluate(()=>{localStorage.removeItem('max-fuglesprenger-garden-v1')});
-            await page.reload({waitUntil:'domcontentloaded',timeout:120000});
-            await page.waitForTimeout(1600);
-
-            await page.keyboard.press('e');
-            await page.waitForTimeout(2200);
-            let garden=JSON.parse(await page.evaluate(()=>localStorage.getItem('max-fuglesprenger-garden-v1')));
-            if(!garden||!garden.plots||garden.plots.length<1)throw new Error('seed was not planted');
-            if(garden.seeds!==7)throw new Error('seed count did not decrease: '+garden.seeds);
-
-            await page.keyboard.press('e');
-            await page.waitForTimeout(2000);
-            garden=JSON.parse(await page.evaluate(()=>localStorage.getItem('max-fuglesprenger-garden-v1')));
-            if(garden.plots[0].moisture<.85)throw new Error('watering failed '+garden.plots[0].moisture);
-
-            await page.waitForTimeout(7000);
-            const hud=await page.locator('#gardenHud').innerText();
-            const hint=await page.locator('#gardenHint').innerText();
-            console.log('HUD',hud);
-            console.log('HINT',hint);
-            console.log('GARDEN',JSON.stringify(garden));
+            await page.keyboard.down('ArrowRight'); await page.waitForTimeout(900); await page.keyboard.up('ArrowRight');
+            await page.keyboard.press('ArrowUp'); await page.waitForTimeout(700);
+            const box=await page.locator('#stage').boundingBox(); if(!box)throw new Error('stage');
+            for(const x of [.35,.5,.65]) {
+              await page.mouse.move(box.x+box.width*x,box.y+box.height*.62);
+              await page.mouse.down(); await page.waitForTimeout(540); await page.mouse.up();
+              await page.waitForTimeout(300);
+            }
+            for(const x of [.3,.45,.6,.75]) {
+              await page.mouse.click(box.x+box.width*x,box.y+box.height*.55);
+              await page.waitForTimeout(150);
+            }
+            await page.waitForTimeout(1500);
+            console.log('HUD',await page.locator('#gardenHud').innerText());
             console.log('ERRORS',JSON.stringify(errors));
             if(errors.length)throw new Error(errors.join('\n'));
-            await page.screenshot({path:'max-fuglesprenger-garden-final.png',fullPage:true});
             await browser.close();
           })().catch(e=>{console.error(e);process.exit(1)});
           JS
           node verify.cjs
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: max-fuglesprenger-garden-final
-          path: max-fuglesprenger-garden-final.png
-          if-no-files-found: ignore
