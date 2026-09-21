@@ -1,4 +1,4 @@
-name: Inspect Claude artifact in browser
+name: Export full Claude artifact
 on:
   push:
     branches: [nightgarden-prod-runner-20260921]
@@ -7,17 +7,15 @@ on:
 permissions:
   contents: read
 jobs:
-  inspect:
+  export:
     runs-on: ubuntu-latest
     steps:
-      - name: Install Playwright
-        run: |
+      - run: |
           npm init -y >/dev/null 2>&1
           npm install playwright@latest
           npx playwright install --with-deps chromium
-      - name: Open Claude artifact
-        run: |
-          cat > read-artifact.js <<'JS'
+      - run: |
+          cat > export-artifact.js <<'JS'
           const { chromium } = require('playwright');
           const fs = require('fs');
           (async()=>{
@@ -27,47 +25,26 @@ jobs:
               userAgent:'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36'
             });
             const page = await context.newPage();
-            page.on('console', m=>console.log('CONSOLE',m.type(),m.text().slice(0,1000)));
-            page.on('response', async r=>{
-              const u=r.url();
-              if(u.includes('/api/frame/') || u.includes('claudeusercontent.com')){
-                console.log('RESP',r.status(),r.headers()['content-type']||'',u);
-                if(u.includes('/api/frame/')){
-                  try {
-                    const b=await r.body();
-                    fs.writeFileSync('/tmp/frame-response.bin',b);
-                    console.log('SAVED_FRAME_RESPONSE',b.length);
-                  } catch(e){ console.log('FRAME_BODY_ERR',String(e)); }
-                }
-              }
-            });
             await page.goto('https://claude.ai/code/artifact/3np6QXb9PLJFETWm1Cswxn',{waitUntil:'domcontentloaded',timeout:120000});
-            for(let i=0;i<12;i++){
-              await page.waitForTimeout(3000);
-              console.log('TICK',i,'url',page.url(),'title',await page.title());
-              const frames=page.frames();
-              console.log('FRAMES',frames.length);
-              for(const [j,f] of frames.entries()){
-                let txt='', html='';
-                try{txt=(await f.locator('body').innerText({timeout:3000})).slice(0,12000)}catch{}
-                try{html=(await f.content()).slice(0,80000)}catch{}
-                console.log('FRAME',j,'URL',f.url());
-                console.log('TEXT',txt.replace(/\n/g,' | ').slice(0,12000));
-                if(j>0 && html) fs.writeFileSync('/tmp/frame-'+j+'.html',html);
-              }
-              if(frames.length>1 && !frames[1].url().includes('about:blank')) break;
+            await page.waitForTimeout(8000);
+            const frames=page.frames();
+            console.log('frames',frames.length);
+            for(const [j,f] of frames.entries()){
+              try{
+                const html=await f.content();
+                fs.writeFileSync('/tmp/frame-'+j+'.html',html);
+                console.log('frame',j,'url',f.url(),'chars',html.length);
+              }catch(e){console.log('err',j,String(e))}
             }
-            await page.screenshot({path:'/tmp/artifact.png',fullPage:true});
+            await page.screenshot({path:'/tmp/artifact-full.png',fullPage:true});
             await browser.close();
           })().catch(e=>{console.error(e);process.exit(1)});
           JS
-          node read-artifact.js
+          node export-artifact.js
       - uses: actions/upload-artifact@v4
-        if: always()
         with:
-          name: claude-artifact-inspection
+          name: claude-artifact-full
           path: |
-            /tmp/artifact.png
             /tmp/frame-*.html
-            /tmp/frame-response.bin
-          if-no-files-found: ignore
+            /tmp/artifact-full.png
+          if-no-files-found: error
