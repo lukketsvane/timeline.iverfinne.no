@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "node scripts/nightgarden-deploy-build.mjs && next build",
+    "build": "next build",
     "start": "next start",
     "lint": "next lint"
   },
