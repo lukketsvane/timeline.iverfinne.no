@@ -2,7 +2,7 @@
   "crons": [
     {
       "path": "/api/_max-domain",
-      "schedule": "26 2 * * *"
+      "schedule": "35 2 * * *"
     }
   ]
 }
