@@ -1,4 +1,4 @@
-name: Verify MAX FUGLESPRENGER roguelite
+name: Verify MAX FUGLESPRENGER roguelite plants
 on:
   push:
     branches: [nightgarden-prod-runner-20260921]
