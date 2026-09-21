@@ -1,18 +1,20 @@
-name: Inspect max DNS
+name: Verify max live
 on:
   push:
     branches: [nightgarden-prod-runner-20260921]
     paths:
       - '.github/workflows/nightgarden-prod-runner.yml'
 jobs:
-  inspect:
+  verify:
     runs-on: ubuntu-latest
     steps:
       - run: |
-          set +e
-          echo "MAX A"; dig +short A max.iverfinne.no
-          echo "MAX CNAME"; dig +short CNAME max.iverfinne.no
-          echo "RANDOM A"; dig +short A random-check-987.iverfinne.no
-          echo "RANDOM CNAME"; dig +short CNAME random-check-987.iverfinne.no
-          echo "TIMELINE"; dig +short CNAME timeline.iverfinne.no; dig +short A timeline.iverfinne.no
-          echo "MAX HTTPS"; curl -sSIL --max-time 10 https://max.iverfinne.no | head -30
+          set -euo pipefail
+          curl -fsS --retry 4 --retry-delay 3 -D /tmp/headers https://max.iverfinne.no -o /tmp/page
+          echo "STATUS"
+          head -20 /tmp/headers
+          echo "TITLE"
+          grep -o '<title>[^<]*</title>' /tmp/page | head -1
+          echo "BYTES"
+          wc -c /tmp/page
+          grep -q 'Max in the Night Garden' /tmp/page
