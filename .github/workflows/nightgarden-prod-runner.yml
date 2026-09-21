@@ -1,47 +1,48 @@
-name: Review Night Garden visuals 3
+name: Verify MAX FUGLESPRENGER
 on:
   push:
     branches: [nightgarden-prod-runner-20260921]
     paths:
       - '.github/workflows/nightgarden-prod-runner.yml'
 jobs:
-  review:
+  verify:
     runs-on: ubuntu-latest
     steps:
+      - run: |
+          set -euo pipefail
+          curl -fsS --retry 5 --retry-delay 2 https://max.iverfinne.no/ -o /tmp/page
+          grep -q '<title>MAX FUGLESPRENGER</title>' /tmp/page
+          grep -q 'function blastBirdAt' /tmp/page
+          grep -q 'MAX FUGLESPRENGER' /tmp/page
+          echo "SOURCE_OK"
       - run: |
           npm init -y >/dev/null 2>&1
           npm install playwright@latest
           npx playwright install --with-deps chromium
       - run: |
-          cat > review.cjs <<'JS'
+          cat > verify.cjs <<'JS'
           const { chromium } = require('playwright');
           (async()=>{
             const browser=await chromium.launch({headless:true});
             const context=await browser.newContext({viewport:{width:390,height:844},hasTouch:true,isMobile:true,deviceScaleFactor:3});
-            const page=await context.newPage();
-            const errors=[];
+            const page=await context.newPage(), errors=[];
             page.on('pageerror',e=>errors.push('PAGE '+e.message));
             page.on('console',m=>{if(m.type()==='error')errors.push('CONSOLE '+m.text())});
-            const biomes=[
-              ['meadow',320],['wetland',960],['grove',1600],['heath',2240],
-              ['moon',2880],['fungal',3520],['frost',4160],['ember',4800]
-            ];
-            for(const [name,x] of biomes){
-              await page.goto('https://max.iverfinne.no/',{waitUntil:'domcontentloaded',timeout:120000});
-              await page.evaluate(v=>localStorage.setItem('max-night-garden-x',String(v)),x);
-              await page.reload({waitUntil:'domcontentloaded',timeout:120000});
-              await page.waitForTimeout(1800);
-              await page.screenshot({path:`review-${name}.png`,fullPage:true});
-            }
+            const res=await page.goto('https://max.iverfinne.no/',{waitUntil:'domcontentloaded',timeout:120000});
+            if(!res||res.status()!==200)throw new Error('HTTP '+(res&&res.status()));
+            await page.waitForTimeout(2600);
+            if((await page.title())!=='MAX FUGLESPRENGER')throw new Error('wrong title');
+            const titleText=await page.locator('#gameTitle').innerText();
+            if(titleText!=='MAX FUGLESPRENGER')throw new Error('missing title card');
+            const box=await page.locator('#stage').boundingBox();
+            if(!box)throw new Error('no stage');
+            for(let y=.42;y<=.72;y+=.10)for(let x=.18;x<=.82;x+=.16){await page.mouse.click(box.x+box.width*x,box.y+box.height*y);await page.waitForTimeout(70);}
+            await page.waitForTimeout(800);
+            console.log('TITLE',await page.title());
+            console.log('HUD',titleText);
             console.log('ERRORS',JSON.stringify(errors));
             if(errors.length)throw new Error(errors.join('\n'));
             await browser.close();
           })().catch(e=>{console.error(e);process.exit(1)});
           JS
-          node review.cjs
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: nightgarden-visual-review
-          path: review-*.png
-          if-no-files-found: error
+          node verify.cjs
