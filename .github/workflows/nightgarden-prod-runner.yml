@@ -1,4 +1,4 @@
-name: Verify finished FUGLESPRENGER roguelite
+name: Verify icon-only FUGLESPRENGER UI
 on:
   push:
     branches: [nightgarden-prod-runner-20260921]
@@ -18,42 +18,25 @@ jobs:
           (async()=>{
             const browser=await chromium.launch({headless:true});
             const context=await browser.newContext({viewport:{width:390,height:844},hasTouch:true,isMobile:true,deviceScaleFactor:3});
-            const page=await context.newPage();
-            const errors=[];
+            const page=await context.newPage(), errors=[];
             page.on('pageerror',e=>errors.push('PAGE '+e.message));
             page.on('console',m=>{if(m.type()==='error')errors.push('CONSOLE '+m.text())});
-            await page.goto('https://max.iverfinne.no/',{waitUntil:'domcontentloaded',timeout:120000});
-            await page.evaluate(()=>{
-              localStorage.removeItem('max-fuglesprenger-rogue-intro-v3');
-              localStorage.removeItem('max-fuglesprenger-rogue-v3');
-              localStorage.setItem('max-night-garden-x','0');
-            });
-            await page.reload({waitUntil:'domcontentloaded',timeout:120000});
-            await page.waitForTimeout(1800);
-            if((await page.title())!=='MAX FUGLESPRENGER')throw new Error('wrong title');
-            const hud0=await page.locator('#gardenHud').innerText();
-            const hint0=await page.locator('#gardenHint').innerText();
-            if(!/FRØ 0/.test(hud0))throw new Error('run does not start at zero seeds: '+hud0);
-            if(!/VERDA ER TOM|FINN/.test(hint0))throw new Error('missing zero-world hint: '+hint0);
-
-            await page.keyboard.down('ArrowRight');
-            await page.waitForTimeout(2300);
-            await page.keyboard.up('ArrowRight');
-            await page.waitForTimeout(500);
-            const hud1=await page.locator('#gardenHud').innerText();
-            console.log('HUD0',hud0.replace(/\n/g,' | '));
-            console.log('HUD1',hud1.replace(/\n/g,' | '));
-            console.log('HINT',hint0);
-            console.log('ERRORS',JSON.stringify(errors));
+            const res=await page.goto('https://max.iverfinne.no/',{waitUntil:'domcontentloaded',timeout:120000});
+            if(!res||res.status()!==200)throw new Error('HTTP '+(res&&res.status()));
+            await page.waitForTimeout(2500);
+            const state=await page.evaluate(()=>({
+              title:document.title,
+              hidden:['gameTitle','blastHud','gardenHud','gardenHint','roundHud'].map(id=>[id,getComputedStyle(document.getElementById(id)).display]),
+              perk:getComputedStyle(document.getElementById('perkMenu')).bottom,
+              text:['gameTitle','blastHud','gardenHud','gardenHint','roundHud'].map(id=>document.getElementById(id).textContent),
+              viewport:document.querySelector('meta[name=viewport]').content
+            }));
+            console.log(JSON.stringify(state));
+            if(state.title!=='MAX FUGLESPRENGER')throw new Error('title');
+            if(state.hidden.some(x=>x[1]!=='none'))throw new Error('text HUD visible');
+            if(!state.viewport.includes('viewport-fit=cover'))throw new Error('viewport');
             if(errors.length)throw new Error(errors.join('\n'));
-            await page.screenshot({path:'finished-roguelite.png',fullPage:true});
             await browser.close();
           })().catch(e=>{console.error(e);process.exit(1)});
           JS
           node verify.cjs
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: finished-fuglesprenger-verification
-          path: finished-roguelite.png
-          if-no-files-found: ignore
