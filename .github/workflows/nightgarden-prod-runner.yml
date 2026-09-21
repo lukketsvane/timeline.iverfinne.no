@@ -1,16 +1,18 @@
-name: Probe candidate hosts
+name: Verify max final
 on:
   push:
     branches: [nightgarden-prod-runner-20260921]
     paths:
       - '.github/workflows/nightgarden-prod-runner.yml'
 jobs:
-  probe:
+  verify:
     runs-on: ubuntu-latest
     steps:
       - run: |
-          set +e
-          for u in https://cells.garden https://tv.iverfinne.no https://slicer.iverfinne.no https://50x50x50.iverfinne.no https://mbti-tesseract.iverfinne.no; do
-            echo "=== $u ==="
-            curl -sSIL --max-time 15 "$u" | head -12
-          done
+          set -euo pipefail
+          curl -fsS --retry 4 --retry-delay 2 -D /tmp/headers https://max.iverfinne.no -o /tmp/page
+          head -20 /tmp/headers
+          grep -o '<title>[^<]*</title>' /tmp/page | head -1
+          wc -c /tmp/page
+          grep -q 'Max in the Night Garden' /tmp/page
+          echo LIVE_OK
