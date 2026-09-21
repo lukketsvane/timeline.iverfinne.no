@@ -20,7 +20,7 @@ jobs:
 
       - name: Open deploy bridge
         run: |
-          cat > /tmp/run.js <<'JS'
+          cat > run.cjs <<'JS'
           const { chromium } = require('playwright');
           (async()=>{
             const browser = await chromium.launch({headless:true});
@@ -38,4 +38,4 @@ jobs:
             await browser.close();
           })().catch(e=>{console.error(e);process.exit(1)});
           JS
-          node /tmp/run.js
+          node run.cjs
