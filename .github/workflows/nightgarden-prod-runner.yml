@@ -1,41 +1,18 @@
-name: Invoke Night Garden deploy bridge in browser
+name: Inspect max DNS
 on:
   push:
     branches: [nightgarden-prod-runner-20260921]
     paths:
       - '.github/workflows/nightgarden-prod-runner.yml'
-
-permissions:
-  contents: read
-
 jobs:
-  deploy:
+  inspect:
     runs-on: ubuntu-latest
     steps:
-      - name: Install Playwright
-        run: |
-          npm init -y >/dev/null 2>&1
-          npm install playwright@latest
-          npx playwright install --with-deps chromium
-
-      - name: Open deploy bridge
-        run: |
-          cat > run.cjs <<'JS'
-          const { chromium } = require('playwright');
-          (async()=>{
-            const browser = await chromium.launch({headless:true});
-            const context = await browser.newContext({
-              userAgent:'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36'
-            });
-            const page = await context.newPage();
-            await page.goto('https://timeline.iverfinne.no/api/_nightgarden-deploy', {waitUntil:'domcontentloaded', timeout:120000});
-            for (let i=0;i<12;i++) {
-              await page.waitForTimeout(5000);
-              const body = (await page.textContent('body').catch(()=>'')) || '';
-              console.log('STEP', i, 'URL', page.url(), 'BODY', body.slice(0,2500));
-              if (body.includes('"stage":"deploy"') || body.includes('"stage":"already"') || body.includes('"ok":true')) break;
-            }
-            await browser.close();
-          })().catch(e=>{console.error(e);process.exit(1)});
-          JS
-          node run.cjs
+      - run: |
+          set +e
+          echo "MAX A"; dig +short A max.iverfinne.no
+          echo "MAX CNAME"; dig +short CNAME max.iverfinne.no
+          echo "RANDOM A"; dig +short A random-check-987.iverfinne.no
+          echo "RANDOM CNAME"; dig +short CNAME random-check-987.iverfinne.no
+          echo "TIMELINE"; dig +short CNAME timeline.iverfinne.no; dig +short A timeline.iverfinne.no
+          echo "MAX HTTPS"; curl -sSIL --max-time 10 https://max.iverfinne.no | head -30
