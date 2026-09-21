@@ -1,4 +1,4 @@
-name: Verify icon-only FUGLESPRENGER UI
+name: Verify crouch gardening iPhone
 on:
   push:
     branches: [nightgarden-prod-runner-20260921]
@@ -17,26 +17,71 @@ jobs:
           const { chromium } = require('playwright');
           (async()=>{
             const browser=await chromium.launch({headless:true});
-            const context=await browser.newContext({viewport:{width:390,height:844},hasTouch:true,isMobile:true,deviceScaleFactor:3});
+            const context=await browser.newContext({
+              viewport:{width:390,height:844},
+              hasTouch:true,isMobile:true,deviceScaleFactor:3,
+              userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148'
+            });
             const page=await context.newPage(), errors=[];
             page.on('pageerror',e=>errors.push('PAGE '+e.message));
             page.on('console',m=>{if(m.type()==='error')errors.push('CONSOLE '+m.text())});
-            const res=await page.goto('https://max.iverfinne.no/',{waitUntil:'domcontentloaded',timeout:120000});
+            let res=await page.goto('https://max.iverfinne.no/',{waitUntil:'domcontentloaded',timeout:120000});
             if(!res||res.status()!==200)throw new Error('HTTP '+(res&&res.status()));
-            await page.waitForTimeout(2500);
-            const state=await page.evaluate(()=>({
-              title:document.title,
-              hidden:['gameTitle','blastHud','gardenHud','gardenHint','roundHud'].map(id=>[id,getComputedStyle(document.getElementById(id)).display]),
-              perk:getComputedStyle(document.getElementById('perkMenu')).bottom,
-              text:['gameTitle','blastHud','gardenHud','gardenHint','roundHud'].map(id=>document.getElementById(id).textContent),
-              viewport:document.querySelector('meta[name=viewport]').content
+            await page.evaluate(()=>{
+              localStorage.setItem('max-fuglesprenger-rogue-intro-v4','1');
+              localStorage.setItem('max-night-garden-x','0');
+              localStorage.setItem('max-fuglesprenger-rogue-v4',JSON.stringify({
+                version:4,seeds:1,stats:{harvested:0,lost:0,defended:0},score:0,wave:0,power:0,
+                rogue:{level:1,xp:0,next:4,choice:null,ended:false,perks:{growth:0,water:0,yield:0,shield:0,magnet:0,blast:0}},
+                seedCollected:{},plots:[]
+              }));
+            });
+            await page.reload({waitUntil:'domcontentloaded',timeout:120000});
+            await page.waitForTimeout(1200);
+            const stage=page.locator('#stage'), box=await stage.boundingBox();
+            if(!box)throw new Error('no stage');
+
+            async function swipeDown(){
+              const x=box.x+box.width*.50, y=box.y+box.height*.45;
+              await page.mouse.move(x,y); await page.mouse.down();
+              await page.mouse.move(x,y+48,{steps:4});
+              await page.waitForTimeout(420);
+              await page.mouse.up();
+            }
+
+            await swipeDown();
+            await page.waitForTimeout(2200);
+            let a=await page.evaluate(()=>JSON.parse(localStorage.getItem('max-fuglesprenger-rogue-v4')||'null'));
+            if(!a||a.seeds!==0||!a.plots||a.plots.length!==1)throw new Error('crouch did not plant '+JSON.stringify(a));
+            const before=a.plots[0].moisture;
+
+            await swipeDown();
+            await page.waitForTimeout(2200);
+            let b=await page.evaluate(()=>JSON.parse(localStorage.getItem('max-fuglesprenger-rogue-v4')||'null'));
+            if(!b||!b.plots||b.plots.length!==1)throw new Error('plot missing after water');
+            if(!(b.plots[0].moisture>before+.35))throw new Error('crouch did not water '+before+' -> '+b.plots[0].moisture);
+
+            const ui=await page.evaluate(()=>({
+              garden:getComputedStyle(document.querySelector('#gardenHud')).display,
+              hint:getComputedStyle(document.querySelector('#gardenHint')).display,
+              round:getComputedStyle(document.querySelector('#roundHud')).display,
+              title:document.querySelector('#gameTitle').textContent,
+              blast:document.querySelector('#blastHud').textContent,
+              perkBottom:getComputedStyle(document.querySelector('#perkMenu')).bottom
             }));
-            console.log(JSON.stringify(state));
-            if(state.title!=='MAX FUGLESPRENGER')throw new Error('title');
-            if(state.hidden.some(x=>x[1]!=='none'))throw new Error('text HUD visible');
-            if(!state.viewport.includes('viewport-fit=cover'))throw new Error('viewport');
+            if(ui.garden!=='none'||ui.hint!=='none'||ui.round!=='none'||ui.title.trim()||ui.blast.trim())throw new Error('text HUD visible '+JSON.stringify(ui));
+            console.log('PLANT_WATER_OK',before,b.plots[0].moisture);
+            console.log('UI_OK',JSON.stringify(ui));
+            console.log('ERRORS',JSON.stringify(errors));
             if(errors.length)throw new Error(errors.join('\n'));
+            await page.screenshot({path:'crouch-garden-iphone.png',fullPage:true});
             await browser.close();
           })().catch(e=>{console.error(e);process.exit(1)});
           JS
           node verify.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: crouch-garden-iphone
+          path: crouch-garden-iphone.png
+          if-no-files-found: ignore
