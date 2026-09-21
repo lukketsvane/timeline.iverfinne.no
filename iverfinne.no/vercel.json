@@ -1,8 +1,6 @@
 {
-  "crons": [
-    {
-      "path": "/api/_max-domain",
-      "schedule": "35 2 * * *"
-    }
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "alias": [
+    "max.iverfinne.no"
   ]
 }
