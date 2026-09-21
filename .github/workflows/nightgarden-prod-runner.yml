@@ -1,18 +1,28 @@
-name: Verify max final
+name: Inspect Claude artifact
 on:
   push:
     branches: [nightgarden-prod-runner-20260921]
     paths:
       - '.github/workflows/nightgarden-prod-runner.yml'
 jobs:
-  verify:
+  inspect:
     runs-on: ubuntu-latest
     steps:
-      - run: |
+      - name: Fetch artifact pages
+        run: |
           set -euo pipefail
-          curl -fsS --retry 4 --retry-delay 2 -D /tmp/headers https://max.iverfinne.no -o /tmp/page
-          head -20 /tmp/headers
-          grep -o '<title>[^<]*</title>' /tmp/page | head -1
-          wc -c /tmp/page
-          grep -q 'Max in the Night Garden' /tmp/page
-          echo LIVE_OK_MIDDLEWARE
+          for u in             "https://claude.ai/artifact/3np6QXb9PLJFETWm1Cswxn"             "https://claude.ai/code/artifact/3np6QXb9PLJFETWm1Cswxn"
+          do
+            echo "=== $u ==="
+            curl -L --compressed -A "Mozilla/5.0" -sS -D /tmp/headers "$u" -o /tmp/page || true
+            head -40 /tmp/headers || true
+            echo "--- size ---"
+            wc -c /tmp/page || true
+            echo "--- title ---"
+            grep -o '<title>[^<]*</title>' /tmp/page | head -3 || true
+            echo "--- artifact/api/url clues ---"
+            grep -Eo 'https?://[^"<> ]+|/api/[^"<> ]+|claudeusercontent[^"<> ]+' /tmp/page | head -120 || true
+            echo "--- body sample ---"
+            head -c 12000 /tmp/page | sed 's/></>\n</g' | head -160 || true
+            echo
+          done
