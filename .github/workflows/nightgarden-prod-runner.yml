@@ -1,50 +1,23 @@
-name: Export full Claude artifact
+name: Verify updated Night Garden
 on:
   push:
     branches: [nightgarden-prod-runner-20260921]
     paths:
       - '.github/workflows/nightgarden-prod-runner.yml'
-permissions:
-  contents: read
 jobs:
-  export:
+  verify:
     runs-on: ubuntu-latest
     steps:
       - run: |
-          npm init -y >/dev/null 2>&1
-          npm install playwright@latest
-          npx playwright install --with-deps chromium
-      - run: |
-          cat > export-artifact.js <<'JS'
-          const { chromium } = require('playwright');
-          const fs = require('fs');
-          (async()=>{
-            const browser = await chromium.launch({headless:true});
-            const context = await browser.newContext({
-              viewport:{width:1440,height:1200},
-              userAgent:'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36'
-            });
-            const page = await context.newPage();
-            await page.goto('https://claude.ai/code/artifact/3np6QXb9PLJFETWm1Cswxn',{waitUntil:'domcontentloaded',timeout:120000});
-            await page.waitForTimeout(8000);
-            const frames=page.frames();
-            console.log('frames',frames.length);
-            for(const [j,f] of frames.entries()){
-              try{
-                const html=await f.content();
-                fs.writeFileSync('/tmp/frame-'+j+'.html',html);
-                console.log('frame',j,'url',f.url(),'chars',html.length);
-              }catch(e){console.log('err',j,String(e))}
-            }
-            await page.screenshot({path:'/tmp/artifact-full.png',fullPage:true});
-            await browser.close();
-          })().catch(e=>{console.error(e);process.exit(1)});
-          JS
-          node export-artifact.js
-      - uses: actions/upload-artifact@v4
-        with:
-          name: claude-artifact-full
-          path: |
-            /tmp/frame-*.html
-            /tmp/artifact-full.png
-          if-no-files-found: error
+          set -euo pipefail
+          curl -fsS --retry 6 --retry-delay 2 -D /tmp/headers https://max.iverfinne.no/ -o /tmp/page
+          echo "=== HEADERS ==="
+          head -30 /tmp/headers
+          echo "=== CHECKS ==="
+          grep -o '<title>[^<]*</title>' /tmp/page | head -1
+          bytes=$(wc -c < /tmp/page)
+          echo "BYTES=$bytes"
+          grep -q 'Max in the Night Garden' /tmp/page
+          grep -q 'SHEET_SRC' /tmp/page
+          test "$bytes" -gt 300000
+          echo "UPDATED_NIGHT_GARDEN_LIVE"
