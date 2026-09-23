@@ -32,7 +32,7 @@ Notion-databasen må ha desse eigenskapane for at innhald skal kunne visast på 
 - `Slug` bør vere stabil over tid når innlegget først er publisert.
 - Dersom feltet er tomt, blir slug generert frå tittelen (tilrådd for enkel flyt).
 
-## Automatisk publisering utan Make
+## Automatisk publisering
 
 Skriv i Notion og set **Status = Ferdig**. Sida oppdaterer seg med Next.js sitt eksisterande mellomlager (ISR). Ingen ny teneste, cron-jobb, database, API-nøkkel eller abonnement er nødvendig.
 
@@ -44,9 +44,15 @@ Skriv i Notion og set **Status = Ferdig**. Sida oppdaterer seg med Next.js sitt 
 - Ei mislukka innhenting blir ikkje lagra som ei tom eller delvis innhaldsliste. Eit bygg utan tilgjengeleg Notion-data feilar, slik at eksisterande utrulling blir ståande.
 - Biletfiler har eige mellomlager; utskifting av eit bilete med same URL kan ta lengre tid. Første innhenting utan nokon lagra versjon krev at Notion er tilgjengeleg.
 
-### Overgang frå Make
+### Manuell oppdatering
 
-Etter at utrullinga er vellukka, slå av tidsplanen for `iverfinne.no – Notion → Revalidate` i Make. Det gamle GET-endepunktet er framleis kompatibelt, men markerer innhald som forelda i staden for å tømme heile nettsida. `POST /api/notion-webhook` er ein kompatibilitetsrute for eksisterande kall med delt hemmelegheit; dette oppsettet registrerer ingen ny native Notion-webhook.
+Treng du ei endring ut med ein gong, kall revalideringa med hemmelegheita i ein header:
+
+```sh
+curl -X POST https://iverfinne.no/api/revalidate -H "Authorization: Bearer $REVALIDATION_SECRET"
+```
+
+`POST /api/notion-webhook` godtek same hemmelegheit (`?secret=` eller `x-revalidate-secret`) for eksterne kall.
 
 ### Kontroll og testing
 
