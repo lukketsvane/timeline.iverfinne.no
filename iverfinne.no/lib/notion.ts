@@ -10,7 +10,7 @@ import { unstable_cache } from "next/cache";
 import { notion, NOTION_CACHE_TAG, NOTION_REFRESH_SECONDS, queryAllPages } from "./notion-client";
 export { NOTION_CACHE_TAG } from "./notion-client";
 
-// Freshness is request-driven: no Make polling or webhook is required.
+// Freshness is request-driven: no polling job or webhook is required.
 // Throwing on failed refreshes lets Next keep its persistent last good data.
 
 // Caps how many of a given async call run at once — getPublishedPosts fans out
