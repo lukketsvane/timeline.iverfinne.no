@@ -8,6 +8,13 @@ import HomePage from '@/components/home-page'
 import { getPublishedPosts } from '@/lib/notion'
 import { generateWebsiteJsonLd, generatePersonJsonLd } from '@/lib/structured-data'
 
+export const metadata = {
+  alternates: {
+    canonical: '/',
+    types: { 'application/rss+xml': '/feed.xml' },
+  },
+}
+
 export default async function Home() {
   const posts = await getPublishedPosts()
 
@@ -21,6 +28,7 @@ export default async function Home() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify([websiteJsonLd, personJsonLd]) }}
       />
       <div className="w-full max-w-6xl mx-auto px-2 py-8 sm:px-4 overflow-x-hidden">
+        <h1 className="sr-only">Iver Finne — prosjekt, skisser og tekstar</h1>
         <HomePage initialPosts={JSON.parse(JSON.stringify(posts))} />
       </div>
     </>

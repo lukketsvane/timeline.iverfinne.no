@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 
-// Digital sketchbook. Each drawing is named skb_YYYYMMDD_FORMAT_NR.png where
+// Digital sketchbook. Each drawing is named skb_YYYYMMDD_FORMAT_NR.webp where
 // FORMAT is `page` (single 13×21 leaf) or `spread` (full 26×21 open spread).
 type Format = 'page' | 'spread'
 type Drawing = { date: string; format: Format; nr: number; src: string }
@@ -12,7 +12,7 @@ const file = (date: string, format: Format, nr: number): Drawing => ({
   date,
   format,
   nr,
-  src: `/skissebok/skb_${date}_${format}_${String(nr).padStart(2, '0')}.png`,
+  src: `/skissebok/skb_${date}_${format}_${String(nr).padStart(2, '0')}.webp`,
 })
 
 // Bundled seed — used until the Notion-backed drawings load (newest first).

@@ -72,8 +72,6 @@ Opprett `.env.local`:
 
 ```sh
 cd iverfinne.no
-npm ci --legacy-peer-deps
-npm run dev
+pnpm install
+pnpm dev
 ```
-
-`--legacy-peer-deps` er nødvendig med den eksisterande kombinasjonen av React 19 og Framer Motion 11. Denne endringa oppgraderer ingen pakkar.

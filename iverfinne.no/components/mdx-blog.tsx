@@ -8,32 +8,18 @@ import { motion } from 'framer-motion'
 import { cn } from "@/lib/utils"
 import { MDXCard } from "./mdx-card"
 import GalleryView from "./gallery-view"
-import Skissebok from "./skissebok"
 import OmMeg from "./om-meg"
 import type { MDXRemoteSerializeResult } from 'next-mdx-remote'
+import type { Post as BasePost } from '@/types/post'
 import { getTagColor } from "@/lib/tag-utils"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
+import dynamic from "next/dynamic"
 
-interface Post {
-  uid: string
-  id?: string
-  title: string
-  description: string
-  date: string
-  tags: string[] | string | undefined
-  slug: string
-  type: "Skriving" | "Bok" | "Prosjekt" | "Lenkje" | "Interaktiv" | "Bilete" | "Presentasjon"
-  image?: string
-  coverimage?: string
-  content: string
-  serialized?: MDXRemoteSerializeResult
-  url?: string
-  icon?: string
-  thumbnails?: { src: string; alt: string }[]
-  modelSrc?: string
-  lesMeir?: boolean
-}
+const Skissebok = dynamic(() => import("./skissebok"), { ssr: false })
+
+type Post = BasePost & { serialized?: MDXRemoteSerializeResult }
+
 
 const contentTypes = [
   { label: "Skriving", value: "Skriving" },

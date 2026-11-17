@@ -12,7 +12,7 @@ const newsreader = Newsreader({
 })
 
 const APP_NAME = 'iverfinne.no'
-const APP_DEFAULT_TITLE = 'iverfinne.no'
+const APP_DEFAULT_TITLE = 'Iver Finne — prosjekt, skisser og tekstar'
 const APP_TITLE_TEMPLATE = '%s - iverfinne.no'
 const APP_DESCRIPTION = 'Arkivet til Iver Finne — små prosjekt, skisser og tekstar, samla på ein stad.'
 
@@ -22,7 +22,7 @@ const OG_IMAGE = {
   url: '/og-image.png',
   width: 1200,
   height: 630,
-  alt: APP_DEFAULT_TITLE,
+  alt: APP_NAME,
 }
 
 // maximumScale stops iOS Safari's automatic zoom-in when focusing the search
@@ -70,19 +70,17 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: APP_DEFAULT_TITLE,
+    title: APP_NAME,
   },
   formatDetection: {
     telephone: false,
   },
   alternates: {
-    canonical: '/',
     types: { 'application/rss+xml': '/feed.xml' },
   },
   openGraph: {
     type: 'website',
     siteName: APP_NAME,
-    url: '/',
     title: {
       default: APP_DEFAULT_TITLE,
       template: APP_TITLE_TEMPLATE,

@@ -18,6 +18,7 @@ export default async function DynamicPage({ params }: { params: Promise<{ slug: 
       const posts = await getPublishedPosts()
       return (
         <div className="w-full max-w-6xl mx-auto px-4 py-8 overflow-x-hidden">
+          <h1 className="sr-only">{segments[0].charAt(0).toUpperCase() + segments[0].slice(1)}</h1>
           <MDXBlog initialPosts={JSON.parse(JSON.stringify(posts))} initialType={segments[0].charAt(0).toUpperCase() + segments[0].slice(1)} />
         </div>
       )
@@ -55,8 +56,9 @@ export default async function DynamicPage({ params }: { params: Promise<{ slug: 
     // and never touch `serialized`, and compiling one (100KB of HTML in, 2.2MB
     // of MDX out for /interaktiv/formspraak) only burned render time and
     // inflated the payload.
-    const serialized =
-      post.type === 'Interaktiv' ? undefined : await serializeMarkdown(post.content)
+    const shown = new Set(post.type === 'Bilete' ? post.thumbnails?.map((t) => t.src) : [])
+    const body = post.content.replace(/!\[[^\]]*\]\(([^)\s]+)\)/g, (m, src) => (shown.has(src) ? '' : m))
+    const serialized = post.type === 'Interaktiv' ? undefined : await serializeMarkdown(body)
     const fullPost = { ...post, serialized }
 
     return <SlugPageClient post={JSON.parse(JSON.stringify(fullPost))} />

@@ -9,7 +9,7 @@ import { cn, notionImgSrc, notionImgSrcSet } from "@/lib/utils"
 import { HtmlIframe } from "@/components/html-iframe"
 import { motion, AnimatePresence } from 'framer-motion'
 import { useEffect, useState } from 'react'
-import { fullPageMdxComponents } from '@/lib/mdx-components'
+import { fullPageMdxComponents, MdxImg } from '@/lib/mdx-components'
 import WebDesignKeys from '@/components/WebDesignKeys'
 import { AudioPlayer } from '@/components/audio-player'
 import { ProgressiveImage } from '@/components/progressive-image'
@@ -111,7 +111,9 @@ export default function SlugPageClient({ post }: SlugPageClientProps) {
 
         <header className="mb-12">
           <div className="mb-8">
-            {post.type !== "Bilete" && (
+            {post.type === "Bilete" ? (
+              <h1 className="sr-only">{post.title}</h1>
+            ) : (
               <motion.h1
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -195,7 +197,7 @@ export default function SlugPageClient({ post }: SlugPageClientProps) {
                 ...(post.type === "Bok" && (post.image || post.icon) ? {
                   img: (props: any) => {
                     if (props.src === post.image || props.src === post.icon) return null
-                    return <img {...props} className="max-w-full h-auto rounded-lg my-6" />
+                    return <MdxImg {...props} className="my-6" />
                   }
                 } : {})
               }}
