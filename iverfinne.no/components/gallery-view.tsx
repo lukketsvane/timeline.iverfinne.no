@@ -78,8 +78,11 @@ interface GalleryItem {
   dims?: { w: number; h: number }
 }
 
+const MAX_FRAMES_PER_POST = 3
+
 // Flatten posts into individual frames: the hero image (cover/sosialbilete),
-// every image in the post body, and any 3D models attached in the body.
+// images from the post body (all of them for a Bilete post, the first few
+// otherwise), and any 3D models attached in the body.
 function buildItems(posts: GalleryPost[]): GalleryItem[] {
   const items: GalleryItem[] = []
   for (const post of posts) {
@@ -106,7 +109,8 @@ function buildItems(posts: GalleryPost[]): GalleryItem[] {
     } else {
       for (const src of extractContentImages(post.content)) add(src)
     }
-    srcs.forEach((src, i) =>
+    const shown = post.type === 'Bilete' ? srcs : srcs.slice(0, MAX_FRAMES_PER_POST)
+    shown.forEach((src, i) =>
       items.push({ key: `${post.uid}-${i}`, src, alt: alts.get(src), post, dims: post.imageDims?.[src] })
     )
     // Models attached inside the body get their own interactive frames.
