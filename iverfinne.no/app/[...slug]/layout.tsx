@@ -1,7 +1,9 @@
 import type { Metadata } from 'next'
 import { getPostBySlug, VALID_TYPES } from '@/lib/notion'
-import { generatePostJsonLd, generateBreadcrumbJsonLd } from '@/lib/structured-data'
+import { generatePostJsonLd, generateBreadcrumbJsonLd, postImage } from '@/lib/structured-data'
 import type { Post } from '@/types/post'
+
+const OG_BASE = { siteName: 'iverfinne.no', locale: 'nn_NO' }
 
 type Props = {
   params: Promise<{ slug: string[] }>
@@ -37,12 +39,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   // Type filter page: /skriving, /bok, etc.
   if (segments.length === 1 && VALID_TYPES.includes(segments[0].toLowerCase())) {
     const displayType = segments[0].charAt(0).toUpperCase() + segments[0].slice(1)
+    const description = `Alle ${displayType.toLowerCase()}-innlegg på iverfinne.no`
+    const canonical = `/${segments[0].toLowerCase()}`
     return {
       title: displayType,
-      description: `Alle ${displayType.toLowerCase()}-innlegg på iverfinne.no`,
-      alternates: {
-        canonical: `/${segments[0].toLowerCase()}`,
-      },
+      description,
+      alternates: { canonical },
+      openGraph: { ...OG_BASE, type: 'website', title: displayType, description, url: canonical, images: ['/og-image.png'] },
     }
   }
 
@@ -54,7 +57,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
     // Fall back to the global default sharing image when a post has none, so
     // every page always renders a large image card across platforms.
-    const image = post.image || post.thumbnails?.[0]?.src || post.ogImage || '/og-image.png'
+    const image = postImage(post) || '/og-image.png'
     const description = post.description || `${post.title} — ${post.type} på iverfinne.no`
     const canonical = `/${post.type.toLowerCase()}/${post.slug}`
 
@@ -66,6 +69,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
         canonical,
       },
       openGraph: {
+        ...OG_BASE,
         title: post.title,
         description,
         type: 'article',

@@ -1,4 +1,5 @@
 import { Post } from '@/types/post'
+import { notionImgSrc } from '@/lib/utils'
 
 const SITE_URL = 'https://iverfinne.no'
 
@@ -8,85 +9,55 @@ const author = {
   url: SITE_URL,
 }
 
+const SCHEMA_TYPE: Partial<Record<Post['type'], string>> = {
+  Skriving: 'BlogPosting',
+  Bilete: 'ImageGallery',
+  Presentasjon: 'PresentationDigitalDocument',
+}
+
+export function postImage(post: Post): string | undefined {
+  const src =
+    post.sosialbilete ||
+    post.image ||
+    post.thumbnails?.[0]?.src ||
+    post.ogImage ||
+    post.content?.match(/!\[[^\]]*\]\((\/api\/notion-image\?[^)\s]+)\)/)?.[1]
+  if (!src) return undefined
+  const sized = notionImgSrc(src, 1280)
+  return sized.startsWith('http') ? sized : `${SITE_URL}${sized}`
+}
+
 export function generatePostJsonLd(post: Post) {
   const url = `${SITE_URL}/${post.type.toLowerCase()}/${post.slug}`
-  const image = post.image || post.ogImage
+  const image = postImage(post)
+  const common = {
+    '@context': 'https://schema.org',
+    description: post.description,
+    author,
+    datePublished: post.date,
+    url,
+  }
 
-  switch (post.type) {
-    case 'Skriving':
-      return {
-        '@context': 'https://schema.org',
-        '@type': 'BlogPosting',
-        headline: post.title,
-        description: post.description,
-        author,
-        datePublished: post.date,
-        url,
-        ...(image && { image }),
-      }
-
-    case 'Bok':
-      return {
-        '@context': 'https://schema.org',
-        '@type': 'Review',
-        itemReviewed: {
-          '@type': 'Book',
-          name: post.title,
-          ...(image && { image }),
-        },
-        author,
-        datePublished: post.date,
-        description: post.description,
-        url,
-      }
-
-    case 'Prosjekt':
-      return {
-        '@context': 'https://schema.org',
-        '@type': 'CreativeWork',
+  if (post.type === 'Bok') {
+    return {
+      ...common,
+      '@type': 'Review',
+      itemReviewed: {
+        '@type': 'Book',
         name: post.title,
-        description: post.description,
-        author,
-        datePublished: post.date,
-        url,
         ...(image && { image }),
-      }
+      },
+    }
+  }
 
-    case 'Bilete':
-      return {
-        '@context': 'https://schema.org',
-        '@type': 'ImageGallery',
-        name: post.title,
-        description: post.description,
-        author,
-        datePublished: post.date,
-        url,
-        ...(image && { image }),
-      }
-
-    case 'Presentasjon':
-      return {
-        '@context': 'https://schema.org',
-        '@type': 'PresentationDigitalDocument',
-        name: post.title,
-        description: post.description,
-        author,
-        datePublished: post.date,
-        url,
-        ...(image && { image }),
-      }
-
-    default:
-      return {
-        '@context': 'https://schema.org',
-        '@type': 'CreativeWork',
-        name: post.title,
-        description: post.description,
-        author,
-        datePublished: post.date,
-        url,
-        ...(image && { image }),
-      }
+  const type = SCHEMA_TYPE[post.type] || 'CreativeWork'
+  return {
+    ...common,
+    '@type': type,
+    [type === 'BlogPosting' ? 'headline' : 'name']: post.title,
+    mainEntityOfPage: url,
+    ...(image && { image }),
+    ...(Array.isArray(post.tags) && post.tags.length > 0 && { keywords: post.tags.join(', ') }),
   }
 }
 
@@ -105,15 +76,15 @@ export function generateWebsiteJsonLd() {
 export function generatePersonJsonLd() {
   return {
     '@context': 'https://schema.org',
-    '@type': 'Person',
-    name: 'Iver Finne',
-    url: SITE_URL,
+    ...author,
+    sameAs: ['https://github.com/lukketsvane'],
   }
 }
 
 export function generateBreadcrumbJsonLd(post: Post) {
   const typeUrl = `${SITE_URL}/${post.type.toLowerCase()}`
   const postUrl = `${typeUrl}/${post.slug}`
+
   return {
     '@context': 'https://schema.org',
     '@type': 'BreadcrumbList',

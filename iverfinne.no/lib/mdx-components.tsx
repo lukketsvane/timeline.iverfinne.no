@@ -3,6 +3,22 @@ import { ImageGallery } from "@/components/image-gallery"
 import { ResponsiveIframe } from "@/components/responsive-iframe"
 import { ModelViewer } from "@/components/model-viewer"
 import { Callout } from "@/components/callout"
+import { cn, notionImgSrc, notionImgSrcSet } from "@/lib/utils"
+
+export function MdxImg({ className, ...props }: any) {
+  const src = typeof props.src === 'string' ? props.src : ''
+  return (
+    <img
+      loading="lazy"
+      decoding="async"
+      sizes="(min-width: 896px) 896px, 100vw"
+      {...props}
+      src={notionImgSrc(src, 1280)}
+      srcSet={notionImgSrcSet(src, [640, 960, 1280, 1600])}
+      className={cn('max-w-full h-auto rounded-lg', className)}
+    />
+  )
+}
 
 // Math block for Notion equation blocks
 function MathBlock({ expression }: { expression: string }) {
@@ -60,10 +76,10 @@ export const baseMdxComponents: Record<string, any> = {
   },
 
   // Images
-  img: (props: any) => <img {...props} className="max-w-full h-auto rounded-lg my-4" />,
+  img: (props: any) => <MdxImg {...props} className="my-4" />,
   Image: (props: any) => {
     if (!props.width && !props.height && !props.fill) {
-      return <img {...props} className="max-w-full h-auto rounded-lg my-4" />
+      return <MdxImg {...props} className="my-4" />
     }
     return <NextImage {...props} />
   },
@@ -126,5 +142,5 @@ export const fullPageMdxComponents: Record<string, any> = {
   h3: (props: any) => <h3 {...props} className="text-xl font-medium mt-4 mb-2 break-words" />,
   p: (props: any) => <p {...props} className="my-3 leading-normal break-words font-serif text-lg" />,
   li: (props: any) => <li {...props} className="font-serif text-lg leading-normal" />,
-  img: (props: any) => <img {...props} className="max-w-full h-auto rounded-lg my-6" />,
+  img: (props: any) => <MdxImg {...props} className="my-6" />,
 }

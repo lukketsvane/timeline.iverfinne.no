@@ -126,10 +126,10 @@ async function fetchAndReturn(imageUrl: string, request: NextRequest): Promise<R
   return new Response(out.body as BodyInit, {
     headers: {
       'Content-Type': out.contentType,
-      // Images keyed by stable block/page ids rarely change. Cache at the edge
-      // for an hour and serve stale while revalidating in the background, so
+      // Images keyed by stable block/page ids rarely change. Cache for a day
+      // and serve stale for a month while revalidating in the background, so
       // image loads stay fast without re-hitting Notion on every request.
-      'Cache-Control': 'public, max-age=300, s-maxage=3600, stale-while-revalidate=86400, stale-if-error=604800',
+      'Cache-Control': 'public, max-age=86400, s-maxage=86400, stale-while-revalidate=2592000, stale-if-error=2592000',
       // The webp negotiation above makes the response depend on Accept.
       'Vary': 'Accept',
     }

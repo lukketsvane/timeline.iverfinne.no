@@ -61,15 +61,6 @@ function proxyImageUrl(url: string | undefined): string | undefined {
   return url;
 }
 
-// Replace Notion S3 image URLs in markdown — these still use URL-based proxy
-// since we don't have block IDs in markdown content
-function proxyMarkdownImages(content: string): string {
-  return content.replace(
-    /!\[([^\]]*)\]\((https:\/\/[^\s)]*s3[^\s)]*amazonaws\.com[^\s)]*)\)/g,
-    (_, alt, url) => `![${alt}](/api/notion-image?url=${encodeURIComponent(url)})`
-  );
-}
-
 const n2m = new NotionToMarkdown({ notionClient: notion });
 
 // Custom block transformers for rich Notion formatting
@@ -132,6 +123,15 @@ n2m.setCustomTransformer("bookmark", async (block: any) => {
   return `[${caption}](${bookmark.url})`;
 });
 
+n2m.setCustomTransformer("image", async (block: any) => {
+  const caption = (block.image?.caption || [])
+    .map((t: any) => t.plain_text)
+    .join("")
+    .replace(/[\[\]\n]/g, " ")
+    .trim();
+  return `![${caption}](${proxyBlockImage(block.id)})`;
+});
+
 // File attachments: 3D models (.glb/.gltf) become an inline viewer; other
 // files render as a plain link. Notion file URLs expire after ~1h, so models
 // go through the stable block-based proxy instead of the raw S3 URL.
@@ -156,7 +156,7 @@ n2m.setCustomTransformer("equation", async (block: any) => {
 
 export const VALID_TYPES = ["skriving", "bok", "prosjekt", "lenkje", "interaktiv", "bilete", "presentasjon"];
 
-const TYPE_MAPPING: Record<string, "Skriving" | "Bok" | "Prosjekt" | "Lenkje" | "Interaktiv" | "Bilete" | "Presentasjon"> = {
+const TYPE_MAPPING: Record<string, Post["type"]> = {
   "Skriving": "Skriving",
   "Bok": "Bok",
   "Prosjekt": "Prosjekt",
@@ -678,11 +678,9 @@ const getSkissebokDrawingsData = unstable_cache(async (): Promise<SkissebokDrawi
 
         // Prefer an uploaded file property, fall back to the page cover.
         let src: string | undefined;
-        const fileProp = find("Teikning") || find("Bilete") || find("Fil");
-        if (fileProp?.files?.length) {
-          const f = fileProp.files[0];
-          src = proxyImageUrl(f.type === "file" ? f.file?.url : f.external?.url);
-        }
+        const fileName = ["Teikning", "Bilete", "Fil"].find((name) => find(name));
+        const f = fileName ? find(fileName)?.files?.[0] : undefined;
+        if (f) src = f.type === "file" ? proxyPageProp(page.id, fileName!) : proxyImageUrl(f.external?.url);
         if (!src && page.cover) src = proxyPageImage(page.id, "cover");
         if (!src) return null;
 
@@ -699,7 +697,7 @@ export const getSkissebokDrawings = cache(getSkissebokDrawingsData);
 export async function getPostContent(pageId: string): Promise<string> {
   const mdblocks = await n2m.pageToMarkdown(pageId);
   const mdObject = n2m.toMarkdownString(mdblocks);
-  return proxyMarkdownImages(mdObject.parent || "");
+  return mdObject.parent || "";
 }
 
 // Share one markdown cache between expanded cards and standalone pages.
@@ -791,10 +789,11 @@ export async function serializePostContent(post: Post): Promise<Post & { seriali
 }
 
 // ── Body media ──────────────────────────────────────────────────────────────
-// One pass over a page's blocks collecting every image and attached 3D model,
-// so the gallery can show in-post images without the client having to fetch
-// and parse each post's markdown first. Also probes image dimensions (a few
-// header bytes per image) so frames can use real aspect ratios immediately.
+// One pass over a page's blocks collecting its images (all of them for a
+// Bilete post, the first few otherwise) and attached 3D models, so the gallery
+// can show in-post images without the client having to fetch and parse each
+// post's markdown first. Also probes image dimensions (a few header bytes per
+// image) so frames can use real aspect ratios immediately.
 
 export type BodyMedia = {
   links?: string[];
@@ -858,6 +857,8 @@ async function listAllChildren(blockId: string): Promise<any[]> {
   return results;
 }
 
+const BODY_IMAGE_CAP = 3;
+
 async function fetchBodyMedia(page: any, fallbackAlt: string): Promise<BodyMedia> {
   const pageId = page.id;
   const images: { src: string; alt: string }[] = [];
@@ -904,6 +905,9 @@ async function fetchBodyMedia(page: any, fallbackAlt: string): Promise<BodyMedia
 
   const rootBlocks = await collect(pageId, 0);
 
+  const shipped = getPageProperties(page).type === "Bilete" ? images : images.slice(0, BODY_IMAGE_CAP);
+  for (const { src } of images.slice(shipped.length)) rawUrls.delete(src);
+
   // The database query already supplied covers and file properties. Reuse
   // them instead of making an extra pages.retrieve request for every post.
   if (page?.cover) rawUrls.set(proxyPageImage(pageId, "cover"), fileUrlOf(page.cover));
@@ -938,7 +942,7 @@ async function fetchBodyMedia(page: any, fallbackAlt: string): Promise<BodyMedia
     break;
   }
 
-  return { images, models, modelOnlySrc, dims, words, links: [...links] };
+  return { images: shipped, models, modelOnlySrc, dims, words, links: [...links] };
 }
 
 // Changed pages get new cache keys immediately; unchanged bodies need only
@@ -947,7 +951,7 @@ async function fetchBodyMedia(page: any, fallbackAlt: string): Promise<BodyMedia
 function fetchBodyMediaCached(page: any, fallbackAlt: string) {
   return unstable_cache(
     () => fetchBodyMedia(page, fallbackAlt),
-    ["body-media-v3", page.id, page.last_edited_time || "", fallbackAlt],
+    ["body-media-v4", page.id, page.last_edited_time || "", fallbackAlt],
     { revalidate: 86400 }
   )();
 }

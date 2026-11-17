@@ -6,24 +6,8 @@ import { ExternalLink, ArrowUpRight, ChevronLeft, ChevronRight, X } from 'lucide
 import { motion, AnimatePresence } from 'framer-motion'
 import { cn, notionImgSrc, notionImgSrcSet } from '@/lib/utils'
 import { ModelViewer } from '@/components/model-viewer'
+import type { Post } from '@/types/post'
 
-interface GalleryPost {
-  uid: string
-  title: string
-  slug: string
-  type: string
-  date?: string
-  url?: string
-  image?: string
-  ogImage?: string
-  sosialbilete?: string
-  content?: string
-  thumbnails?: { src: string; alt: string }[]
-  modelSrc?: string
-  bodyImages?: { src: string; alt: string }[]
-  bodyModels?: string[]
-  imageDims?: Record<string, { w: number; h: number }>
-}
 
 // Column widths in the masonry (2 → 3 → 4 columns).
 const FRAME_SIZES = '(min-width: 1024px) 270px, (min-width: 640px) 33vw, 50vw'
@@ -47,7 +31,7 @@ function hash(str: string): number {
   return Math.abs(h)
 }
 
-function pickImage(post: GalleryPost): string | undefined {
+function pickImage(post: Post): string | undefined {
   return post.sosialbilete || post.image || post.ogImage || post.thumbnails?.[0]?.src
 }
 
@@ -73,7 +57,7 @@ interface GalleryItem {
   key: string
   src: string
   alt?: string
-  post: GalleryPost
+  post: Post
   model?: boolean
   dims?: { w: number; h: number }
 }
@@ -83,7 +67,7 @@ const MAX_FRAMES_PER_POST = 3
 // Flatten posts into individual frames: the hero image (cover/sosialbilete),
 // images from the post body (all of them for a Bilete post, the first few
 // otherwise), and any 3D models attached in the body.
-function buildItems(posts: GalleryPost[]): GalleryItem[] {
+function buildItems(posts: Post[]): GalleryItem[] {
   const items: GalleryItem[] = []
   for (const post of posts) {
     // Model-only posts contribute an interactive 3D frame instead of an image.
@@ -131,7 +115,7 @@ function fmtDate(d?: string): string {
 
 // Where a frame leads: the post page, or straight out for a Lenkje post.
 function PostLink({ post, className, children }: {
-  post: GalleryPost
+  post: Post
   className?: string
   children: React.ReactNode
 }) {
@@ -433,7 +417,7 @@ function useColumnCount(): number {
   return n
 }
 
-export default function GalleryView({ posts }: { posts: GalleryPost[] }) {
+export default function GalleryView({ posts }: { posts: Post[] }) {
   const [active, setActive] = useState<number | null>(null)
   const items = useMemo(() => buildItems(posts), [posts])
   const cols = useColumnCount()

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { MDXRemote } from 'next-mdx-remote'
 import type { MDXRemoteSerializeResult } from 'next-mdx-remote'
+import type { Post } from '@/types/post'
 import { motion, AnimatePresence } from 'framer-motion'
 import { cn, notionImgSrc, notionImgSrcSet } from "@/lib/utils"
 import { ImageGallery } from "@/components/image-gallery"
@@ -55,7 +56,7 @@ import { AudioPlayer } from "@/components/audio-player"
 import { ProgressiveImage } from "@/components/progressive-image"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { baseMdxComponents } from "@/lib/mdx-components"
+import { baseMdxComponents, MdxImg } from "@/lib/mdx-components"
 
 const WebDesignKeys = dynamic(() => import('@/components/WebDesignKeys'), {
   ssr: false,
@@ -72,30 +73,6 @@ const mdxComponents = {
   Github, Twitter, Mail, Globe, Calendar, Clock, User, Tag, Search, Menu,
   ArrowRight, ArrowLeft, Settings, Info, AlertCircle, AlertTriangle,
   Eye, EyeOff, Copy, Download, Share2, Heart, Star, Home,
-}
-
-interface Post {
-  uid: string
-  title: string
-  description: string
-  date: string
-  tags: string[] | string | undefined
-  slug: string
-  type: "Skriving" | "Bok" | "Prosjekt" | "Lenkje" | "Interaktiv" | "Bilete" | "Presentasjon"
-  image?: string
-  coverimage?: string
-  content: string
-  url?: string
-  lyd?: string
-  icon?: string
-  sosialbilete?: string
-  thumbnails?: { src: string; alt: string }[]
-  ogTitle?: string
-  ogDescription?: string
-  ogImage?: string
-  modelSrc?: string
-  lesMeir?: boolean
-  readTime?: number
 }
 
 // Category-label / timeline colour per type. Text-only tints (the badge tints
@@ -715,7 +692,7 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent, content
                               ...(post.type === "Bok" && bookCover ? {
                                 img: (props: any) => {
                                   if (props.src === bookCover) return null
-                                  return <img {...props} className="max-w-full h-auto rounded-lg mb-4" />
+                                  return <MdxImg {...props} className="mb-4" />
                                 }
                               } : {})
                             }}
