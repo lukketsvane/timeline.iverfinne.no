@@ -24,12 +24,20 @@ const NETWORK_TIMEOUT = 2500
 // Image width kept for offline use: sharp full-screen on a phone.
 const OFFLINE_WIDTH = 1280
 const IMAGE_ACCEPT = 'image/avif,image/webp,image/*,*/*;q=0.8'
-// A full sync at most this often (each one only fetches what is missing)…
+// A full sync at most this often (each one only fetches what is missing),
+// or this often to fill the gaps after one that hit network trouble…
 const SYNC_EVERY = 30 * 60 * 1000
+const RETRY_EVERY = 5 * 60 * 1000
 // …and stored pages are re-fetched once they are this old.
 const PAGE_MAX_AGE = 24 * 60 * 60 * 1000
-// Caches that have never been fully synced are trimmed, oldest first, to
-// these sizes.
+// A stored image is refreshed in the background once it is this old (a
+// replaced cover or image block keeps its URL).
+const MEDIA_MAX_AGE = 24 * 60 * 60 * 1000
+// On a miss, a stored image of another size answers if the network has not
+// within this long.
+const MEDIA_TIMEOUT = 1500
+// Caches of browsers that have never synced (a normal tab) are trimmed,
+// oldest first, to these sizes.
 const RUNTIME_LIMIT = { [STATIC]: 800, [MEDIA]: 1200 }
 
 const MEDIA_FILE = /\.(?:png|jpe?g|webp|avif|gif|svg|ico|glb|gltf|hdr)$/i
@@ -59,7 +67,7 @@ self.addEventListener('fetch', (event) => {
   if (req.headers.get('rsc') === '1' || url.searchParams.has('_rsc')) return event.respondWith(flight(req))
   if (url.pathname.startsWith('/_next/static/')) return event.respondWith(staticFile(req))
   if (url.pathname === '/api/notion-image' || url.pathname === '/_next/image' || MEDIA_FILE.test(url.pathname)) {
-    return event.respondWith(media(req))
+    return event.respondWith(media(event))
   }
   if (url.pathname.startsWith('/api/posts/')) return event.respondWith(data(req))
 })
@@ -76,31 +84,48 @@ const timeout = (ms) => new Promise((resolve) => setTimeout(resolve, ms, null))
 const fetchWithin = (req, ms, init) =>
   Promise.race([fetch(req, init).catch(() => null), timeout(ms)])
 
+// Set when a flight request just timed out: the network is crawling, so the
+// full page load Next falls back to takes the stored copy straight away.
+let slowUntil = 0
+
 // Pages: network first, so a new post or deploy shows up at once. The stored
 // copy answers when the network fails, is too slow, or the server errors.
-// A slow answer still lands in the cache for next time.
+// The response streams straight through; storing it happens alongside, and
+// a slow answer still lands in the cache for next time.
 async function page(event) {
   const req = event.request
   const key = pageKey(req.url)
-  const network = fetch(req).then(async (res) => {
-    if (isStorableHtml(res)) await put(PAGES, key, res.clone())
+  let stored = Promise.resolve()
+  const network = fetch(req).then((res) => {
+    if (isStorableHtml(res)) stored = put(PAGES, key, res.clone())
     return res
   })
-  event.waitUntil(network.catch(() => {}))
+  event.waitUntil(network.then(() => stored, () => {}))
   const cached = await caches.match(key, { cacheName: PAGES })
   if (!cached) return network.catch(() => offlinePage())
-  const res = await Promise.race([network.catch(() => null), timeout(NETWORK_TIMEOUT)])
+  const wait = Date.now() < slowUntil ? 0 : NETWORK_TIMEOUT
+  const res = await Promise.race([network.catch(() => null), timeout(wait)])
   // Any real answer below 500 goes through as is — including Vercel's
   // security check, which must run for the site to keep working.
   return res && res.status < 500 ? res : cached
 }
 
 // React Server Component payloads (client-side navigation). Never stored:
-// each depends on the router state that asked for it. Failing fast instead
-// makes Next fall back to a full page load, which page() can serve.
+// each depends on the router state that asked for it. When a stored copy of
+// the page exists, a slow answer is cut short: Next then falls back to a
+// full page load, which page() serves from that copy. Without one, waiting
+// is the only way to get there, so the request is left alone.
 async function flight(req) {
-  return (await fetchWithin(req, NETWORK_TIMEOUT)) || Response.error()
+  if (!(await caches.match(pageKey(req.url), { cacheName: PAGES }))) return fetch(req)
+  const res = await fetchWithin(req, NETWORK_TIMEOUT)
+  if (res) return res
+  slowUntil = Date.now() + 15000
+  return Response.error()
 }
+
+// Build files fetched while this worker has been running: the open page may
+// still need them, so a sync never prunes them.
+const recentStatic = new Set()
 
 // Hashed build output never changes: cache first. The query (deployment id)
 // does not change the file.
@@ -108,32 +133,41 @@ async function staticFile(req) {
   const hit = await caches.match(req, { cacheName: STATIC, ignoreSearch: true })
   if (hit) return hit
   const res = await fetch(req)
-  if (res.ok && res.type === 'basic') put(STATIC, req, res.clone())
+  if (res.ok && res.type === 'basic') {
+    recentStatic.add(new URL(req.url).pathname)
+    put(STATIC, req, res.clone())
+  }
   return res
 }
 
-// Images, models and public files: cache first. Offline, a request for a size
-// that was never fetched gets any stored size of the same image instead of a
-// broken one.
-async function media(req) {
+// Images, models and public files: cache first, refreshed in the background
+// once a day old. On a miss, the network gets MEDIA_TIMEOUT before a stored
+// copy of the same image at another size answers (offline: at once) — the
+// sync keeps one size, pages ask for several.
+async function media(event) {
+  const req = event.request
   const hit = await caches.match(req, { cacheName: MEDIA, ignoreVary: true })
-  if (hit) return hit
-  const res = await fetch(req).catch(() => null)
-  if (res && res.ok && res.type === 'basic') {
-    put(MEDIA, req, res.clone())
-    return res
+  if (hit) {
+    if (age(hit) > MEDIA_MAX_AGE) fetchInto(event, MEDIA, req).catch(() => {})
+    return hit
   }
-  return (await anySize(req.url)) || res || Response.error()
+  const net = fetchInto(event, MEDIA, req).catch(() => null)
+  const other = await anySize(req.url)
+  if (!other) return (await net) || Response.error()
+  const res = await Promise.race([net, timeout(MEDIA_TIMEOUT)])
+  return res && res.ok ? res : other
 }
 
-// Post bodies for "Les meir" cards: network first, stored copy as fallback.
+// Post bodies for "Les meir" cards: network first. Only cut short when a
+// stored copy can answer instead — a cold body can take a while to build.
 async function data(req) {
-  const res = await fetchWithin(req, NETWORK_TIMEOUT * 2)
+  const stored = await caches.match(req, { cacheName: DATA })
+  const res = stored ? await fetchWithin(req, NETWORK_TIMEOUT * 2) : await fetch(req).catch(() => null)
   if (res && res.ok) {
     put(DATA, req, res.clone())
     return res
   }
-  return (await caches.match(req, { cacheName: DATA })) || res || Response.error()
+  return stored || res || Response.error()
 }
 
 function offlinePage() {
@@ -157,18 +191,34 @@ function isStorableHtml(res) {
   )
 }
 
+const age = (res) => Date.now() - (Date.parse(res.headers.get('Date') || '') || Date.now())
+
+// Fetch, keeping a copy of a whole same-origin success. The response comes
+// back as soon as it arrives; storing it runs alongside, kept alive by the
+// event.
+function fetchInto(event, cacheName, req) {
+  let stored = Promise.resolve()
+  const res = fetch(req).then((r) => {
+    if (r.ok && r.type === 'basic') stored = put(cacheName, req, r.clone())
+    return r
+  })
+  event.waitUntil(res.then(() => stored, () => {}))
+  return res
+}
+
 let writes = 0
 async function put(cacheName, key, res) {
   try {
     const cache = await caches.open(cacheName)
     await cache.put(key, res)
-    if (cacheName === MEDIA) sizeIndex = null
+    if (cacheName === MEDIA) indexSize(typeof key === 'string' ? key : key.url)
+    // A browser that has never synced (a normal tab) still gets a ceiling.
+    // Once the home-screen app has synced, nothing it keeps is trimmed.
+    if (++writes % 100 === 0 && !(await readState()).started) {
+      for (const [name, max] of Object.entries(RUNTIME_LIMIT)) await trim(name, max)
+    }
   } catch {
     /* quota or a body that can't be stored: just don't keep it */
-  }
-  // Visitors who never sync (a normal browser tab) still get a ceiling.
-  if (++writes % 100 === 0 && !(await readState()).complete) {
-    for (const [name, max] of Object.entries(RUNTIME_LIMIT)) await trim(name, max)
   }
 }
 
@@ -185,31 +235,50 @@ function sizeless(url) {
   return u.href
 }
 
-let sizeIndex = null // sizeless url → [{ req, w }], rebuilt after writes
+// sizeless url → [{ url, w }] for every stored image. Built once (a single
+// shared build, however many requests miss at the same moment), kept up to
+// date by put(), dropped after bulk changes (sync, trim).
+let sizeIndex = null
+function addSize(map, url) {
+  const k = sizeless(url)
+  const w = Number(new URL(url).searchParams.get('w')) || Infinity
+  if (!map.has(k)) map.set(k, [])
+  const list = map.get(k)
+  if (!list.some((e) => e.url === url)) list.push({ url, w })
+}
+function indexSize(url) {
+  if (sizeIndex) sizeIndex = sizeIndex.then((map) => (addSize(map, url), map))
+}
 async function anySize(url) {
   const cache = await caches.open(MEDIA)
   if (!sizeIndex) {
-    sizeIndex = new Map()
-    for (const r of await cache.keys()) {
-      const k = sizeless(r.url)
-      const w = Number(new URL(r.url).searchParams.get('w')) || Infinity
-      if (!sizeIndex.has(k)) sizeIndex.set(k, [])
-      sizeIndex.get(k).push({ req: r, w })
-    }
+    sizeIndex = cache.keys().then((keys) => {
+      const map = new Map()
+      for (const r of keys) addSize(map, r.url)
+      return map
+    })
   }
-  const all = sizeIndex.get(sizeless(url))
+  const all = (await sizeIndex).get(sizeless(url))
   if (!all) return null
   const best = all.reduce((a, b) => (b.w > a.w ? b : a))
-  return cache.match(best.req, { ignoreVary: true })
+  return cache.match(best.url, { ignoreVary: true })
 }
 
 // Build output referenced from HTML, JS or CSS. Next writes these as
-// "/_next/static/…" in HTML and as "static/chunks/…" inside its runtime.
+// "/_next/static/…" in HTML and as "static/chunks/…" inside its runtime;
+// stylesheets point at fonts relatively, as url(../media/….woff2).
 const STATIC_REF = /(?:\/_next\/)?static\/(?:chunks|css|media)\/[\w\-.~@%/]+?\.(?:js|css|woff2?|ttf|otf|png|jpe?g|svg|webp|avif|gif|wasm)(?![\w.])/g
-function staticRefs(text) {
+function staticRefs(text, from) {
   const out = new Set()
   for (const m of text.matchAll(STATIC_REF)) {
     out.add('/_next/' + m[0].replace(/^\/?(?:_next\/)?/, ''))
+  }
+  if (from && from.endsWith('.css')) {
+    for (const m of text.matchAll(/url\(\s*['"]?([^'")]+)['"]?\s*\)/g)) {
+      if (/^(?:data:|https?:|\/\/)/.test(m[1])) continue
+      const path = new URL(m[1], self.location.origin + from).pathname
+      if (path.startsWith('/_next/static/')) out.add(path)
+    }
   }
   return out
 }
@@ -220,10 +289,14 @@ function staticRefs(text) {
 // into a request.
 function mediaRefs(html) {
   const out = new Set()
-  for (const m of html.matchAll(/\/api\/notion-image\?[^"'\s<>\\()]+/g)) {
+  // The inline payload escapes "&" as \u0026 and may escape "/" as \/.
+  const text = html.replace(/\\u0026/g, '&').replace(/\\\//g, '/')
+  for (const m of text.matchAll(/\/api\/notion-image\?[^"'\s<>\\()]+/g)) {
     const src = m[0].replace(/&amp;/g, '&')
-    const block = new URL(src, self.location.origin).searchParams.get('block')
-    if (block === null || /^[0-9a-f-]{32,36}$/i.test(block)) out.add(src)
+    const q = new URL(src, self.location.origin).searchParams
+    const block = q.get('block')
+    const ok = block !== null ? /^[0-9a-f-]{32,36}$/i.test(block) : q.has('url') || (q.has('page') && (q.has('type') || q.has('prop')))
+    if (ok) out.add(src)
   }
   return out
 }
@@ -267,7 +340,8 @@ function sync() {
 // is topped up the next time the app comes to the front.
 async function runSync() {
   const state = await readState()
-  if (state.complete && Date.now() - state.at < SYNC_EVERY) return
+  if (state.at && Date.now() - state.at < (state.complete ? SYNC_EVERY : RETRY_EVERY)) return
+  await writeState({ ...state, started: state.started || Date.now() })
 
   const res = await fetch('/api/offline-manifest', { cache: 'no-store' })
   if (!res.ok) return
@@ -320,7 +394,7 @@ async function runSync() {
         file = fresh
       }
       if (/\.(?:js|css)$/.test(path)) {
-        for (const ref of staticRefs(await file.text())) if (!seen.has(ref)) next.push(ref)
+        for (const ref of staticRefs(await file.text(), path)) if (!seen.has(ref)) next.push(ref)
       }
     })
     frontier = next
@@ -357,17 +431,24 @@ async function runSync() {
   })
 
   // 5. Drop what the site no longer has: unpublished posts, images that left
-  //    them, and build files no stored page needs (earlier deploys). Safe
-  //    after failed fetches too: what is wanted is never dropped, and a page
-  //    that could not be fetched keeps its stored copy and that copy's files.
+  //    them, and build files of earlier deploys. Safe after failed fetches
+  //    too: what is wanted is never dropped, and a page that could not be
+  //    fetched keeps its stored copy and that copy's files. Build files are
+  //    kept one sync longer than the pages that used them, and never while
+  //    the open page may still load them (recentStatic).
+  const keepStatic = new Set([...seen, ...(state.static || []), ...recentStatic])
   for (const k of await pageCache.keys()) if (!pageKeys.has(pageKey(k.url))) await pageCache.delete(k)
-  for (const k of await staticCache.keys()) if (!seen.has(new URL(k.url).pathname)) await staticCache.delete(k)
+  for (const k of await staticCache.keys()) if (!keepStatic.has(new URL(k.url).pathname)) await staticCache.delete(k)
   for (const k of await mediaCache.keys()) if (!wantedMedia.has(sizeless(k.url))) await mediaCache.delete(k)
   sizeIndex = null
 
   await writeState({
+    started: state.started || Date.now(),
     at: Date.now(),
-    pagesAt: refreshPages && complete ? Date.now() : state.pagesAt,
+    // Advanced even after a partial run: pages that failed keep their stored
+    // copy, and are refreshed whenever they are opened online anyway.
+    pagesAt: refreshPages ? Date.now() : state.pagesAt,
+    static: [...seen],
     complete,
   })
 }

@@ -47,6 +47,9 @@ export function Lightbox({ startIndex, items, ...rest }: LightboxProps) {
 const GAP = 16 // px between neighbouring photos while swiping
 const MAX_ZOOM = 4
 const DOUBLE_TAP_ZOOM = 2.5
+// Second touch within this long of the first tap (and close to it) makes a
+// double tap; the single-tap action waits the same time.
+const DOUBLE_TAP_MS = 300
 const EASE = 'cubic-bezier(0.22, 1, 0.36, 1)'
 const WIDTHS = [640, 960, 1280, 1600, 2048]
 
@@ -123,6 +126,10 @@ function LightboxView({ items, startIndex, onClose, getThumb }: Omit<LightboxPro
     y: 0,
     lastTap: null as { t: number; x: number; y: number } | null,
     tapTimer: 0 as ReturnType<typeof setTimeout> | 0,
+    doubleTap: false,
+    // A step is sliding in; further key/arrow steps queue behind it.
+    stepping: false,
+    queued: 0,
     closing: false,
   })
 
@@ -189,6 +196,8 @@ function LightboxView({ items, startIndex, onClose, getThumb }: Omit<LightboxPro
     if (t?.getAnimations().length) {
       let x = paintedMatrix(t).m41
       t.getAnimations().forEach((a) => a.cancel())
+      st.stepping = false
+      st.queued = 0
       // A step that is past halfway counts as taken, so a quick second flick
       // carries on from the next photo instead of redoing this one.
       const w = vp.w + GAP
@@ -222,9 +231,16 @@ function LightboxView({ items, startIndex, onClose, getThumb }: Omit<LightboxPro
 
   // Step one photo left (-1) or right (+1); 0 springs back in place.
   const go = (dir: number) => {
+    const st = g.current
+    // Quick key presses / arrow clicks: let the step under way land first.
+    if (dir && st.stepping) {
+      st.queued = clamp(st.queued + dir, -3, 3)
+      return
+    }
     if (index + dir < 0 || index + dir > items.length - 1) dir = 0
     const target = -dir * (vp.w + GAP)
-    g.current.track = target
+    st.track = target
+    st.stepping = dir !== 0
     tween(trackRef.current, 'transform', `translate3d(${target}px,0,0)`, ms(dir ? 300 : 260)).then((done) => {
       if (done && dir) setIndex((i) => clamp(i + dir, 0, items.length - 1))
     })
@@ -236,31 +252,33 @@ function LightboxView({ items, startIndex, onClose, getThumb }: Omit<LightboxPro
     freeze(false)
     st.closing = true
     clearTimeout(st.tapTimer)
-    const el = cur()
     const d = ms(280)
     tween(backdropRef.current, 'opacity', '0', d)
     tween(chromeRef.current, 'opacity', '0', d * 0.6)
 
-    // Fly back into the thumbnail when it can be seen. The backdrop is still
-    // opaque at this point, so scrolling the page behind it to bring the
-    // thumbnail into view (after swiping to another photo) is invisible.
-    const thumb = getThumb?.(index)
-    let r = thumb?.getBoundingClientRect()
-    if (thumb && r && !isVisible(r, vp.w, vp.h)) {
-      thumb.scrollIntoView({ block: 'center', behavior: 'instant' as ScrollBehavior })
-      r = thumb.getBoundingClientRect()
-    }
+    // Mid-step, the photo on screen may already be the neighbour; close the
+    // one that is actually there, from where it actually is.
+    const page = vp.w + GAP
+    const vis = Math.abs(st.track) > page / 2 ? clamp(index + (st.track < 0 ? 1 : -1), 0, items.length - 1) : index
+    const shift = (vis - index) * page + st.track
+    const z = vis === index ? st : { s: 1, x: 0, y: 0 }
+    const el = zoomEls.current.get(vis) ?? null
     const box = el?.firstElementChild as HTMLElement | null
+
+    // Fly back into the thumbnail when it can be seen (the [index] effect
+    // keeps the current one scrolled into view behind the viewer).
+    const r = getThumb?.(vis)?.getBoundingClientRect()
     if (el && r && isVisible(r, vp.w, vp.h)) {
-      const { w, h } = fit(index)
+      const { w, h } = fit(vis)
       const s = Math.min(r.width / w, r.height / h)
-      tween(el, 'transform', zoomTransform(s, r.left + r.width / 2 - vp.w / 2, r.top + r.height / 2 - vp.h / 2), d)
+      const x = r.left + r.width / 2 - vp.w / 2 - shift
+      tween(el, 'transform', zoomTransform(s, x, r.top + r.height / 2 - vp.h / 2), d)
       // Hold the photo opaque until it has landed, then hand over to the
       // thumbnail underneath.
       box?.animate([{ opacity: 1 }, { opacity: 1, offset: 0.75 }, { opacity: 0 }], { duration: d, fill: 'forwards' })
     } else if (el) {
-      const dir = st.y < 0 ? -1 : 1
-      tween(el, 'transform', zoomTransform(st.s * 0.92, st.x, st.y + dir * vp.h * 0.15), d)
+      const dir = z.y < 0 ? -1 : 1
+      tween(el, 'transform', zoomTransform(z.s * 0.92, z.x, z.y + dir * vp.h * 0.15), d)
       box?.animate([{ opacity: 1 }, { opacity: 0 }], { duration: d, fill: 'forwards' })
     }
     setTimeout(onClose, d)
@@ -309,20 +327,17 @@ function LightboxView({ items, startIndex, onClose, getThumb }: Omit<LightboxPro
     }
     // Touch: double-tap zooms; a single tap toggles the chrome on the photo
     // and closes on the black around it. The single tap waits out the
-    // double-tap window.
-    const now = performance.now()
-    const last = st.lastTap
-    if (last && now - last.t < 300 && Math.hypot(x - last.x, y - last.y) < 40) {
-      clearTimeout(st.tapTimer)
-      st.lastTap = null
+    // double-tap window (onPointerDown cancels it when a second touch lands).
+    if (st.doubleTap) {
+      st.doubleTap = false
       return toggleZoomAt(x, y)
     }
-    st.lastTap = { t: now, x, y }
+    st.lastTap = { t: performance.now(), x, y }
     st.tapTimer = setTimeout(() => {
       st.lastTap = null
       if (st.s > 1.01 || onPhoto(x, y)) api.current.toggleChrome()
       else api.current.close()
-    }, 260)
+    }, DOUBLE_TAP_MS)
   }
 
   // Velocity (px/ms) over the last ~100ms of movement.
@@ -347,8 +362,9 @@ function LightboxView({ items, startIndex, onClose, getThumb }: Omit<LightboxPro
 
   const beginPinch = () => {
     const st = g.current
-    // A second finger cancels a swipe or pull that was already under way.
-    if (st.mode === 'swipe') go(0)
+    // A second finger cancels a swipe or pull that was already under way, and
+    // centres a photo that was caught mid-step.
+    if (st.mode === 'swipe' || Math.abs(st.track) > 0.5) go(0)
     if (st.mode === 'pull') {
       setZoom(st.base.s, st.base.x, st.base.y)
       setFade(1)
@@ -370,8 +386,16 @@ function LightboxView({ items, startIndex, onClose, getThumb }: Omit<LightboxPro
     if (st.pointers.size === 0) freeze()
     st.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
     st.pointerType = e.pointerType
-    if (st.pointers.size === 1) beginSingle({ x: e.clientX, y: e.clientY })
-    else if (st.pointers.size === 2) beginPinch()
+    if (st.pointers.size === 1) {
+      // A touch landing in the double-tap window holds back the first tap's
+      // single-tap action; this touch decides what it was.
+      const last = st.lastTap
+      clearTimeout(st.tapTimer)
+      st.lastTap = null
+      st.doubleTap =
+        !!last && performance.now() - last.t < DOUBLE_TAP_MS && Math.hypot(e.clientX - last.x, e.clientY - last.y) < 40
+      beginSingle({ x: e.clientX, y: e.clientY })
+    } else if (st.pointers.size === 2) beginPinch()
   }
 
   const onPointerMove = (e: React.PointerEvent) => {
@@ -446,8 +470,12 @@ function LightboxView({ items, startIndex, onClose, getThumb }: Omit<LightboxPro
     const mode = st.mode
     st.mode = 'idle'
     const { vx, vy } = velocity()
+    // A photo caught mid-step and then tapped, pulled back or panned goes
+    // back to the centre (only a swipe decides where the track goes).
+    const recentre = () => Math.abs(st.track) > 0.5 && go(0)
 
     if (mode === 'pending') {
+      recentre()
       if (!cancelled && performance.now() - st.start.t < 500) tap(e.clientX, e.clientY, st.pointerType)
     } else if (mode === 'swipe') {
       const x = st.track
@@ -461,6 +489,7 @@ function LightboxView({ items, startIndex, onClose, getThumb }: Omit<LightboxPro
       if (!cancelled && (Math.abs(y) > 90 || (Math.abs(vy) > 0.5 && Math.sign(vy) === Math.sign(y)))) {
         close()
       } else {
+        recentre()
         Object.assign(st, { s: 1, x: 0, y: 0 })
         tween(cur(), 'transform', zoomTransform(1, 0, 0), ms(320))
         tween(backdropRef.current, 'opacity', '1', ms(220))
@@ -468,7 +497,9 @@ function LightboxView({ items, startIndex, onClose, getThumb }: Omit<LightboxPro
       }
     } else if (mode === 'pan') {
       // Glide on in the direction of the flick, then come to rest in bounds.
-      if (st.s <= 1.02) return settleZoom()
+      // (A pinch always ends here: its fingers lift one at a time.)
+      recentre()
+      if (st.s <= 1.02 || st.s > MAX_ZOOM) return settleZoom()
       const { bx, by } = bounds(st.s)
       zoomTo(st.s, clamp(st.x + vx * 180, -bx, bx), clamp(st.y + vy * 180, -by, by), 420)
     }
@@ -487,15 +518,35 @@ function LightboxView({ items, startIndex, onClose, getThumb }: Omit<LightboxPro
       firstIndex.current = false
       return
     }
+    const st = g.current
     trackRef.current?.getAnimations().forEach((a) => a.cancel())
-    setTrack(g.current.rebase)
-    g.current.rebase = 0
+    // A finger that went down before this commit keeps its baseline in step
+    // with the track, or its next move would throw the track a page over.
+    st.base.track += st.rebase - st.track
+    setTrack(st.rebase)
+    st.rebase = 0
+    st.stepping = false
     zoomEls.current.forEach((el) => {
       el.getAnimations().forEach((a) => a.cancel())
       el.style.transform = zoomTransform(1, 0, 0)
     })
-    Object.assign(g.current, { s: 1, x: 0, y: 0 })
+    Object.assign(st, { s: 1, x: 0, y: 0 })
     setHires(null)
+    if (st.queued) {
+      const dir = Math.sign(st.queued)
+      st.queued -= dir
+      api.current.go(dir)
+    }
+    // Keep this photo's thumbnail in view behind the (opaque) viewer, so a
+    // close can fly into it. Off the commit frame; rare (only when it is out
+    // of view).
+    const thumb = getThumb?.(index)
+    const t = setTimeout(() => {
+      if (thumb && !st.closing && !isVisible(thumb.getBoundingClientRect(), vp.w, vp.h)) {
+        thumb.scrollIntoView({ block: 'center', behavior: 'instant' as ScrollBehavior })
+      }
+    }, 80)
+    return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [index])
 
@@ -525,12 +576,17 @@ function LightboxView({ items, startIndex, onClose, getThumb }: Omit<LightboxPro
     const prev = { overflow: html.style.overflow, padding: document.body.style.paddingRight }
     html.style.overflow = 'hidden'
     if (scrollbar > 0) document.body.style.paddingRight = `${scrollbar}px`
+    // Modal for real: everything else on the page is inert (Tab stays in
+    // the viewer, screen readers see only it).
+    const inerted = [...document.body.children].filter((c) => c !== rootRef.current && !c.hasAttribute('inert'))
+    inerted.forEach((c) => c.setAttribute('inert', ''))
     const focused = document.activeElement as HTMLElement | null
     closeBtnRef.current?.focus({ preventScroll: true })
     return () => {
       html.style.overflow = prev.overflow
       document.body.style.paddingRight = prev.padding
       clearTimeout(g.current.tapTimer)
+      inerted.forEach((c) => c.removeAttribute('inert'))
       focused?.focus?.({ preventScroll: true })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
