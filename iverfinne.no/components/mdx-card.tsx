@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect } from "react"
+import { useState, useMemo, useEffect, useRef } from "react"
 import NextImage from "next/image"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -9,7 +9,7 @@ import { MDXRemote } from 'next-mdx-remote'
 import type { MDXRemoteSerializeResult } from 'next-mdx-remote'
 import { motion, AnimatePresence } from 'framer-motion'
 import { cn, notionImgSrc, notionImgSrcSet } from "@/lib/utils"
-import { ImageGallery } from "@/components/image-gallery"
+import { Lightbox } from "@/components/lightbox"
 import { 
   Link2, 
   Minus, 
@@ -96,6 +96,7 @@ interface Post {
   modelSrc?: string
   lesMeir?: boolean
   readTime?: number
+  imageDims?: Record<string, { w: number; h: number }>
 }
 
 // Category-label / timeline colour per type. Text-only tints (the badge tints
@@ -246,6 +247,13 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent, content
     if (!post.thumbnails) return []
     return post.thumbnails.filter(img => !img.src.endsWith('.glb'))
   }, [post.thumbnails])
+  const viewerItems = useMemo(
+    () => galleryImages.map(img => ({ ...img, w: post.imageDims?.[img.src]?.w, h: post.imageDims?.[img.src]?.h })),
+    [galleryImages, post.imageDims]
+  )
+  // Thumbnail elements by viewer index, so the viewer opens out of (and
+  // closes back into) the one that was tapped.
+  const thumbEls = useRef<(HTMLElement | null)[]>([])
 
   // A Bilete post with exactly one photo shows it as a full-width square
   // frame — same presentation as the 3D viewer — instead of a small grid cell.
@@ -582,6 +590,7 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent, content
             {/* Single-photo Bilete: one big square frame, like the 3D viewer */}
             {singlePhoto && (
               <div
+                ref={(el) => { thumbEls.current[0] = el }}
                 className="relative mb-4 aspect-square w-full cursor-pointer overflow-hidden rounded-lg bg-gray-50 dark:bg-gray-900"
                 onClick={(e) => {
                   e.stopPropagation()
@@ -607,10 +616,12 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent, content
               )}>
                 {(post.type === "Bilete" ? post.thumbnails.slice(0, 8) : post.thumbnails.slice(0, 3)).map((img, i) => {
                   const isLastVisible = post.type === "Bilete" && i === 7 && post.thumbnails!.length > 8;
+                  const viewerIdx = galleryImages.findIndex(g => g.src === img.src)
 
                   return (
                     <div 
                       key={`${post.uid}-thumb-${i}`}
+                      ref={(el) => { if (viewerIdx !== -1) thumbEls.current[viewerIdx] = el }}
                       className={cn(
                         "aspect-square relative rounded-sm overflow-hidden group/thumb",
                         post.type === "Bilete" && !img.src.endsWith('.glb') && "cursor-pointer"
@@ -618,8 +629,7 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent, content
                       onClick={(e) => {
                         if (post.type === "Bilete" && !img.src.endsWith('.glb')) {
                           e.stopPropagation()
-                          const galleryIdx = galleryImages.findIndex(g => g.src === img.src)
-                          if (galleryIdx !== -1) setEnlargedImageIndex(galleryIdx)
+                          if (viewerIdx !== -1) setEnlargedImageIndex(viewerIdx)
                         }
                       }}
                     >
@@ -729,15 +739,13 @@ export function MDXCard({ post, isExpanded, onToggle, serializedContent, content
             </AnimatePresence>
           </motion.article>
 
-          {/* Image gallery lightbox with navigation, gestures, keyboard support */}
-          {galleryImages.length > 0 && (
-            <ImageGallery
-              images={galleryImages}
-              viewerOnly
-              initialIndex={enlargedImageIndex}
-              onIndexChange={setEnlargedImageIndex}
-            />
-          )}
+          {/* Full-screen viewer: swipe, pinch/double-tap zoom, pull to close */}
+          <Lightbox
+            items={viewerItems}
+            startIndex={enlargedImageIndex}
+            onClose={() => setEnlargedImageIndex(null)}
+            getThumb={(i) => thumbEls.current[i]}
+          />
         </div>
       </div>
     </div>

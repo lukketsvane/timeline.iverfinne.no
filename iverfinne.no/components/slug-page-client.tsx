@@ -7,12 +7,13 @@ import Link from 'next/link'
 import { getTagColor } from "@/lib/tag-utils"
 import { cn, notionImgSrc, notionImgSrcSet } from "@/lib/utils"
 import { HtmlIframe } from "@/components/html-iframe"
-import { motion, AnimatePresence } from 'framer-motion'
-import { useEffect, useState } from 'react'
+import { motion } from 'framer-motion'
+import { useRef, useState } from 'react'
 import { fullPageMdxComponents } from '@/lib/mdx-components'
 import WebDesignKeys from '@/components/WebDesignKeys'
 import { AudioPlayer } from '@/components/audio-player'
 import { ProgressiveImage } from '@/components/progressive-image'
+import { Lightbox } from '@/components/lightbox'
 
 const components = {
   ...fullPageMdxComponents,
@@ -23,19 +24,41 @@ interface SlugPageClientProps {
   post: any
 }
 
+// A Bilete post's photos, full width, each opening the shared viewer. Its
+// own component so opening the viewer re-renders only this list, not the
+// whole post.
+function BileteImages({ images, dims }: {
+  images: { src: string; alt: string }[]
+  dims?: Record<string, { w: number; h: number }>
+}) {
+  const [open, setOpen] = useState<number | null>(null)
+  const thumbs = useRef<(HTMLImageElement | null)[]>([])
+  const items = images.map((img) => ({ ...img, w: dims?.[img.src]?.w, h: dims?.[img.src]?.h }))
+
+  return (
+    <div className="mb-12 flex flex-col gap-4">
+      {images.map((img, i) => (
+        <img
+          key={i}
+          ref={(el) => { thumbs.current[i] = el }}
+          src={notionImgSrc(img.src, 1280)}
+          srcSet={notionImgSrcSet(img.src, [640, 960, 1280, 1600])}
+          sizes="(min-width: 896px) 896px, 100vw"
+          alt={img.alt}
+          loading={i > 1 ? 'lazy' : 'eager'}
+          className="max-w-full h-auto rounded-lg cursor-pointer hover:brightness-95 transition-[filter] duration-150"
+          onClick={() => setOpen(i)}
+        />
+      ))}
+      <Lightbox items={items} startIndex={open} onClose={() => setOpen(null)} getThumb={(i) => thumbs.current[i]} />
+    </div>
+  )
+}
+
 export default function SlugPageClient({ post }: SlugPageClientProps) {
-  const [enlargedImage, setEnlargedImage] = useState<string | null>(null)
   // The back link floats over the header image; pick black or white from the
   // brightness of the image's top-left corner. Default white until measured.
   const [headerDark, setHeaderDark] = useState(true)
-
-  useEffect(() => {
-    if (!enlargedImage) return
-    document.body.style.overflow = 'hidden'
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setEnlargedImage(null) }
-    window.addEventListener('keydown', onKey)
-    return () => { document.body.style.overflow = ''; window.removeEventListener('keydown', onKey) }
-  }, [enlargedImage])
 
   if (post.type === "Interaktiv") {
     return (
@@ -161,20 +184,7 @@ export default function SlugPageClient({ post }: SlugPageClientProps) {
         )}
 
         {post.type === "Bilete" && post.thumbnails && (
-          <div className="mb-12 flex flex-col gap-4">
-            {post.thumbnails.map((img: { src: string; alt: string }, i: number) => (
-              <img
-                key={i}
-                src={notionImgSrc(img.src, 1280)}
-                srcSet={notionImgSrcSet(img.src, [640, 960, 1280, 1600])}
-                sizes="(min-width: 896px) 896px, 100vw"
-                alt={img.alt}
-                loading={i > 1 ? 'lazy' : 'eager'}
-                className="max-w-full h-auto rounded-lg cursor-pointer hover:brightness-95 transition-[filter] duration-150"
-                onClick={() => setEnlargedImage(img.src)}
-              />
-            ))}
-          </div>
+          <BileteImages images={post.thumbnails} dims={post.imageDims} />
         )}
 
         <div
@@ -203,32 +213,6 @@ export default function SlugPageClient({ post }: SlugPageClientProps) {
           )}
         </div>
       </motion.article>
-
-      <AnimatePresence>
-        {enlargedImage && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2, ease: [0.25, 0.1, 0.25, 1] }}
-            className="fixed inset-0 z-[200] flex items-center justify-center cursor-pointer"
-            style={{ backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)' }}
-            onClick={() => setEnlargedImage(null)}
-          >
-            <div className="absolute inset-0 bg-white/80 dark:bg-black/80" />
-            <motion.img
-              src={notionImgSrc(enlargedImage, 2048)}
-              alt=""
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              transition={{ duration: 0.2, ease: [0.25, 0.1, 0.25, 1] }}
-              className="relative z-10 max-w-[92vw] max-h-[90vh] object-contain rounded-lg select-none"
-              draggable={false}
-            />
-          </motion.div>
-        )}
-      </AnimatePresence>
     </>
   )
 }

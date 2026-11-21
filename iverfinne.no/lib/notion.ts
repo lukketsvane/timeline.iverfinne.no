@@ -147,6 +147,15 @@ n2m.setCustomTransformer("file", async (block: any) => {
   return `[${name}](${rawUrl})`;
 });
 
+// Images: the stable block proxy, the same URL the gallery uses. The raw
+// file URL is a signed S3 link that expires within the hour and changes on
+// every conversion, yet the markdown is cached for up to a day — and a URL
+// that keeps changing can never be kept for offline use either.
+n2m.setCustomTransformer("image", async (block: any) => {
+  const caption = (block.image?.caption || []).map((t: any) => t.plain_text).join("").trim();
+  return `![${(caption || "image").replace(/[[\]]/g, "")}](${proxyBlockImage(block.id)})`;
+});
+
 // Equation: render as displayable math block
 n2m.setCustomTransformer("equation", async (block: any) => {
   const equation = block.equation;
@@ -719,7 +728,7 @@ export const getPostContentCached = unstable_cache(getPostContent, ["post-conten
 function getPostContentByVersion(pageId: string, lastEditedTime: string) {
   return unstable_cache(
     () => getPostContent(pageId),
-    ["post-content-v2", pageId, lastEditedTime || ""],
+    ["post-content-v3", pageId, lastEditedTime || ""],
     { revalidate: 86400, tags: [NOTION_CACHE_TAG] }
   )();
 }

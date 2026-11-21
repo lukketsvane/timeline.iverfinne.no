@@ -1,11 +1,11 @@
 'use client'
 
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { memo, useState, useEffect, useMemo, useRef } from 'react'
 import Link from 'next/link'
-import { ExternalLink, ArrowUpRight, ChevronLeft, ChevronRight, X } from 'lucide-react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { ExternalLink, ArrowUpRight } from 'lucide-react'
 import { cn, notionImgSrc, notionImgSrcSet } from '@/lib/utils'
 import { ModelViewer } from '@/components/model-viewer'
+import { Lightbox, type LightboxItem } from '@/components/lightbox'
 
 interface GalleryPost {
   uid: string
@@ -24,6 +24,11 @@ interface GalleryPost {
   bodyModels?: string[]
   imageDims?: Record<string, { w: number; h: number }>
 }
+
+// Frames a single post may put in the gallery. A long photo essay would
+// otherwise flood the wall (and the first load) with every image it holds;
+// the rest is one tap away in the post itself.
+const MAX_FRAMES_PER_POST = 4
 
 // Column widths in the masonry (2 → 3 → 4 columns).
 const FRAME_SIZES = '(min-width: 1024px) 270px, (min-width: 640px) 33vw, 50vw'
@@ -79,7 +84,8 @@ interface GalleryItem {
 }
 
 // Flatten posts into individual frames: the hero image (cover/sosialbilete),
-// every image in the post body, and any 3D models attached in the body.
+// then the post body's images and attached 3D models, in that order, up to
+// MAX_FRAMES_PER_POST per post.
 function buildItems(posts: GalleryPost[]): GalleryItem[] {
   const items: GalleryItem[] = []
   for (const post of posts) {
@@ -106,11 +112,14 @@ function buildItems(posts: GalleryPost[]): GalleryItem[] {
     } else {
       for (const src of extractContentImages(post.content)) add(src)
     }
-    srcs.forEach((src, i) =>
+    const shown = srcs.slice(0, MAX_FRAMES_PER_POST)
+    shown.forEach((src, i) =>
       items.push({ key: `${post.uid}-${i}`, src, alt: alts.get(src), post, dims: post.imageDims?.[src] })
     )
-    // Models attached inside the body get their own interactive frames.
-    for (const [i, m] of (post.bodyModels || []).entries()) {
+    // Models attached inside the body get their own interactive frames, in
+    // whatever room the images left.
+    const models = (post.bodyModels || []).slice(0, MAX_FRAMES_PER_POST - shown.length)
+    for (const [i, m] of models.entries()) {
       items.push({ key: `${post.uid}-bodymodel-${i}`, src: m, post, model: true })
     }
   }
@@ -145,7 +154,15 @@ function PostLink({ post, className, children }: {
   )
 }
 
-function GalleryFrame({ item, index, onOpen }: { item: GalleryItem; index: number; onOpen: () => void }) {
+// Memoised: opening the viewer re-renders the gallery, and a few hundred
+// frames re-rendering would land right on the opening animation.
+const GalleryFrame = memo(function GalleryFrame({ item, index, viewerIndex, onOpen, registerThumb }: {
+  item: GalleryItem
+  index: number
+  viewerIndex: number
+  onOpen: (viewerIndex: number) => void
+  registerThumb: (viewerIndex: number, el: HTMLElement | null) => void
+}) {
   const [loaded, setLoaded] = useState(false)
   // Real ratio when the server probed it (no layout shift); otherwise start
   // with a hashed guess and refine once the image loads.
@@ -177,7 +194,8 @@ function GalleryFrame({ item, index, onOpen }: { item: GalleryItem; index: numbe
 
   return (
     <div
-      className="group relative w-full overflow-hidden rounded-2xl transition-transform duration-300 ease-out hover:scale-[1.02]"
+      ref={(el) => registerThumb(viewerIndex, el)}
+      className="group relative w-full overflow-hidden rounded-2xl transition-transform duration-300 ease-out [@media(hover:hover)]:hover:scale-[1.02]"
       style={{ aspectRatio: String(ar), backgroundColor: color }}
     >
       <img
@@ -201,7 +219,7 @@ function GalleryFrame({ item, index, onOpen }: { item: GalleryItem; index: numbe
       />
       <button
         type="button"
-        onClick={onOpen}
+        onClick={() => onOpen(viewerIndex)}
         aria-label={item.alt || item.post.title}
         className="absolute inset-0 h-full w-full rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-cyan-400"
       />
@@ -234,182 +252,7 @@ function GalleryFrame({ item, index, onOpen }: { item: GalleryItem; index: numbe
       </PostLink>
     </div>
   )
-}
-
-function Lightbox({ items, index, onClose, onNavigate }: {
-  items: GalleryItem[]
-  index: number
-  onClose: () => void
-  onNavigate: (i: number) => void
-}) {
-  const go = (dir: number) => onNavigate((index + dir + items.length) % items.length)
-
-  useEffect(() => {
-    document.body.style.overflow = 'hidden'
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-      else if (e.key === 'ArrowLeft') go(-1)
-      else if (e.key === 'ArrowRight') go(1)
-    }
-    window.addEventListener('keydown', onKey)
-    return () => { document.body.style.overflow = ''; window.removeEventListener('keydown', onKey) }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [index, items.length])
-
-  // Preload the neighbours so stepping never shows a blank frame.
-  useEffect(() => {
-    for (const d of [-1, 1]) {
-      const it = items[(index + d + items.length) % items.length]
-      if (it && !it.model) {
-        const img = new Image()
-        img.src = notionImgSrc(it.src, 1600)
-      }
-    }
-  }, [index, items])
-
-  // Pointer-based swipe (mirrors image-gallery.tsx): horizontal flicks step,
-  // a firm vertical flick closes. Deliberately NOT framer-motion drag — motion
-  // components that mount/unmount inside an open AnimatePresence subtree (the
-  // img remounts on every step) break its exit bookkeeping and the overlay
-  // never unmounts.
-  const startRef = useRef<{ x: number; y: number; t: number } | null>(null)
-  const [offset, setOffset] = useState({ x: 0, y: 0 })
-  const draggingRef = useRef(false)
-  const axisRef = useRef<'none' | 'x' | 'y'>('none')
-
-  const onDown = (e: React.PointerEvent) => {
-    startRef.current = { x: e.clientX, y: e.clientY, t: Date.now() }
-    draggingRef.current = false
-    axisRef.current = 'none'
-    setOffset({ x: 0, y: 0 })
-    ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
-  }
-  const onMove = (e: React.PointerEvent) => {
-    if (!startRef.current) return
-    const dx = e.clientX - startRef.current.x
-    const dy = e.clientY - startRef.current.y
-    if (axisRef.current === 'none' && (Math.abs(dx) > 6 || Math.abs(dy) > 6)) {
-      axisRef.current = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y'
-      draggingRef.current = true
-    }
-    if (axisRef.current === 'x') setOffset({ x: dx, y: 0 })
-    else if (axisRef.current === 'y') setOffset({ x: 0, y: dy })
-  }
-  const onUp = () => {
-    if (!startRef.current) return
-    const dt = Math.max(Date.now() - startRef.current.t, 1)
-    if (axisRef.current === 'y' && (Math.abs(offset.y) > 80 || (Math.abs(offset.y) / dt) * 1000 > 500)) {
-      onClose()
-    } else if (axisRef.current === 'x' && (Math.abs(offset.x) > 50 || (Math.abs(offset.x) / dt) * 1000 > 400)) {
-      go(offset.x > 0 ? -1 : 1)
-    }
-    startRef.current = null
-    draggingRef.current = false
-    axisRef.current = 'none'
-    setOffset({ x: 0, y: 0 })
-  }
-
-  const item = items[index]
-  const post = item.post
-  const isLink = post.type === 'Lenkje' && post.url
-  const swipeScale = 1 - Math.min(Math.abs(offset.y) / 500, 0.15)
-
-  return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.2, ease: [0.25, 0.1, 0.25, 1] }}
-      role="dialog"
-      aria-modal="true"
-      aria-label={item.alt || post.title}
-      className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/90 p-4"
-      onClick={onClose}
-    >
-      <span
-        className="absolute left-4 top-4 text-xs tabular-nums text-white/50"
-        style={{ marginTop: 'max(0px, env(safe-area-inset-top))' }}
-      >
-        {index + 1} / {items.length}
-      </span>
-      <button
-        type="button"
-        onClick={(e) => { e.stopPropagation(); onClose() }}
-        aria-label="Lukk"
-        className="absolute right-3 top-3 z-10 p-3 text-white/60 transition-colors hover:text-white"
-        style={{ marginTop: 'max(0px, env(safe-area-inset-top))' }}
-      >
-        <X className="h-6 w-6" />
-      </button>
-
-      {/* Click outside to close; click the left/right half of the image to step */}
-      <div className="inline-flex max-w-full flex-col gap-3" onClick={(e) => e.stopPropagation()}>
-        <div className="relative">
-          {item.model ? (
-            <div className="h-[70vh] w-[70vh] max-w-[85vw]">
-              <ModelViewer src={item.src} alt={post.title} className="h-full" />
-            </div>
-          ) : (
-            <img
-              src={notionImgSrc(item.src, 1600)}
-              alt={item.alt || post.title}
-              width={item.dims?.w}
-              height={item.dims?.h}
-              onPointerDown={onDown}
-              onPointerMove={onMove}
-              onPointerUp={onUp}
-              onPointerCancel={onUp}
-              className="max-h-[78vh] max-w-full select-none rounded-xl object-contain"
-              style={{
-                transform: `translate(${offset.x}px, ${offset.y}px) scale(${swipeScale})`,
-                transition: draggingRef.current ? 'none' : 'transform 0.25s cubic-bezier(0.25, 0.1, 0.25, 1)',
-                touchAction: 'none',
-                width: 'auto',
-                height: 'auto',
-              }}
-              draggable={false}
-            />
-          )}
-          {items.length > 1 && (
-            <>
-              <button
-                type="button"
-                onClick={() => go(-1)}
-                aria-label="Førre"
-                className="group absolute inset-y-0 left-0 hidden w-1/2 cursor-w-resize items-center justify-start p-3 sm:flex"
-              >
-                <ChevronLeft className="h-7 w-7 text-white/0 drop-shadow transition-colors group-hover:text-white/80" />
-              </button>
-              <button
-                type="button"
-                onClick={() => go(1)}
-                aria-label="Neste"
-                className="group absolute inset-y-0 right-0 hidden w-1/2 cursor-e-resize items-center justify-end p-3 sm:flex"
-              >
-                <ChevronRight className="h-7 w-7 text-white/0 drop-shadow transition-colors group-hover:text-white/80" />
-              </button>
-            </>
-          )}
-        </div>
-
-        {/* The whole row is the way into the post — a 24px icon was too small
-            a target to find, let alone hit. */}
-        <PostLink
-          post={post}
-          className="group/open -mx-2 flex items-center justify-between gap-4 rounded-lg px-2 py-1 text-white/80 transition-colors hover:text-white"
-        >
-          <span className="min-w-0">
-            <span className="block truncate font-sans text-sm leading-snug underline-offset-4 group-hover/open:underline">
-              {post.title}
-            </span>
-            <span className="block text-xs tabular-nums text-white/50">{fmtDate(post.date)}</span>
-          </span>
-          {isLink ? <ExternalLink className="h-6 w-6 shrink-0" /> : <ArrowUpRight className="h-6 w-6 shrink-0" />}
-        </PostLink>
-      </div>
-    </motion.div>
-  )
-}
+})
 
 // Responsive column count, mirroring the Tailwind breakpoints below.
 function useColumnCount(): number {
@@ -429,10 +272,54 @@ function useColumnCount(): number {
   return n
 }
 
+// The row under a photo in the viewer: the way into its post.
+function ViewerCaption({ post }: { post: GalleryPost }) {
+  return (
+    <PostLink
+      post={post}
+      className="group/open flex items-center justify-between gap-4 text-white/85 transition-colors hover:text-white"
+    >
+      <span className="min-w-0">
+        <span className="block truncate font-sans text-sm leading-snug underline-offset-4 group-hover/open:underline">
+          {post.title}
+        </span>
+        <span className="block text-xs tabular-nums text-white/55">{fmtDate(post.date)}</span>
+      </span>
+      {post.type === 'Lenkje' && post.url ? (
+        <ExternalLink className="h-6 w-6 shrink-0" />
+      ) : (
+        <ArrowUpRight className="h-6 w-6 shrink-0" />
+      )}
+    </PostLink>
+  )
+}
+
 export default function GalleryView({ posts }: { posts: GalleryPost[] }) {
   const [active, setActive] = useState<number | null>(null)
   const items = useMemo(() => buildItems(posts), [posts])
   const cols = useColumnCount()
+
+  // 3D frames rotate in place and stay out of the viewer; every photo frame
+  // gets a slot in it.
+  const { viewerItems, viewerIndexOf } = useMemo(() => {
+    const viewerItems: LightboxItem[] = []
+    const viewerIndexOf = new Map<string, number>()
+    for (const item of items) {
+      if (item.model) continue
+      viewerIndexOf.set(item.key, viewerItems.length)
+      viewerItems.push({
+        src: item.src,
+        alt: item.alt || item.post.title,
+        w: item.dims?.w,
+        h: item.dims?.h,
+        caption: <ViewerCaption post={item.post} />,
+      })
+    }
+    return { viewerItems, viewerIndexOf }
+  }, [items])
+
+  const thumbs = useRef<(HTMLElement | null)[]>([])
+  const registerThumb = useRef((i: number, el: HTMLElement | null) => { thumbs.current[i] = el }).current
 
   // CSS multi-column fills column-by-column, which scrambles the date order when
   // read left-to-right. Distribute round-robin instead so the newest sits
@@ -451,16 +338,24 @@ export default function GalleryView({ posts }: { posts: GalleryPost[] }) {
         {columns.map((col, ci) => (
           <div key={ci} className="flex min-w-0 flex-1 flex-col gap-3">
             {col.map(({ item, index }) => (
-              <GalleryFrame key={item.key} item={item} index={index} onOpen={() => setActive(index)} />
+              <GalleryFrame
+                key={item.key}
+                item={item}
+                index={index}
+                viewerIndex={viewerIndexOf.get(item.key) ?? -1}
+                onOpen={setActive}
+                registerThumb={registerThumb}
+              />
             ))}
           </div>
         ))}
       </div>
-      <AnimatePresence>
-        {active !== null && (
-          <Lightbox items={items} index={active} onClose={() => setActive(null)} onNavigate={setActive} />
-        )}
-      </AnimatePresence>
+      <Lightbox
+        items={viewerItems}
+        startIndex={active}
+        onClose={() => setActive(null)}
+        getThumb={(i) => thumbs.current[i]}
+      />
     </>
   )
 }

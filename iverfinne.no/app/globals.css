@@ -83,6 +83,11 @@ body {
 @layer base {
   html {
     -webkit-text-size-adjust: 100%;
+    /* Scroll, but never pinch- or double-tap-zoom the page (Chrome/Android and
+       iOS honour this; Safari's pinch is also blocked in <NoPageZoom>).
+       Elements that need gestures set their own: the image viewer `none`,
+       the 3D viewer `pan-y`. */
+    touch-action: pan-x pan-y;
     overflow-x: hidden;
     overflow-x: clip;
     width: 100%;

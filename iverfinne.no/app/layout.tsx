@@ -4,6 +4,8 @@ import { GeistSans } from 'geist/font/sans'
 import { GeistMono } from 'geist/font/mono'
 import { Newsreader } from 'next/font/google'
 import { PostsProvider } from '@/lib/posts-context'
+import { NoPageZoom } from '@/components/no-page-zoom'
+import { ServiceWorker } from '@/components/service-worker'
 
 const newsreader = Newsreader({
   subsets: ['latin'],
@@ -25,14 +27,16 @@ const OG_IMAGE = {
   alt: APP_DEFAULT_TITLE,
 }
 
-// maximumScale stops iOS Safari's automatic zoom-in when focusing the search
-// field — the 16px input font-size rule in globals.css alone proved
-// insufficient on current iOS. Safari has ignored maximum-scale for user
-// pinch gestures since iOS 10, so pinch-zoom (a11y) still works there.
+// The page never zooms: it is laid out at exactly the screen width and
+// should feel like an app. maximumScale also stops iOS Safari's automatic
+// zoom-in when focusing the search field. Safari ignores maximum-scale and
+// user-scalable for pinch gestures, so <NoPageZoom> blocks those itself.
+// Photos can still be zoomed in the full-screen viewer.
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   maximumScale: 1,
+  userScalable: false,
   viewportFit: 'cover',
 }
 
@@ -109,7 +113,11 @@ export default function RootLayout({
 }) {
   return (
     <html lang="nn" suppressHydrationWarning className={`${GeistSans.variable} ${GeistMono.variable} ${newsreader.variable}`}>
-      <body><PostsProvider>{children}</PostsProvider></body>
+      <body>
+        <NoPageZoom />
+        <ServiceWorker />
+        <PostsProvider>{children}</PostsProvider>
+      </body>
     </html>
   )
 }
