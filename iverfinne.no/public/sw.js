@@ -340,8 +340,11 @@ function sync() {
 // is topped up the next time the app comes to the front.
 async function runSync() {
   const state = await readState()
-  if (state.at && Date.now() - state.at < (state.complete ? SYNC_EVERY : RETRY_EVERY)) return
-  await writeState({ ...state, started: state.started || Date.now() })
+  // Paced by the last finished sync, or by the last attempt — an attempt
+  // cut short (iOS suspends a backgrounded app) still counts.
+  if (state.complete && Date.now() - state.at < SYNC_EVERY) return
+  if (Date.now() - Math.max(state.at || 0, state.tried || 0) < RETRY_EVERY) return
+  await writeState({ ...state, started: state.started || Date.now(), tried: Date.now() })
 
   const res = await fetch('/api/offline-manifest', { cache: 'no-store' })
   if (!res.ok) return
@@ -376,6 +379,12 @@ async function runSync() {
     for (const ref of staticRefs(html)) needed.add(ref)
     for (const ref of mediaRefs(html)) shown.add(ref)
   })
+  // Record the page refresh now, so a run cut short later does not fetch
+  // every page again next time.
+  if (refreshPages) {
+    state.pagesAt = Date.now()
+    await writeState({ ...state, started: state.started || Date.now(), tried: Date.now() })
+  }
 
   // 2. Build files, following the chunks scripts load later on (lazy
   //    components such as the 3D viewer) until nothing new turns up.
@@ -445,9 +454,10 @@ async function runSync() {
   await writeState({
     started: state.started || Date.now(),
     at: Date.now(),
+    tried: Date.now(),
     // Advanced even after a partial run: pages that failed keep their stored
     // copy, and are refreshed whenever they are opened online anyway.
-    pagesAt: refreshPages ? Date.now() : state.pagesAt,
+    pagesAt: state.pagesAt,
     static: [...seen],
     complete,
   })

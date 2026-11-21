@@ -53,6 +53,14 @@ const DOUBLE_TAP_MS = 300
 const EASE = 'cubic-bezier(0.22, 1, 0.36, 1)'
 const WIDTHS = [640, 960, 1280, 1600, 2048]
 
+// CSS width to ask srcset for. Phone-sized slots that need up to ~5% more
+// than 1280 device pixels (430pt × 3 on the largest iPhones) take 1280 —
+// the size the offline copy keeps — instead of jumping to 1600.
+function slot(w: number) {
+  const dpr = (typeof window !== 'undefined' && window.devicePixelRatio) || 1
+  return Math.floor(w * dpr <= 1280 * 1.05 ? Math.min(w, 1280 / dpr) : w)
+}
+
 type Mode = 'idle' | 'pending' | 'swipe' | 'pull' | 'pan' | 'pinch'
 type Pt = { x: number; y: number }
 
@@ -138,12 +146,23 @@ function LightboxView({ items, startIndex, onClose, getThumb }: Omit<LightboxPro
   ).current
   const ms = (n: number) => (reduceMotion ? 0 : n)
 
+  // Shape of a photo: measured once loaded; before that the loaded thumbnail
+  // (exactly what is on screen), then the server's probed size.
   const ratioOf = (i: number): number | undefined => {
     if (ratios[i]) return ratios[i]
-    const it = items[i]
-    if (it?.w && it?.h) return it.w / it.h
     const img = thumbImg(getThumb?.(i))
-    return img ? img.naturalWidth / img.naturalHeight : undefined
+    if (img) return img.naturalWidth / img.naturalHeight
+    const it = items[i]
+    return it?.w && it?.h ? it.w / it.h : undefined
+  }
+
+  // Bring a photo's thumbnail into view behind the viewer, so a close can
+  // fly into it. Only called while the viewer still covers the page.
+  const revealThumb = (i: number) => {
+    const thumb = getThumb?.(i)
+    if (thumb && !isVisible(thumb.getBoundingClientRect(), vp.w, vp.h)) {
+      thumb.scrollIntoView({ block: 'center', behavior: 'instant' as ScrollBehavior })
+    }
   }
 
   // The photo's untransformed box: contained in the viewport, edge to edge
@@ -253,8 +272,6 @@ function LightboxView({ items, startIndex, onClose, getThumb }: Omit<LightboxPro
     st.closing = true
     clearTimeout(st.tapTimer)
     const d = ms(280)
-    tween(backdropRef.current, 'opacity', '0', d)
-    tween(chromeRef.current, 'opacity', '0', d * 0.6)
 
     // Mid-step, the photo on screen may already be the neighbour; close the
     // one that is actually there, from where it actually is.
@@ -264,9 +281,13 @@ function LightboxView({ items, startIndex, onClose, getThumb }: Omit<LightboxPro
     const z = vis === index ? st : { s: 1, x: 0, y: 0 }
     const el = zoomEls.current.get(vis) ?? null
     const box = el?.firstElementChild as HTMLElement | null
+    tween(backdropRef.current, 'opacity', '0', d)
+    tween(chromeRef.current, 'opacity', '0', d * 0.6)
 
-    // Fly back into the thumbnail when it can be seen (the [index] effect
-    // keeps the current one scrolled into view behind the viewer).
+    // Fly back into the thumbnail when it can be seen. While the backdrop is
+    // still opaque, scroll it into view first (a pull already did that when
+    // it began, before the page started to show through).
+    if (Number(backdropRef.current?.style.opacity || 1) >= 0.99) revealThumb(vis)
     const r = getThumb?.(vis)?.getBoundingClientRect()
     if (el && r && isVisible(r, vp.w, vp.h)) {
       const { w, h } = fit(vis)
@@ -431,6 +452,8 @@ function LightboxView({ items, startIndex, onClose, getThumb }: Omit<LightboxPro
     if (st.mode === 'pending') {
       if (Math.hypot(dx, dy) < 8) return
       st.mode = st.base.s > 1.01 ? 'pan' : Math.abs(dx) > Math.abs(dy) ? 'swipe' : 'pull'
+      // The page is about to show through: put the thumbnail in place now.
+      if (st.mode === 'pull') revealThumb(index)
     }
 
     if (st.mode === 'swipe') {
@@ -537,16 +560,6 @@ function LightboxView({ items, startIndex, onClose, getThumb }: Omit<LightboxPro
       st.queued -= dir
       api.current.go(dir)
     }
-    // Keep this photo's thumbnail in view behind the (opaque) viewer, so a
-    // close can fly into it. Off the commit frame; rare (only when it is out
-    // of view).
-    const thumb = getThumb?.(index)
-    const t = setTimeout(() => {
-      if (thumb && !st.closing && !isVisible(thumb.getBoundingClientRect(), vp.w, vp.h)) {
-        thumb.scrollIntoView({ block: 'center', behavior: 'instant' as ScrollBehavior })
-      }
-    }, 80)
-    return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [index])
 
@@ -642,7 +655,7 @@ function LightboxView({ items, startIndex, onClose, getThumb }: Omit<LightboxPro
       const it = items[i]
       if (!it) continue
       const img = new Image()
-      img.sizes = `${Math.round(fit(i).w)}px`
+      img.sizes = `${slot(fit(i).w)}px`
       const set = notionImgSrcSet(it.src, WIDTHS)
       if (set) img.srcset = set
       img.src = notionImgSrc(it.src, 1280)
@@ -772,7 +785,7 @@ function Slide({ item, offset, vpw, box, placeholder, hires, setEl, onRatio }: {
           <img
             src={notionImgSrc(item.src, 1280)}
             srcSet={notionImgSrcSet(item.src, WIDTHS)}
-            sizes={`${Math.round(box.w)}px`}
+            sizes={`${slot(box.w)}px`}
             alt={item.alt || ''}
             decoding="async"
             draggable={false}

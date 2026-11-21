@@ -207,6 +207,15 @@ export default function SlugPageClient({ post }: SlugPageClientProps) {
                     if (props.src === post.image || props.src === post.icon) return null
                     return <img {...props} className="max-w-full h-auto rounded-lg my-6" />
                   }
+                } : {}),
+                // A Bilete post's photos are already shown above (BileteImages,
+                // sized and opening the viewer); don't repeat them full-size
+                // in the body.
+                ...(post.type === "Bilete" && post.thumbnails?.length ? {
+                  img: (props: any) => {
+                    if (post.thumbnails.some((t: { src: string }) => t.src === props.src)) return null
+                    return <img {...props} className="max-w-full h-auto rounded-lg my-6" />
+                  }
                 } : {})
               }}
             />
