@@ -827,7 +827,9 @@ async function probeDims(url: string | undefined): Promise<{ w: number; h: numbe
   try {
     const probe = (await import("probe-image-size")).default;
     const r = await probe(url, { timeout: 2500 });
-    if (r?.width && r?.height) return { w: r.width, h: r.height };
+    // probe reports the stored size; EXIF orientations 5–8 (portrait phone
+    // shots) are shown rotated — the image proxy applies the rotation.
+    if (r?.width && r?.height) return (r.orientation ?? 1) >= 5 ? { w: r.height, h: r.width } : { w: r.width, h: r.height };
   } catch { /* dimension stays unknown */ }
   return undefined;
 }
@@ -956,7 +958,7 @@ async function fetchBodyMedia(page: any, fallbackAlt: string): Promise<BodyMedia
 function fetchBodyMediaCached(page: any, fallbackAlt: string) {
   return unstable_cache(
     () => fetchBodyMedia(page, fallbackAlt),
-    ["body-media-v3", page.id, page.last_edited_time || "", fallbackAlt],
+    ["body-media-v4", page.id, page.last_edited_time || "", fallbackAlt],
     { revalidate: 86400 }
   )();
 }
@@ -1057,13 +1059,18 @@ const getPostBySlugData = unstable_cache(
     const props = getPageProperties(page);
     const content = await getPostContentByVersion(page.id, page.last_edited_time);
     let thumbnails = props.image ? [{ src: props.image, alt: props.title }] : [];
+    let imageDims: Post["imageDims"];
     if (props.type === "Bilete") {
       thumbnails = await fetchBileteThumbnails(page.id, props.title, props.image);
+      // Real photo shapes for the viewer before each image has loaded. Same
+      // cache entry as the list's body scan, so usually already warm.
+      imageDims = (await fetchBodyMediaCached(page, props.title)).dims;
     }
     return {
       ...props,
       content,
       thumbnails,
+      imageDims,
     };
   },
   ["post-by-slug"],
